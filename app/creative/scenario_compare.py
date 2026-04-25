@@ -34,10 +34,12 @@ log = logging.getLogger(__name__)
 DEFAULT_MODELS_TO_COMPARE: list[tuple[str, str]] = [
     ("flux.1-dev", "Flux 1.0 dev"),
     ("flux.1-schnell", "Flux Schnell (fast)"),
-    ("model-sdxl-1-0", "SDXL 1.0 base"),
-    ("model-sdxl-lightning", "SDXL Lightning (fast)"),
-    ("model-anime-xl", "Anime XL (stylized)"),
 ]
+# NOTE: ``model-sdxl-1-0``, ``model-sdxl-lightning``, ``model-anime-xl`` were
+# tested on 2026-04-26 against /generate/txt2img-ip-adapter and all returned
+# HTTP 404. They're either unavailable on this Scenario tenant or don't
+# support the IP-Adapter route. To extend the comparison set, fish out the
+# real model IDs from the Scenario dashboard and pass them via --models.
 
 _SAFE_SLUG_RE = re.compile(r"[^a-zA-Z0-9._-]+")
 
