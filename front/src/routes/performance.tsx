@@ -5,7 +5,7 @@ import { PerformanceSignals } from "@/components/dashboard/PerformanceSignals";
 export const Route = createFileRoute("/performance")({
   head: () => ({
     meta: [
-      { title: "Performance Signals — AdIntel Gaming" },
+      { title: "Performance Signals — Voodoo" },
       { name: "description", content: "Top creatives, performance scores, and run-vs-impressions analysis." },
     ],
   }),

@@ -44,7 +44,7 @@ import { getAdDetail } from "@/data/adDetails";
 export const Route = createFileRoute("/ad/$id")({
   head: () => ({
     meta: [
-      { title: "Ad Intelligence Detail — AdIntel Gaming" },
+      { title: "Ad Intelligence Detail — Voodoo" },
       {
         name: "description",
         content:

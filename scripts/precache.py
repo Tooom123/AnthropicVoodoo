@@ -35,8 +35,16 @@ logging.basicConfig(
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("games", nargs="+", help="Game names to pre-cache")
-    parser.add_argument("--country", default="US")
-    parser.add_argument("--network", default="TikTok")
+    parser.add_argument(
+        "--countries",
+        default="all",
+        help="Comma-separated country codes, or 'all' for the curated worldwide list",
+    )
+    parser.add_argument(
+        "--networks",
+        default="all",
+        help="Comma-separated networks (TikTok, Facebook, Instagram), or 'all'",
+    )
     parser.add_argument("--max-creatives", type=int, default=8)
     parser.add_argument("--top-k-archetypes", type=int, default=5)
     parser.add_argument("--top-k-variants", type=int, default=3)
@@ -44,17 +52,20 @@ def main() -> int:
 
     from app.pipeline import PipelineConfig, run_pipeline
 
+    countries = [c.strip() for c in args.countries.split(",") if c.strip()]
+    networks = [n.strip() for n in args.networks.split(",") if n.strip()]
+
     successes: list[tuple[str, float]] = []
     failures: list[tuple[str, str]] = []
 
     for game in args.games:
         print(f"\n{'=' * 70}")
-        print(f"Pre-caching: {game!r}")
+        print(f"Pre-caching: {game!r}  ({','.join(countries)} × {','.join(networks)})")
         print("=" * 70)
         config = PipelineConfig(
             game_name=game,
-            country=args.country,
-            network=args.network,
+            countries=countries,
+            networks=networks,
             max_creatives=args.max_creatives,
             top_k_archetypes=args.top_k_archetypes,
             top_k_variants=args.top_k_variants,

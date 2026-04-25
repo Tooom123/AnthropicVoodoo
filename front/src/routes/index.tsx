@@ -5,7 +5,7 @@ import { AdLibrary } from "@/components/dashboard/AdLibrary";
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "Ad Library — AdIntel Gaming" },
+      { title: "Ad Library — Voodoo" },
       { name: "description", content: "Browse competitor ad creatives across networks and formats." },
     ],
   }),

@@ -55,16 +55,39 @@ REPORT_CACHE_DIR = CACHE_DIR / "reports"
 # ---------------------------------------------------------------------------
 
 
+# Curated worldwide expansion lists used when the caller asks for "all".
+# We deliberately limit the breadth — we want diverse signal, not a 50× cost
+# explosion. Pick the markets / networks that matter most for mobile gaming
+# user-acquisition spend in 2026.
+ALL_COUNTRIES = ["US", "GB", "DE", "FR", "JP", "BR", "KR"]
+ALL_NETWORKS = ["TikTok", "Facebook", "Instagram"]
+# SensorTower /v1/unified/ad_intel/creatives/top rejects Google + ironSource
+# with HTTP 422 — exclude them from the worldwide loop. They're available via
+# advertiser-level queries but not creative-level for the filters we use.
+
+
+def _expand_all(values: list[str], expansion: list[str]) -> list[str]:
+    """If ``values`` is empty or contains the sentinel ``"all"``, return the
+    full ``expansion``. Otherwise keep the user-supplied list as-is.
+    """
+    if not values or any(v.strip().lower() == "all" for v in values):
+        return list(expansion)
+    return values
+
+
 @dataclass
 class PipelineConfig:
     game_name: str
-    country: str = "US"
-    network: str = "TikTok"
+    # Worldwide-by-default: pass ``["all"]`` (or omit) to query every curated
+    # market / network. Single-value lists keep the original narrow behaviour
+    # (e.g. ``["US"]`` + ``["TikTok"]`` for the focused Streamlit demo path).
+    countries: list[str] = field(default_factory=lambda: ["US"])
+    networks: list[str] = field(default_factory=lambda: ["TikTok"])
     category_id: int = 7012  # iOS Puzzle (see docs/sensortower-api.md §9.1)
     period: str = "month"  # week | month | quarter
     period_date: str = "2026-04-01"
     max_top_advertisers: int = 10
-    max_creatives: int = 8
+    max_creatives: int = 8  # final cap AFTER cross-market dedupe
     deconstruct_concurrency: int = 5
     top_k_archetypes: int = 5
     top_k_variants: int = 3
@@ -102,6 +125,10 @@ class PipelineState:
     variants: list[GeneratedVariant] = field(default_factory=list)
     report: HookLensReport | None = None
     step_durations_s: dict[str, float] = field(default_factory=dict)
+    # Resolved (post-``all`` expansion) markets/networks. Filled at step start
+    # so the final MarketContext reflects what was actually scanned.
+    resolved_countries: list[str] = field(default_factory=list)
+    resolved_networks: list[str] = field(default_factory=list)
 
 
 # ---------------------------------------------------------------------------
@@ -117,7 +144,14 @@ class StepDef:
 
 
 def _step_resolve_game(state: PipelineState) -> AppMetadata:
-    state.target_meta = resolve_game(state.config.game_name, country=state.config.country)
+    # Resolve "all" sentinels once, here, so every downstream step uses the
+    # same expanded list. ``resolve_game`` itself only needs one country (it's
+    # just a name → SensorTower app metadata lookup); we use the first
+    # resolved country as the canonical one for store metadata.
+    state.resolved_countries = _expand_all(state.config.countries, ALL_COUNTRIES)
+    state.resolved_networks = _expand_all(state.config.networks, ALL_NETWORKS)
+    primary_country = state.resolved_countries[0] if state.resolved_countries else "US"
+    state.target_meta = resolve_game(state.config.game_name, country=primary_country)
     return state.target_meta
 
 
@@ -128,25 +162,86 @@ def _step_game_dna(state: PipelineState) -> GameDNA:
 
 
 def _step_top_advertisers(state: PipelineState) -> list[dict]:
-    state.top_advertisers = fetch_top_advertisers(
-        category_id=state.config.category_id,
-        country=state.config.country,
-        period=state.config.period,
-        period_date=state.config.period_date,
-        limit=state.config.max_top_advertisers,
-    )
+    """Top advertisers per (country) for the configured category, deduped by
+    app_id. We use ``network='All Networks'`` (the only top_apps endpoint that
+    accepts it) so a single request per country is enough.
+    """
+    seen_ids: set[str] = set()
+    merged: list[dict] = []
+
+    for country in state.resolved_countries:
+        try:
+            advs = fetch_top_advertisers(
+                category_id=state.config.category_id,
+                country=country,
+                period=state.config.period,
+                period_date=state.config.period_date,
+                limit=state.config.max_top_advertisers,
+            )
+        except Exception:
+            log.exception("fetch_top_advertisers failed for country=%s", country)
+            continue
+        for adv in advs:
+            aid = str(adv.get("app_id") or adv.get("name") or "")
+            if not aid or aid in seen_ids:
+                continue
+            seen_ids.add(aid)
+            merged.append(adv)
+
+    state.top_advertisers = merged[: state.config.max_top_advertisers]
     return state.top_advertisers
 
 
 def _step_top_creatives(state: PipelineState) -> list[RawCreative]:
-    state.raw_creatives = fetch_top_creatives(
-        category_id=state.config.category_id,
-        country=state.config.country,
-        network=state.config.network,
-        period=state.config.period,
-        period_date=state.config.period_date,
-        max_creatives=state.config.max_creatives,
-    )
+    """Fan out across (network × country) combos and merge, deduped by
+    creative_id. ``creatives/top`` does not accept ``All Networks``, so we
+    must loop. Per-combo budget is sized so that total fetched across combos
+    ≈ ``max_creatives × 1.5`` (buffer for dedupe). We stop early once
+    ``max_creatives`` distinct creatives are collected.
+    """
+    networks = state.resolved_networks
+    countries = state.resolved_countries
+    target = state.config.max_creatives
+    num_combos = max(1, len(networks) * len(countries))
+    per_combo = max(2, (target * 3 // 2) // num_combos)
+
+    seen_ids: set[str] = set()
+    merged: list[RawCreative] = []
+
+    for network in networks:
+        for country in countries:
+            if len(merged) >= target:
+                break
+            try:
+                creatives = fetch_top_creatives(
+                    category_id=state.config.category_id,
+                    country=country,
+                    network=network,
+                    period=state.config.period,
+                    period_date=state.config.period_date,
+                    max_creatives=per_combo,
+                )
+            except Exception:
+                # SensorTower 422 is common for some network × filter combos
+                # (e.g. Google, ironSource). Log + skip; other combos still
+                # contribute.
+                log.exception(
+                    "fetch_top_creatives failed for network=%s country=%s",
+                    network,
+                    country,
+                )
+                continue
+            for c in creatives:
+                if c.creative_id in seen_ids:
+                    continue
+                seen_ids.add(c.creative_id)
+                merged.append(c)
+                if len(merged) >= target:
+                    break
+        if len(merged) >= target:
+            break
+
+    state.raw_creatives = merged[:target]
     return state.raw_creatives
 
 
@@ -207,8 +302,8 @@ def _step_compose_report(state: PipelineState) -> HookLensReport:
         market_context=MarketContext(
             category_id=str(state.config.category_id),
             category_name="Puzzle" if state.config.category_id == 7012 else "Other",
-            countries=[state.config.country],
-            networks=[state.config.network],
+            countries=state.resolved_countries or [state.config.countries[0]],
+            networks=state.resolved_networks or [state.config.networks[0]],
             period_start=period_dt,
             period_end=period_dt,
             num_advertisers_scanned=len(state.top_advertisers),
@@ -352,6 +447,10 @@ def run_pipeline_prototype(
 
     state = PipelineState(config=config)
     state.target_meta = synthetic_meta
+    # Resolve the "all" sentinels here too — prototype mode skips
+    # _step_resolve_game where the live path performs this expansion.
+    state.resolved_countries = _expand_all(config.countries, ALL_COUNTRIES)
+    state.resolved_networks = _expand_all(config.networks, ALL_NETWORKS)
 
     # Synthetically yield step 1 (resolve_game) so the UI gets a "Step 1/10
     # done" event with the synthetic metadata payload.
