@@ -17,12 +17,13 @@ from typing import Any
 import httpx
 
 from app._cache import disk_cached
+from app._paths import CACHE_DIR
 from app.models import AppMetadata, RawCreative
 
 log = logging.getLogger(__name__)
 
 ST_BASE = "https://api.sensortower.com"
-DEFAULT_CACHE_DIR = Path("data/cache/sensortower")
+DEFAULT_CACHE_DIR = CACHE_DIR / "sensortower"
 
 
 # ---------------------------------------------------------------------------

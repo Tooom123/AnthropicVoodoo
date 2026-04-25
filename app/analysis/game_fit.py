@@ -14,11 +14,12 @@ from pathlib import Path
 import anthropic
 
 from app._cache import disk_cached
+from app._paths import CACHE_DIR
 from app.models import CreativeArchetype, GameDNA, GameFitScore
 
 log = logging.getLogger(__name__)
 
-DEFAULT_CACHE_DIR = Path("data/cache/game_fit")
+DEFAULT_CACHE_DIR = CACHE_DIR / "game_fit"
 OPUS_MODEL = "claude-opus-4-7"  # adjust if your SDK rejects the alias
 
 GAMEFIT_TOOL = {

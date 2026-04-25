@@ -24,6 +24,7 @@ from google.genai import types
 from pydantic import BaseModel, Field
 from tenacity import retry, stop_after_attempt, wait_exponential
 
+from app._paths import CACHE_DIR
 from app.models import DeconstructedCreative, HookFrame, RawCreative
 
 log = logging.getLogger(__name__)
@@ -33,8 +34,8 @@ log = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 MODEL = "gemini-2.5-pro"
-DEFAULT_VIDEO_CACHE_DIR = Path("data/cache/videos")
-DEFAULT_DECONSTRUCT_CACHE_DIR = Path("data/cache/deconstruct")
+DEFAULT_VIDEO_CACHE_DIR = CACHE_DIR / "videos"
+DEFAULT_DECONSTRUCT_CACHE_DIR = CACHE_DIR / "deconstruct"
 
 # Gemini 2.5 Pro pricing — rough estimate for budget tracking only.
 COST_INPUT_PER_1M_TOKENS = 1.25

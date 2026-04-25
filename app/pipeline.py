@@ -18,6 +18,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Iterator
 
+from app._paths import CACHE_DIR
 from app.analysis.archetypes import compute_archetypes
 from app.analysis.deconstruct import deconstruct_batch
 from app.analysis.game_dna import extract_game_dna
@@ -44,7 +45,7 @@ from app.sources.sensortower import (
 
 log = logging.getLogger(__name__)
 
-REPORT_CACHE_DIR = Path("data/cache/reports")
+REPORT_CACHE_DIR = CACHE_DIR / "reports"
 
 
 # ---------------------------------------------------------------------------

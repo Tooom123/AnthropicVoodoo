@@ -25,13 +25,14 @@ from pathlib import Path
 import httpx
 
 from app._cache import disk_cached, hash_key
+from app._paths import CACHE_DIR
 from app.models import CreativeArchetype, CreativeBrief, GameFitScore, GeneratedVariant
 
 log = logging.getLogger(__name__)
 
 SCENARIO_BASE = "https://api.cloud.scenario.com/v1"
 DEFAULT_MODEL_ID = "flux.1-dev"
-DEFAULT_CACHE_DIR = Path("data/cache/scenario")
+DEFAULT_CACHE_DIR = CACHE_DIR / "scenario"
 
 
 def _basic_auth_header() -> str | None:

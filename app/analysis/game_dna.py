@@ -11,12 +11,13 @@ from google import genai
 from google.genai import types
 
 from app._cache import disk_cached
+from app._paths import CACHE_DIR
 from app.models import AppMetadata, GameDNA
 
 log = logging.getLogger(__name__)
 
-DEFAULT_CACHE_DIR = Path("data/cache/game_dna")
-SCREENSHOT_CACHE_DIR = Path("data/cache/screenshots")
+DEFAULT_CACHE_DIR = CACHE_DIR / "game_dna"
+SCREENSHOT_CACHE_DIR = CACHE_DIR / "screenshots"
 MODEL = "gemini-2.5-pro"
 
 PROMPT_TEMPLATE = """You are a senior mobile-game product analyst. Looking at these in-game screenshots and the store description below, extract a precise, structured "Game DNA" matching the schema. Be specific, concrete, never hedge.

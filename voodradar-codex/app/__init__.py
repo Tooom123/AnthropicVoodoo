@@ -1,2 +1,0 @@
-"""HookLens application package."""
-

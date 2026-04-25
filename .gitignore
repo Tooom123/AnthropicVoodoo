@@ -30,6 +30,11 @@ dist/
 # Runtime cache (we keep the dir but ignore its contents)
 data/cache/*
 !data/cache/.gitkeep
+# Notebook stray cache (shouldn't happen anymore — modules now resolve to repo root)
+notebooks/data/
+
+# Parallel sub-agent experiments (kept on disk, untracked)
+voodradar-codex/
 
 # Notebooks
 .ipynb_checkpoints/

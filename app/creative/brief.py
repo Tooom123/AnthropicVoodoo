@@ -14,11 +14,12 @@ from pathlib import Path
 import anthropic
 
 from app._cache import disk_cached
+from app._paths import CACHE_DIR
 from app.models import CreativeArchetype, CreativeBrief, GameDNA, GameFitScore
 
 log = logging.getLogger(__name__)
 
-DEFAULT_CACHE_DIR = Path("data/cache/briefs")
+DEFAULT_CACHE_DIR = CACHE_DIR / "briefs"
 OPUS_MODEL = "claude-opus-4-7"
 
 BRIEF_TOOL = {
