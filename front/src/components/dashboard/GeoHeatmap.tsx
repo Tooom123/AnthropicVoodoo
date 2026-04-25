@@ -37,18 +37,23 @@ const STEP_LNG = 3.5;
 const STEP_LAT = 2.8;
 const DOT_R = 2.6;
 
+type DotKind = "heat" | "land" | "ocean";
+
 interface GridDot {
   x: number;
   y: number;
   signal: CountrySignal | null;
+  kind: DotKind;
 }
 
 function haversine(lat1: number, lng1: number, lat2: number, lng2: number): number {
-  // returns distance in degrees (approx, good enough for radius lookup)
   const dLat = lat1 - lat2;
   const dLng = (lng1 - lng2) * Math.cos(((lat1 + lat2) / 2) * (Math.PI / 180));
   return Math.sqrt(dLat * dLat + dLng * dLng);
 }
+
+// Land-silhouette radius = 2.4× capture radius so untracked land is still visible
+const LAND_MULT = 2.4;
 
 function buildGrid(signals: CountrySignal[]): GridDot[] {
   const dots: GridDot[] = [];
@@ -57,6 +62,7 @@ function buildGrid(signals: CountrySignal[]): GridDot[] {
       const { x, y } = project(lat, lng);
       let nearest: CountrySignal | null = null;
       let minDist = Infinity;
+      let isLand = false;
 
       for (const s of signals) {
         const d = haversine(lat, lng, s.lat, s.lng);
@@ -64,8 +70,11 @@ function buildGrid(signals: CountrySignal[]): GridDot[] {
           minDist = d;
           nearest = s;
         }
+        if (d < s.radius * LAND_MULT) isLand = true;
       }
-      dots.push({ x, y, signal: nearest });
+
+      const kind: DotKind = nearest ? "heat" : isLand ? "land" : "ocean";
+      dots.push({ x, y, signal: nearest, kind });
     }
   }
   return dots;
@@ -260,31 +269,55 @@ export function GeoHeatmap() {
           style={{ display: "block" }}
           onMouseLeave={() => setTooltip(null)}
         >
-          {/* Dot grid */}
+          {/* Dot grid — three tiers: heat / land-silhouette / ocean */}
           {dots.map((dot, i) => {
-            const hasSignal = dot.signal !== null;
+            const { kind, signal } = dot;
+
+            // Ocean dots: near-invisible, very small
+            if (kind === "ocean") {
+              return (
+                <circle
+                  key={i}
+                  cx={dot.x}
+                  cy={dot.y}
+                  r={DOT_R * 0.55}
+                  fill="#0d1a2a"
+                  opacity={0.6}
+                />
+              );
+            }
+
+            // Land silhouette (no data coverage): muted slate-blue
+            if (kind === "land") {
+              const dimmed =
+                hoveredContinent !== null;
+              return (
+                <circle
+                  key={i}
+                  cx={dot.x}
+                  cy={dot.y}
+                  r={DOT_R * 0.75}
+                  fill="#1e3352"
+                  opacity={dimmed ? 0.25 : 0.7}
+                  style={{ transition: "opacity 0.3s" }}
+                />
+              );
+            }
+
+            // Heat dot (data coverage)
             const dimmed =
               hoveredContinent !== null &&
-              hasSignal &&
-              dot.signal!.continent !== hoveredContinent;
-
-            const color = hasSignal
-              ? dimmed
-                ? "#1e293b"
-                : heatColor(dot.signal!.market_intensity)
-              : "#111827";
-
-            const opacity = hasSignal ? (dimmed ? 0.3 : 1) : 0.45;
+              signal!.continent !== hoveredContinent;
 
             return (
               <circle
                 key={i}
                 cx={dot.x}
                 cy={dot.y}
-                r={hasSignal ? DOT_R + (dot.signal!.market_intensity / maxIntensity) * 1.4 : DOT_R * 0.7}
-                fill={color}
-                opacity={opacity}
-                style={{ transition: "fill 0.4s, opacity 0.3s, r 0.4s" }}
+                r={dimmed ? DOT_R * 0.8 : DOT_R + (signal!.market_intensity / maxIntensity) * 1.6}
+                fill={dimmed ? "#1e3352" : heatColor(signal!.market_intensity)}
+                opacity={dimmed ? 0.3 : 1}
+                style={{ transition: "fill 0.4s, opacity 0.3s" }}
               />
             );
           })}
