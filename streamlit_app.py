@@ -31,6 +31,7 @@ from app.pipeline import (
 from app.ui.cards import (
     render_app_metadata,
     render_archetype_card,
+    render_brief_card,
     render_deconstructed_table,
     render_fit_score_row,
     render_game_dna,
@@ -124,15 +125,28 @@ with st.sidebar:
             game_name = ""  # not used in this mode
 
         st.divider()
-        st.caption("Common parameters")
+        st.caption("Common parameters · _hover ℹ️ on any field for details_")
 
-        # ----- Common pipeline knobs -----
-        country = st.selectbox("Country", ["US", "GB", "FR", "JP", "DE", "BR"], index=0)
+        country = st.selectbox(
+            "Country",
+            ["US", "GB", "FR", "JP", "DE", "BR"],
+            index=0,
+            help=(
+                "ISO-2 country code for the SensorTower scan. Defines which "
+                "geographic ad market we observe — US is biggest for puzzle/casual; "
+                "JP/KR have very different hook conventions."
+            ),
+        )
         network = st.selectbox(
             "Network",
             ["TikTok", "Facebook", "Instagram", "Admob", "Unity"],
             index=0,
-            help="creatives/top requires a single network — All Networks is rejected.",
+            help=(
+                "Ad network to scan. SensorTower's `creatives/top` endpoint "
+                "requires exactly one network (no 'All Networks'). TikTok = best "
+                "signal for emerging hyper/hybrid-casual hooks; Admob = broader "
+                "volume; Facebook = older-audience tilt."
+            ),
         )
         category_id = st.selectbox(
             "iOS Category",
@@ -147,17 +161,78 @@ with st.sidebar:
                 7017: "Strategy",
             }.get(x, str(x)),
             index=0,
-            help="In prototype mode this is also the target category for the market scan.",
+            help=(
+                "iOS App Store category. Drives the market scan — we only see "
+                "ads from competitors in this segment. In prototype mode this is "
+                "also the target category we'll position the new game in."
+            ),
         )
-        period = st.selectbox("Period", ["week", "month", "quarter"], index=1)
-        period_date = st.text_input("Period start (YYYY-MM-DD)", value="2026-04-01")
+        period = st.selectbox(
+            "Period",
+            ["week", "month", "quarter"],
+            index=1,
+            help=(
+                "Aggregation window for the SensorTower share/SoV metrics. "
+                "Shorter (week) = more reactive to breakouts but noisier; "
+                "longer (quarter) = more stable but misses fresh hooks."
+            ),
+        )
+        period_date = st.text_input(
+            "Period start (YYYY-MM-DD)",
+            value="2026-04-01",
+            help=(
+                "Anchor date for the period window. SensorTower returns the "
+                "period starting from this date going backward."
+            ),
+        )
 
         st.divider()
-        st.caption("⚙️ Pipeline tuning")
-        max_creatives = st.slider("Max creatives to scan", 4, 20, 8)
-        top_k_archetypes = st.slider("Top archetypes to keep", 3, 8, 5)
-        top_k_variants = st.slider("Final variants to generate", 1, 5, 3)
-        deconstruct_concurrency = st.slider("Gemini parallelism", 1, 8, 5)
+        st.caption("⚙️ Pipeline tuning · _safe to leave at defaults_")
+        max_creatives = st.slider(
+            "Max creatives to scan",
+            4,
+            20,
+            8,
+            help=(
+                "Number of top ad creatives we'll deconstruct with Gemini Pro. "
+                "More = richer archetype clustering but slower (~10s/video) and "
+                "more expensive (~$0.01/video on Gemini)."
+            ),
+        )
+        top_k_archetypes = st.slider(
+            "Top archetypes to keep",
+            3,
+            8,
+            5,
+            help=(
+                "How many archetype clusters we score against the Game DNA "
+                "(step 7 — Game-fit). More = broader exploration; each extra "
+                "archetype adds one Claude Opus call (~$0.05)."
+            ),
+        )
+        top_k_variants = st.slider(
+            "Final variants to generate",
+            1,
+            5,
+            3,
+            help=(
+                "How many creative briefs + Scenario images we produce as the "
+                "final deliverable. 3 is the sweet spot for A/B testing — "
+                "enough variety to compare hooks without overwhelming the UA team."
+            ),
+        )
+        deconstruct_concurrency = st.slider(
+            "Gemini parallelism",
+            1,
+            8,
+            5,
+            help=(
+                "How many video deconstruction calls to Gemini Pro run "
+                "simultaneously. We use asyncio.Semaphore(N): N concurrent "
+                "video uploads + analyses. 5 is safe; 8 may hit Gemini's rate "
+                "limit; 1 is sequential (slow but trivial to debug)."
+            ),
+        )
 
         submitted = st.form_submit_button(
             "🚀 Run pipeline", type="primary", use_container_width=True
@@ -299,8 +374,68 @@ def on_step(
     )
     container = sections[step_id]
 
+    # One-liner explainer per step so the user always knows what just happened.
+    explainers = {
+        "target_meta": (
+            "Resolved the target game on SensorTower (or built synthetic "
+            "metadata in prototype mode). Screenshots + description below "
+            "feed the next step."
+        ),
+        "game_dna": (
+            "Gemini 2.5 Pro Vision compresses screenshots + description into "
+            "a structured Game DNA — the anchor every downstream scoring "
+            "step uses to decide if a market hook fits THIS game."
+        ),
+        "top_advertisers": (
+            "SensorTower /ad_intel/top_apps — who is buying ads in this "
+            "category, ranked by Share of Voice. Defines our competitive "
+            "universe."
+        ),
+        "raw_creatives": (
+            "SensorTower /ad_intel/creatives/top — the actual ad videos "
+            "running right now. `phashion_group` is a perceptual hash: "
+            "same value across rows = visual derivatives = signal of a "
+            "hook being copied."
+        ),
+        "deconstructed": (
+            "Each video uploaded to Gemini 2.5 Pro and deconstructed into "
+            "structured features (hook 3s, scene flow, palette, on-screen "
+            "text, voiceover, CTA). Async pool, ~10s/video."
+        ),
+        "archetypes": (
+            "Local clustering on (emotional_pitch × visual_style). For each "
+            "cluster we compute 3 NON-OBVIOUS signals: velocity (fresher = "
+            "rising), derivative_spread (more advertisers = stronger market "
+            "validation), freshness (mean age). The composite score is what "
+            "ranks them."
+        ),
+        "fit_scores": (
+            "Claude Opus 4.7 scores each top archetype against the Game DNA "
+            "on 3 axes (visual / mechanic / audience). Filters market-strong "
+            "but game-inappropriate hooks. The thumbnail you see is the "
+            "centroid creative of that cluster."
+        ),
+        "briefs": (
+            "Claude Opus 4.7 authors a fully-structured CreativeBrief for "
+            "each top-fit archetype: hook, scene flow, visual direction, "
+            "copy, CTA, rationale, and the actual Scenario prompts."
+        ),
+        "variants": (
+            "Scenario img2img generation: each prompt is rendered using "
+            "your target game's screenshots as visual reference (strength "
+            "0.6) so the generated ad keeps the game's identity — palette, "
+            "characters, UI — and avoids the deceptive-ad problem."
+        ),
+        "report": (
+            "Final HookLensReport composed and saved to `data/cache/reports/`. "
+            "Pitch story generated below."
+        ),
+    }
+
     with container.container():
         st.markdown(f"### {idx}. {label}  ·  _{duration_s:.1f}s_")
+        if step_id in explainers:
+            st.caption(explainers[step_id])
 
         if step_id == "target_meta":
             render_app_metadata(payload)  # type: ignore[arg-type]
@@ -334,11 +469,14 @@ def on_step(
                 render_fit_score_row(arch, sc, deconstructed_index=decon_idx)
 
         elif step_id == "briefs":
+            st.caption(
+                "Each brief is fully structured and ready to paste into a "
+                "creative ticket. The Scenario prompts (in the expander) are "
+                "what step 9 will execute against your game's actual screenshots "
+                "to keep the visuals on-brand."
+            )
             for brief in payload:  # type: ignore[union-attr]
-                with st.container(border=True):
-                    st.markdown(f"**{brief.title}**")
-                    st.caption(f"For archetype `{brief.archetype_id}`")
-                    st.write(brief.hook_3s)
+                render_brief_card(brief)
 
         elif step_id == "variants":
             for variant in payload:  # type: ignore[union-attr]

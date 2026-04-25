@@ -12,6 +12,7 @@ import streamlit as st
 from app.models import (
     AppMetadata,
     CreativeArchetype,
+    CreativeBrief,
     DeconstructedCreative,
     GameDNA,
     GameFitScore,
@@ -338,6 +339,64 @@ def render_fit_score_row(
         cols[4].metric("Audience", sc.audience_match)
         cols[5].metric("Overall", sc.overall)
         st.caption(sc.rationale)
+
+
+def render_brief_card(brief: CreativeBrief) -> None:
+    """Detailed inline render of a CreativeBrief — every field exposed.
+
+    Used at step 8 (Author briefs) so the user sees the full brief content
+    immediately, not just a title teaser. Step 9 (Variants) re-renders the
+    brief alongside generated assets.
+    """
+    with st.container(border=True):
+        cols = st.columns([3, 2])
+        with cols[0]:
+            st.markdown(f"### {brief.title}")
+            st.caption(
+                f"Archetype: `{brief.archetype_id}` · Target game: `{brief.target_game_id}`"
+            )
+
+            st.markdown("**Hook (first 3 seconds)**")
+            st.info(brief.hook_3s)
+
+            st.markdown("**Scene flow** _(15-second arc)_")
+            for i, beat in enumerate(brief.scene_flow, start=1):
+                st.write(f"{i}. {beat}")
+
+            st.markdown("**Visual direction**")
+            st.write(brief.visual_direction)
+
+            st.markdown("**Text overlays**")
+            for ov in brief.text_overlays:
+                st.write(f"• {ov}")
+
+            st.markdown(f"**CTA:** :violet-badge[{brief.cta}]")
+
+        with cols[1]:
+            st.markdown("**Why this brief**")
+            st.write(brief.rationale)
+
+            with st.expander(
+                f"🎨 Scenario prompts ({len(brief.scenario_prompts)})",
+                expanded=False,
+            ):
+                st.caption(
+                    "These are the actual text prompts that will be sent to "
+                    "Scenario at step 9. The first becomes the hero frame, "
+                    "the rest become storyboard frames."
+                )
+                for i, p in enumerate(brief.scenario_prompts, start=1):
+                    st.markdown(f"**Prompt {i}**")
+                    st.code(p, language="text")
+
+            st.download_button(
+                "⬇️ Download brief (JSON)",
+                data=brief.model_dump_json(indent=2),
+                file_name=f"brief_{brief.archetype_id}.json",
+                mime="application/json",
+                key=f"dl_brief_step8_{brief.archetype_id}",
+                use_container_width=True,
+            )
 
 
 def _is_stub_url(url: str) -> bool:

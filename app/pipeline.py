@@ -191,7 +191,28 @@ def _step_briefs(state: PipelineState) -> list[CreativeBrief]:
 
 
 def _step_visuals(state: PipelineState) -> list[GeneratedVariant]:
-    state.variants = generate_variants(state.chosen, state.briefs)
+    # Use the target game's downloaded screenshots as visual references for
+    # img2img generation — this anchors the generated ad to the game's actual
+    # palette/characters/UI and prevents "deceptive ad" syndrome (a player
+    # downloading the game shouldn't feel bait-and-switched).
+    from app.analysis.game_dna import SCREENSHOT_CACHE_DIR
+
+    reference_paths: list[Path] = []
+    if state.target_meta is not None:
+        screenshot_dir = SCREENSHOT_CACHE_DIR / state.target_meta.app_id
+        if screenshot_dir.exists():
+            reference_paths = sorted(screenshot_dir.glob("*.png"))[:3]
+        if reference_paths:
+            log.info(
+                "Step 9 — using %d game screenshot(s) as img2img reference",
+                len(reference_paths),
+            )
+
+    state.variants = generate_variants(
+        state.chosen,
+        state.briefs,
+        reference_image_paths=reference_paths,
+    )
     return state.variants
 
 
