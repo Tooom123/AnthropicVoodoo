@@ -86,8 +86,14 @@ export function Sidebar({ activePath }: { activePath: string }) {
   return (
     <aside className="w-64 shrink-0 border-r border-sidebar-border bg-sidebar text-sidebar-foreground">
       <div className="flex h-14 items-center gap-2.5 border-b border-sidebar-border px-4">
+        {/*
+          Voodoo brand mark: matches voodoo.io's white-V-on-black logo in
+          LIGHT mode, and inverts to black-V-on-white in DARK mode so the
+          glyph stays visible on either background. font-black + Inter is
+          the closest free match to the Voodoo wordmark's heavy stencil.
+        */}
         <div
-          className="grid h-8 w-8 place-items-center rounded-md bg-white text-black font-black"
+          className="grid h-8 w-8 place-items-center rounded-md bg-black text-white font-black dark:bg-white dark:text-black"
           style={{ fontFamily: "Inter, system-ui, sans-serif", fontSize: "1.25rem", lineHeight: 1 }}
           aria-label="Voodoo"
         >
