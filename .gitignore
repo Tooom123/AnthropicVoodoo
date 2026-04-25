@@ -55,3 +55,11 @@ htmlcov/
 
 # uv
 uv.lock
+
+# Frontend deps
+front/node_modules/
+front/dist/
+front/.tanstack/
+
+# Voodoo brand assets (reference only, not used at runtime)
+voodooio_logo.*
