@@ -8,6 +8,7 @@ const TABS = [
   { label: "Ad Library", to: "/" },
   { label: "Performance Signals", to: "/performance" },
   { label: "Competitive Scope", to: "/competitive" },
+  { label: "Game Insights", to: "/insights" },
 ];
 
 export function DashboardLayout({

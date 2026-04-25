@@ -70,7 +70,7 @@ const SECTIONS: Section[] = [
     label: "Insight Layer",
     icon: Brain,
     items: [
-      { label: "Recommendations", to: "/insights/recommendations", icon: Lightbulb },
+      { label: "Recommendations", to: "/insights", icon: Lightbulb },
     ],
   },
 ];

@@ -7,8 +7,10 @@ Run:
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 from datetime import date, datetime, timezone
+from pathlib import Path
 from typing import Literal
 
 from dotenv import load_dotenv
@@ -283,6 +285,75 @@ def get_advertisers(
         return []
 
     return [_advertiser_to_competitor(adv, rank=i + 1) for i, adv in enumerate(advs)]
+
+
+_REPORTS_DIR = Path(__file__).parent.parent / "data" / "cache" / "reports"
+
+
+class ReportSummary(BaseModel):
+    app_id: str
+    game_name: str
+    generated_at: str
+    num_archetypes: int
+    num_variants: int
+
+
+@app.get("/api/reports", response_model=list[ReportSummary])
+def list_reports():
+    """List all cached HookLens reports as lightweight summaries."""
+    if not _REPORTS_DIR.exists():
+        return []
+    summaries: list[ReportSummary] = []
+    for path in sorted(_REPORTS_DIR.glob("*_e2e.json")):
+        try:
+            data = json.loads(path.read_text())
+            game = data.get("target_game", {})
+            summaries.append(
+                ReportSummary(
+                    app_id=game.get("app_id", path.stem.replace("_e2e", "")),
+                    game_name=game.get("name", "Unknown"),
+                    generated_at=data.get("generated_at", ""),
+                    num_archetypes=len(data.get("top_archetypes", [])),
+                    num_variants=len(data.get("final_variants", [])),
+                )
+            )
+        except Exception:
+            log.exception("Failed to parse report %s", path)
+    return summaries
+
+
+@app.get("/api/report")
+def get_report(game_name: str = Query(...)):
+    """Return the full HookLensReport for a game, if cached."""
+    from fastapi import HTTPException
+    from fastapi.responses import JSONResponse
+
+    if not _REPORTS_DIR.exists():
+        raise HTTPException(status_code=404, detail="No reports cached yet")
+
+    # Try resolving app_id via SensorTower to get the exact filename
+    try:
+        from app.sources.sensortower import resolve_game
+        meta = resolve_game(game_name)
+        candidates = list(_REPORTS_DIR.glob(f"{meta.app_id}_e2e.json"))
+    except Exception:
+        candidates = []
+
+    # Fallback: fuzzy match by game name inside any report
+    if not candidates:
+        for path in _REPORTS_DIR.glob("*_e2e.json"):
+            try:
+                data = json.loads(path.read_text())
+                if game_name.lower() in data.get("target_game", {}).get("name", "").lower():
+                    candidates = [path]
+                    break
+            except Exception:
+                continue
+
+    if not candidates:
+        raise HTTPException(status_code=404, detail=f"No cached report for '{game_name}'")
+
+    return JSONResponse(content=json.loads(candidates[0].read_text()))
 
 
 @app.get("/health")

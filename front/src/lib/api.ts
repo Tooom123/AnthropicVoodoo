@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import type { Creative, CompetitorGame } from "@/data/sample";
+import type { HookLensReport, ReportSummary } from "@/types/hooklens";
 
 const API_BASE = (import.meta.env.VITE_API_URL as string | undefined) ?? "http://localhost:8000";
 
@@ -65,5 +66,23 @@ export function useGameMeta(name: string) {
     queryFn: () => apiFetch<GameMeta | null>("/api/game", { name }),
     staleTime: 30 * 60 * 1000,
     enabled: name.trim().length > 0,
+  });
+}
+
+export function useReport(gameName: string) {
+  return useQuery<HookLensReport>({
+    queryKey: ["report", gameName],
+    queryFn: () => apiFetch<HookLensReport>("/api/report", { game_name: gameName }),
+    staleTime: 30 * 60 * 1000,
+    enabled: gameName.trim().length > 0,
+    retry: false,
+  });
+}
+
+export function useReportList() {
+  return useQuery<ReportSummary[]>({
+    queryKey: ["reports"],
+    queryFn: () => apiFetch<ReportSummary[]>("/api/reports"),
+    staleTime: 5 * 60 * 1000,
   });
 }
