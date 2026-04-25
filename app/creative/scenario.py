@@ -56,14 +56,19 @@ def call_scenario(
     model_id: str = DEFAULT_MODEL_ID,
     width: int = 720,
     height: int = 1280,
-    timeout_s: float = 180.0,
+    timeout_s: float = 360.0,
 ) -> tuple[str, dict]:
     """Generate one image via Scenario REST API.
 
     Returns ``(asset_url, metadata_dict)``. ``metadata_dict["stub"]`` is True
-    when credentials are missing and the Picsum fallback was used.
+    when credentials are missing or when generation timed out (graceful
+    degradation: the pipeline continues with a Picsum placeholder rather
+    than crashing on a single slow asset).
 
-    Cached on disk by ``(prompt, model_id)`` so re-runs are instant.
+    On timeout, the failure is *not* cached — re-running may succeed if
+    Scenario's queue has cleared.
+
+    Cached on disk by ``(prompt, model_id)`` so successful re-runs are instant.
     """
     cache_path = DEFAULT_CACHE_DIR / f"{label}__{hash_key({'p': prompt, 'm': model_id})}.json"
     if cache_path.exists():
@@ -147,7 +152,25 @@ def call_scenario(
 
         time.sleep(3.0)
 
-    raise TimeoutError(f"Scenario job {job_id} did not finish within {timeout_s}s")
+    # Graceful degradation on timeout — return a Picsum placeholder so the
+    # pipeline can complete. Do NOT cache: a future re-run may succeed once
+    # Scenario's queue clears. The job_id is kept in metadata so the user can
+    # check the Scenario dashboard manually for the eventual asset.
+    log.warning(
+        "Scenario job %s timed out after %.0fs — falling back to placeholder. "
+        "Re-run later to retry; the job may still complete in Scenario's queue.",
+        job_id,
+        timeout_s,
+    )
+    fallback_url = _picsum_stub(prompt)
+    return fallback_url, {
+        "url": fallback_url,
+        "stub": True,
+        "stub_reason": "scenario_timeout",
+        "job_id": job_id,
+        "prompt": prompt,
+        "model_id": model_id,
+    }
 
 
 def generate_variants(

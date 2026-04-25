@@ -174,10 +174,15 @@ def on_step(step_id: str, label: str, idx: int, payload: object, duration_s: flo
 
         elif step_id == "deconstructed":
             render_deconstructed_table(payload)  # type: ignore[arg-type]
+            # Keep an index for the archetype cards to show source thumbnails
+            st.session_state["__deconstructed_index"] = {
+                d.raw.creative_id: d for d in payload  # type: ignore[union-attr]
+            }
 
         elif step_id == "archetypes":
+            decon_idx = st.session_state.get("__deconstructed_index")
             for arch in payload:  # type: ignore[union-attr]
-                render_archetype_card(arch)
+                render_archetype_card(arch, deconstructed_index=decon_idx)
 
         elif step_id == "fit_scores":
             top_archs = sections.get("__top_archs_cache")
