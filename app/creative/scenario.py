@@ -4,15 +4,17 @@ Owner: Partner 2. The production target uses the **Scenario MCP** connector
 inside Claude Code; this module is the v1 REST baseline so the Streamlit
 pipeline runs end-to-end from Python.
 
-Two generation modes:
+Three generation modes (auto-selected based on inputs):
 
-- ``txt2img``: pure prompt-driven. Used when no reference image is available.
-- ``img2img``: prompt + reference image (the target game's screenshot). The
-  ``strength`` parameter controls how much the generation deviates from the
-  reference (1.0 = ignore reference, 0.0 = unchanged). For ad creative
-  purposes we use 0.6 by default — keeps the game's identity (palette,
-  characters, UI style) so the ad is *non-deceptive* but lets the prompt
-  shape the narrative beat.
+- ``txt2img``: pure prompt-driven. No reference image.
+- ``txt2img-ip-adapter`` (default when refs provided): prompt-driven
+  composition with **IP-Adapter style transfer** from 1-3 game screenshots.
+  This is the right tool for "ad creative that stays on-brand" — the prompt
+  drives the narrative, the references inject palette + character + UI vibe
+  without locking the canvas. Anti-deceptive-ad strategy.
+- ``img2img`` (opt-in via ``img2img_strength=...``): single-reference
+  composition lock. Useful when one screenshot must define the layout
+  exactly (rare for ads — kept for flexibility).
 
 API auth: Basic with ``API_KEY:API_SECRET`` base64-encoded.
 
@@ -46,6 +48,7 @@ DEFAULT_MODEL_ID = "flux.1-dev"
 DEFAULT_CACHE_DIR = CACHE_DIR / "scenario"
 ASSETS_CACHE_DIR = CACHE_DIR / "scenario_assets"
 DEFAULT_IMG2IMG_STRENGTH = 0.6  # 0.0 = identical to reference, 1.0 = ignore reference
+MAX_IPADAPTER_REFS = 3  # Scenario / Veo / most IP-Adapter models cap quality at 3 refs
 
 
 def _basic_auth_header() -> str | None:
@@ -111,18 +114,15 @@ def call_scenario(
     width: int = 720,
     height: int = 1280,
     timeout_s: float = 360.0,
-    reference_image_path: Path | None = None,
-    img2img_strength: float = DEFAULT_IMG2IMG_STRENGTH,
+    reference_image_paths: list[Path] | None = None,
+    ipadapter_type: str = "style",  # "style" or "character"
+    img2img_strength: float | None = None,  # if set, force img2img mode (single ref)
 ) -> tuple[str, dict]:
-    """Generate one image via Scenario REST API.
+    """Generate one image via Scenario REST API. Mode auto-selected:
 
-    If ``reference_image_path`` is provided, uses **img2img** mode so the
-    output stays visually anchored on the target game's actual aesthetic
-    (palette, characters, UI style). This is what makes the ad
-    *non-deceptive* — a player downloading the game won't feel
-    bait-and-switched.
-
-    Otherwise uses **txt2img** mode (prompt only).
+    - 0 refs                                 → ``txt2img``
+    - 1+ refs, no ``img2img_strength``       → ``txt2img-ip-adapter`` (recommended for ad creatives)
+    - exactly 1 ref + ``img2img_strength``   → ``img2img`` (composition lock, opt-in)
 
     Returns ``(asset_url, metadata_dict)``. ``metadata_dict["stub"]`` is True
     when credentials are missing or when generation timed out (graceful
@@ -132,19 +132,27 @@ def call_scenario(
     On timeout, the failure is *not* cached — re-running may succeed if
     Scenario's queue has cleared.
 
-    Cached on disk by ``(prompt, model_id, reference_image_hash, mode)``.
+    Cached on disk by all inputs that affect the output.
     """
-    mode = "img2img" if reference_image_path else "txt2img"
+    refs = reference_image_paths or []
+    refs = refs[:MAX_IPADAPTER_REFS]  # cap
+
+    if img2img_strength is not None and len(refs) >= 1:
+        mode = "img2img"
+    elif len(refs) >= 1:
+        mode = "txt2img-ip-adapter"
+    else:
+        mode = "txt2img"
+
     cache_key = {
         "p": prompt,
         "m": model_id,
         "mode": mode,
-        "ref": (
-            hashlib.sha256(reference_image_path.read_bytes()).hexdigest()[:16]
-            if reference_image_path
-            else None
-        ),
-        "strength": img2img_strength if reference_image_path else None,
+        "refs": [
+            hashlib.sha256(p.read_bytes()).hexdigest()[:16] for p in refs
+        ],
+        "strength": img2img_strength,
+        "ipa_type": ipadapter_type if mode == "txt2img-ip-adapter" else None,
     }
     cache_path = DEFAULT_CACHE_DIR / f"{label}__{hash_key(cache_key)}.json"
     if cache_path.exists():
@@ -169,7 +177,7 @@ def call_scenario(
 
     headers = {"Content-Type": "application/json", "Authorization": auth}
 
-    # Build payload — txt2img vs img2img
+    # Build payload — same base for all 3 modes
     payload: dict = {
         "prompt": prompt,
         "modelId": model_id,
@@ -179,26 +187,42 @@ def call_scenario(
         "width": width,
         "height": height,
     }
+
+    # Upload refs and add mode-specific fields
     endpoint = "/generate/txt2img"
-    if reference_image_path:
+    asset_ids: list[str] = []
+    if mode != "txt2img":
         try:
-            asset_id = upload_asset(reference_image_path, name=f"ref_{label}")
-            payload["image"] = asset_id
-            payload["strength"] = img2img_strength
-            endpoint = "/generate/img2img"
+            asset_ids = [
+                upload_asset(p, name=f"ref_{label}_{i}")
+                for i, p in enumerate(refs)
+            ]
         except Exception as e:  # noqa: BLE001
             log.warning(
-                "img2img reference upload failed (%s) — falling back to txt2img.", e
+                "Scenario reference upload failed (%s) — falling back to txt2img.", e
             )
             mode = "txt2img"
+
+    if mode == "img2img":
+        payload["image"] = asset_ids[0]
+        payload["strength"] = img2img_strength
+        endpoint = "/generate/img2img"
+    elif mode == "txt2img-ip-adapter":
+        payload["ipAdapterImageIds"] = asset_ids
+        payload["ipAdapterType"] = ipadapter_type
+        endpoint = "/generate/txt2img-ip-adapter"
 
     log.info(
         "Scenario CACHE MISS · POST %s · model=%s%s",
         endpoint,
         model_id,
-        f" · ref={reference_image_path.name}, strength={img2img_strength}"
-        if reference_image_path and "image" in payload
-        else "",
+        (
+            f" · {len(asset_ids)} ref(s) · type={ipadapter_type}"
+            if mode == "txt2img-ip-adapter"
+            else f" · ref={refs[0].name}, strength={img2img_strength}"
+            if mode == "img2img"
+            else ""
+        ),
     )
     r = httpx.post(
         f"{SCENARIO_BASE}{endpoint}",
@@ -246,12 +270,9 @@ def call_scenario(
                 "prompt": prompt,
                 "model_id": model_id,
                 "mode": mode,
-                "reference_image": (
-                    reference_image_path.name if reference_image_path else None
-                ),
-                "img2img_strength": (
-                    img2img_strength if reference_image_path else None
-                ),
+                "reference_images": [p.name for p in refs] if refs else None,
+                "img2img_strength": img2img_strength if mode == "img2img" else None,
+                "ipadapter_type": ipadapter_type if mode == "txt2img-ip-adapter" else None,
             }
             DEFAULT_CACHE_DIR.mkdir(parents=True, exist_ok=True)
             cache_path.write_text(json.dumps(result, indent=2))
@@ -289,35 +310,37 @@ def generate_variants(
     *,
     model_id: str = DEFAULT_MODEL_ID,
     reference_image_paths: list[Path] | None = None,
-    img2img_strength: float = DEFAULT_IMG2IMG_STRENGTH,
+    ipadapter_type: str = "style",
 ) -> list[GeneratedVariant]:
     """For each brief, generate one hero frame + storyboard via Scenario.
 
-    If ``reference_image_paths`` is non-empty, runs in **img2img** mode so the
-    output keeps the target game's visual identity (palette, characters, UI).
-    The first reference is used for the hero frame; subsequent references
-    (or the same one cycled) are used for storyboard frames. This is the fix
-    for "deceptive ad" syndrome where a generated visual looks nothing like
-    the actual game.
+    When ``reference_image_paths`` is non-empty (typical: the target game's
+    screenshots), uses **txt2img + IP-Adapter** to transfer the game's
+    visual STYLE (palette, character/UI vibe) onto each prompt-driven
+    composition. This is the right tool for ad creatives — palette match
+    without composition lock — and prevents the "deceptive ad" problem
+    where a generated visual looks nothing like the actual game.
+
+    All available refs (capped at 3) are passed as IP-Adapter style refs
+    for every scenario_prompt — every frame of the variant gets the full
+    style anchor.
 
     ``test_priority`` is a final ranking by ``signal_score × game_fit / 100``
     so the publishing team knows which variant to A/B-test first.
     """
     variants: list[GeneratedVariant] = []
-    refs = reference_image_paths or []
+    refs = (reference_image_paths or [])[:MAX_IPADAPTER_REFS]
 
     for arch, sc in chosen:
         brief = next(b for b in briefs if b.archetype_id == arch.archetype_id)
         urls: list[str] = []
         for j, prompt in enumerate(brief.scenario_prompts):
-            # Cycle through reference images so each scenario_prompt gets one.
-            ref_path = refs[j % len(refs)] if refs else None
             url, _meta = call_scenario(
                 prompt,
                 label=f"{brief.archetype_id}_{j}",
                 model_id=model_id,
-                reference_image_path=ref_path,
-                img2img_strength=img2img_strength,
+                reference_image_paths=refs,
+                ipadapter_type=ipadapter_type,
             )
             urls.append(url)
 
