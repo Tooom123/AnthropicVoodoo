@@ -37,9 +37,13 @@ notebooks/data/
 voodradar-codex/
 
 # Notebooks
+# We work in .py jupytext format. Convert on demand with:
+#   uv run jupytext --to ipynb notebooks/<file>.py
+# .ipynb files are never committed — their outputs can leak secrets (e.g. API
+# tokens captured in httpx INFO logs are inlined into cell outputs).
 .ipynb_checkpoints/
 *.ipynb_meta
-**/Untitled*.ipynb
+*.ipynb
 **/Untitled*.py
 
 # Test / coverage
