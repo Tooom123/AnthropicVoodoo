@@ -30,10 +30,23 @@ dist/
 # Runtime cache (we keep the dir but ignore its contents)
 data/cache/*
 !data/cache/.gitkeep
+# PM-uploaded screenshots/mockups for the prototype mode
+data/uploads/
+# Notebook stray cache (shouldn't happen anymore — modules now resolve to repo root)
+notebooks/data/
+
+# Parallel sub-agent experiments (kept on disk, untracked)
+voodradar-codex/
 
 # Notebooks
+# We work in .py jupytext format. Convert on demand with:
+#   uv run jupytext --to ipynb notebooks/<file>.py
+# .ipynb files are never committed — their outputs can leak secrets (e.g. API
+# tokens captured in httpx INFO logs are inlined into cell outputs).
 .ipynb_checkpoints/
 *.ipynb_meta
+*.ipynb
+**/Untitled*.py
 
 # Test / coverage
 .pytest_cache/
@@ -42,11 +55,3 @@ htmlcov/
 
 # uv
 uv.lock
-
-# Node
-node_modules/
-**/node_modules/
-front/bun.lockb
-front/package-lock.json
-proto/bun.lockb
-proto/package-lock.json

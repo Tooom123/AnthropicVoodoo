@@ -1,4 +1,5 @@
-"""HookLens API bridge — exposes SensorTower metrics to the React frontend.
+"""HookLens API bridge — exposes SensorTower metrics + full HookLens reports
+to the React frontend.
 
 Run:
     uv run uvicorn api.main:app --reload --port 8000
@@ -7,12 +8,14 @@ Run:
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 from datetime import date, datetime, timezone
+from pathlib import Path
 from typing import Literal
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, Query
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
@@ -288,3 +291,114 @@ def get_advertisers(
 @app.get("/health")
 def health():
     return {"status": "ok", "utc": datetime.now(timezone.utc).isoformat()}
+
+
+# ---------------------------------------------------------------------------
+# Full HookLens report endpoints — the actual product surface
+# ---------------------------------------------------------------------------
+
+from app._paths import CACHE_DIR  # noqa: E402
+
+REPORTS_CACHE_DIR = CACHE_DIR / "reports"
+
+
+class ReportSummary(BaseModel):
+    """One row in /api/reports — a cached run available for instant display."""
+
+    app_id: str
+    name: str
+    publisher: str | None = None
+    icon_url: str | None = None
+    generated_at: str | None = None
+    num_archetypes: int
+    num_variants: int
+    total_cost_usd: float
+    duration_seconds: float
+
+
+@app.get("/api/reports", response_model=list[ReportSummary])
+def list_reports() -> list[ReportSummary]:
+    """List all cached HookLensReports available on disk.
+
+    Used by the frontend to populate a "previously analyzed games" picker
+    in the sidebar — instant load on click vs running the full pipeline.
+    """
+    if not REPORTS_CACHE_DIR.exists():
+        return []
+
+    out: list[ReportSummary] = []
+    for path in sorted(REPORTS_CACHE_DIR.glob("*_e2e.json")):
+        try:
+            data = json.loads(path.read_text())
+            tg = data.get("target_game", {})
+            out.append(
+                ReportSummary(
+                    app_id=tg.get("app_id", path.stem.removesuffix("_e2e")),
+                    name=tg.get("name", "Unknown"),
+                    publisher=None,
+                    icon_url=None,
+                    generated_at=data.get("generated_at"),
+                    num_archetypes=len(data.get("top_archetypes", [])),
+                    num_variants=len(data.get("final_variants", [])),
+                    total_cost_usd=float(data.get("total_cost_usd") or 0),
+                    duration_seconds=float(data.get("pipeline_duration_seconds") or 0),
+                )
+            )
+        except Exception:
+            log.exception("Failed to parse cached report %s", path.name)
+            continue
+    # Most recent first
+    out.sort(key=lambda r: r.generated_at or "", reverse=True)
+    return out
+
+
+@app.get("/api/report")
+def get_report(
+    game_name: str | None = Query(None, description="Game name to resolve via SensorTower"),
+    app_id: str | None = Query(None, description="Direct app_id (skips SensorTower lookup)"),
+) -> dict:
+    """Return the full HookLensReport for a game, loaded from disk cache.
+
+    The pipeline is too slow (3-5 minutes) to run synchronously inside an
+    HTTP request. We assume reports have been pre-cached by:
+
+        uv run python -m scripts.precache "Marble Sort" "Mob Control" ...
+
+    Returns 404 if no cached report exists for the resolved app_id.
+    """
+    if not (game_name or app_id):
+        raise HTTPException(
+            status_code=400,
+            detail="Provide either ?game_name=... or ?app_id=...",
+        )
+
+    resolved_id = app_id
+    if not resolved_id and game_name:
+        try:
+            from app.sources.sensortower import resolve_game
+
+            meta = resolve_game(game_name)
+            resolved_id = meta.app_id
+        except Exception:
+            log.exception("resolve_game failed for %r", game_name)
+            # Fall back to slug-based lookup for prototype reports
+            slug = game_name.lower().replace(" ", "_").replace("-", "_")
+            resolved_id = f"proto_{slug}"
+
+    cache_path = REPORTS_CACHE_DIR / f"{resolved_id}_e2e.json"
+    if not cache_path.exists():
+        raise HTTPException(
+            status_code=404,
+            detail={
+                "message": f"No cached HookLensReport for {game_name or app_id!r}.",
+                "resolved_app_id": resolved_id,
+                "hint": (
+                    "Run `uv run python -m scripts.precache "
+                    f"{game_name!r}` to pre-bake one (3-5 min)."
+                ),
+            },
+        )
+
+    # Return the raw JSON payload — preserves Pydantic schema fidelity for
+    # the frontend without forcing FastAPI to re-serialize.
+    return json.loads(cache_path.read_text())

@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import type { Creative, CompetitorGame } from "@/data/sample";
+import type { HookLensReport, ReportSummary } from "@/types/hooklens";
 
 const API_BASE = (import.meta.env.VITE_API_URL as string | undefined) ?? "http://localhost:8000";
 
@@ -65,5 +66,39 @@ export function useGameMeta(name: string) {
     queryFn: () => apiFetch<GameMeta | null>("/api/game", { name }),
     staleTime: 30 * 60 * 1000,
     enabled: name.trim().length > 0,
+  });
+}
+
+// ---------------------------------------------------------------------------
+// HookLensReport — full pipeline output
+// ---------------------------------------------------------------------------
+
+/**
+ * Fetch the full HookLensReport for a game (Game DNA, archetypes, fit scores,
+ * briefs, generated variants). Loaded from disk cache; returns null on 404 so
+ * callers can render a "no report yet" empty state.
+ */
+export function useReport(gameName: string) {
+  return useQuery<HookLensReport | null>({
+    queryKey: ["report", gameName],
+    queryFn: async () => {
+      const url = new URL("/api/report", API_BASE);
+      url.searchParams.set("game_name", gameName);
+      const res = await fetch(url.toString());
+      if (res.status === 404) return null;
+      if (!res.ok) throw new Error(`API /api/report → ${res.status}`);
+      return res.json() as Promise<HookLensReport>;
+    },
+    staleTime: 10 * 60 * 1000,
+    enabled: gameName.trim().length > 0,
+  });
+}
+
+/** List of pre-cached reports — for a "previously analyzed" picker. */
+export function useReportList() {
+  return useQuery<ReportSummary[]>({
+    queryKey: ["reports"],
+    queryFn: () => apiFetch<ReportSummary[]>("/api/reports"),
+    staleTime: 60 * 1000,
   });
 }
