@@ -42,3 +42,11 @@ htmlcov/
 
 # uv
 uv.lock
+
+# Node
+node_modules/
+**/node_modules/
+front/bun.lockb
+front/package-lock.json
+proto/bun.lockb
+proto/package-lock.json
