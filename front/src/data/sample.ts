@@ -12,6 +12,10 @@ export interface Creative {
   score: number; // 0-100
   spendEstimate: number; // USD
   startedAt: string;
+  /** SensorTower S3 thumbnail (jpeg). May be null for some Static formats. */
+  thumbUrl?: string | null;
+  /** Original creative asset URL (mp4 for Video; image for Static). */
+  creativeUrl?: string | null;
 }
 
 export interface CompetitorGame {

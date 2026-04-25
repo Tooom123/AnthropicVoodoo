@@ -303,6 +303,44 @@ export function LaunchAnalysisModal({
             onChange={(v) => setCountries(v === "all" ? "all" : v)}
           />
 
+          {/* Briefs preset (presented as a 3-way segmented control because
+              this decision matters more for run cost / focus than the rest) */}
+          <div>
+            <label className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+              Briefs to generate
+            </label>
+            <div className="mt-1.5 inline-flex rounded-md border border-border bg-card p-0.5">
+              {[
+                { v: 1, label: "Focus", help: "Top archetype only · 1 brief, fastest" },
+                { v: 3, label: "Multi", help: "Top 3 archetypes · 3 briefs (default)" },
+                { v: 5, label: "Wide", help: "Top 5 archetypes · 5 briefs" },
+              ].map((opt) => {
+                const active = topKVariants === opt.v;
+                return (
+                  <button
+                    key={opt.v}
+                    type="button"
+                    onClick={() => setTopKVariants(opt.v)}
+                    title={opt.help}
+                    className={`rounded px-3 py-1.5 text-xs font-medium transition-colors ${
+                      active
+                        ? "bg-primary text-primary-foreground"
+                        : "text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    {opt.label}
+                    <span className="ml-1 text-[10px] opacity-80">×{opt.v}</span>
+                  </button>
+                );
+              })}
+            </div>
+            <p className="mt-1.5 text-[11px] text-muted-foreground">
+              {topKVariants === 1
+                ? "Generates a single brief on the top-scoring market hook (fastest, cheapest)."
+                : `Generates ${topKVariants} briefs across the highest-scoring archetypes — useful for A/B testing.`}
+            </p>
+          </div>
+
           {/* Period */}
           <div>
             <label className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
@@ -350,13 +388,13 @@ export function LaunchAnalysisModal({
                 help="How many distinct creative patterns we score against your Game DNA."
               />
               <SliderRow
-                label="Final variants to generate"
+                label="Briefs to generate (fine-grained)"
                 value={topKVariants}
                 onChange={setTopKVariants}
                 min={1}
                 max={5}
                 step={1}
-                help="Each variant = one full creative brief + Scenario hero image."
+                help="Same as the Briefs segmented control above. Slide for non-preset values (e.g. 2 or 4)."
               />
             </div>
           </details>

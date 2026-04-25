@@ -1,8 +1,14 @@
 import { useMemo, useState } from "react";
-import { Play, ChevronDown, Check } from "lucide-react";
+import { Play, ChevronDown, Check, Image as ImageIcon, ExternalLink } from "lucide-react";
 import { Link } from "@tanstack/react-router";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -16,6 +22,7 @@ import {
   NETWORKS,
   FORMATS,
   abbrevNumber,
+  type Creative,
   type Network,
   type Format,
 } from "@/data/sample";
@@ -152,43 +159,7 @@ export function AdLibrary() {
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
         {filtered.map((c) => (
-          <Card
-            key={c.id}
-            className="overflow-hidden border-border bg-card p-0 transition-colors hover:border-primary/50"
-          >
-            <div className="relative aspect-video w-full bg-gradient-to-br from-muted to-muted/40">
-              <div className="absolute inset-0 grid place-items-center">
-                <div className="grid h-12 w-12 place-items-center rounded-full bg-background/40 backdrop-blur-sm">
-                  <Play className="h-5 w-5 fill-foreground text-foreground" />
-                </div>
-              </div>
-              <span className="absolute right-2 top-2 rounded-md bg-background/70 px-1.5 py-0.5 text-[10px] font-medium backdrop-blur-sm">
-                {c.format}
-              </span>
-            </div>
-            <div className="space-y-3 p-4">
-              <div className="flex items-start justify-between gap-2">
-                <div>
-                  <div className="text-sm font-semibold leading-tight">{c.game}</div>
-                  <div className="text-xs text-muted-foreground">{c.id}</div>
-                </div>
-                <NetworkBadge network={c.network} />
-              </div>
-              <div className="grid grid-cols-2 gap-2 text-xs">
-                <div className="rounded-md bg-muted/50 px-2 py-1.5">
-                  <div className="text-muted-foreground">Run</div>
-                  <div className="font-medium text-foreground">{c.runDays}d</div>
-                </div>
-                <div className="rounded-md bg-muted/50 px-2 py-1.5">
-                  <div className="text-muted-foreground">Impr.</div>
-                  <div className="font-medium text-foreground">{abbrevNumber(c.impressions)}</div>
-                </div>
-              </div>
-              <Button size="sm" variant="secondary" className="w-full" asChild>
-                <Link to="/ad/$id" params={{ id: c.id }}>View details</Link>
-              </Button>
-            </div>
-          </Card>
+          <CreativeCard key={c.id} creative={c} />
         ))}
         {filtered.length === 0 && (
           <div className="col-span-full rounded-md border border-dashed border-border p-10 text-center text-sm text-muted-foreground">
@@ -197,5 +168,146 @@ export function AdLibrary() {
         )}
       </div>
     </div>
+  );
+}
+
+interface CreativeCardProps {
+  creative: Creative;
+}
+
+/**
+ * Single ad card with the SensorTower thumbnail as hero. Click → opens an
+ * inline video preview (Dialog with <video controls>) when a creativeUrl
+ * is available; falls back to the ad-detail route otherwise.
+ *
+ * Thumbnails come from the SensorTower creative_url's sibling thumb_url
+ * (S3-hosted). Loading errors degrade to a gradient placeholder + icon.
+ */
+function CreativeCard({ creative: c }: CreativeCardProps) {
+  const [thumbErrored, setThumbErrored] = useState(false);
+  const [previewOpen, setPreviewOpen] = useState(false);
+
+  const hasThumb = Boolean(c.thumbUrl) && !thumbErrored;
+  const hasVideo = Boolean(c.creativeUrl) && c.format === "Video";
+
+  function handleHeroClick() {
+    if (hasVideo) {
+      setPreviewOpen(true);
+    }
+  }
+
+  return (
+    <>
+      <Card className="overflow-hidden border-border bg-card p-0 transition-all hover:border-primary/50 hover:shadow-lg hover:shadow-primary/5">
+        {/* Hero / thumbnail */}
+        <button
+          type="button"
+          onClick={handleHeroClick}
+          className="group relative block aspect-video w-full overflow-hidden bg-gradient-to-br from-muted to-muted/40"
+          disabled={!hasVideo}
+          aria-label={hasVideo ? `Preview ad ${c.id}` : `Ad ${c.id}`}
+        >
+          {hasThumb ? (
+            <img
+              src={c.thumbUrl ?? undefined}
+              alt={`${c.game} — ${c.format} ad`}
+              loading="lazy"
+              onError={() => setThumbErrored(true)}
+              className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+            />
+          ) : (
+            <div className="grid h-full w-full place-items-center text-muted-foreground/40">
+              <ImageIcon className="h-10 w-10" />
+            </div>
+          )}
+          {/* Play overlay (video format only) */}
+          {hasVideo && (
+            <div className="absolute inset-0 grid place-items-center bg-black/0 transition-colors group-hover:bg-black/30">
+              <div className="grid h-12 w-12 place-items-center rounded-full bg-background/80 opacity-0 backdrop-blur-sm transition-opacity group-hover:opacity-100">
+                <Play className="h-5 w-5 fill-foreground text-foreground" />
+              </div>
+            </div>
+          )}
+          {/* Format badge */}
+          <span className="pointer-events-none absolute right-2 top-2 rounded-md bg-background/80 px-1.5 py-0.5 text-[10px] font-medium backdrop-blur-sm">
+            {c.format}
+          </span>
+        </button>
+
+        <div className="space-y-3 p-4">
+          <div className="flex items-start justify-between gap-2">
+            <div className="min-w-0 flex-1">
+              <div className="truncate text-sm font-semibold leading-tight">
+                {c.game}
+              </div>
+              <div className="truncate text-xs text-muted-foreground">{c.id}</div>
+            </div>
+            <NetworkBadge network={c.network} />
+          </div>
+          <div className="grid grid-cols-2 gap-2 text-xs">
+            <div className="rounded-md bg-muted/50 px-2 py-1.5">
+              <div className="text-muted-foreground">Run</div>
+              <div className="font-medium text-foreground">{c.runDays}d</div>
+            </div>
+            <div className="rounded-md bg-muted/50 px-2 py-1.5">
+              <div className="text-muted-foreground">Impr.</div>
+              <div className="font-medium text-foreground">
+                {abbrevNumber(c.impressions)}
+              </div>
+            </div>
+          </div>
+          <Button size="sm" variant="secondary" className="w-full" asChild>
+            <Link to="/ad/$id" params={{ id: c.id }}>
+              View details
+            </Link>
+          </Button>
+        </div>
+      </Card>
+
+      {/* Inline video preview */}
+      <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
+        <DialogContent className="max-w-2xl overflow-hidden p-0">
+          <DialogHeader className="px-5 pt-5">
+            <DialogTitle className="flex items-center justify-between gap-3">
+              <span className="truncate">
+                {c.game}{" "}
+                <span className="text-xs font-normal text-muted-foreground">
+                  · {c.network} · {c.format}
+                </span>
+              </span>
+              {c.creativeUrl && (
+                <a
+                  href={c.creativeUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-xs font-normal text-muted-foreground transition-colors hover:border-primary/50 hover:text-foreground"
+                >
+                  Open original
+                  <ExternalLink className="h-3 w-3" />
+                </a>
+              )}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="relative aspect-[9/16] max-h-[70vh] w-full bg-black">
+            {c.creativeUrl ? (
+              <video
+                key={c.creativeUrl}
+                src={c.creativeUrl}
+                controls
+                autoPlay
+                playsInline
+                className="h-full w-full object-contain"
+              />
+            ) : c.thumbUrl ? (
+              <img
+                src={c.thumbUrl}
+                alt={c.game}
+                className="h-full w-full object-contain"
+              />
+            ) : null}
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
