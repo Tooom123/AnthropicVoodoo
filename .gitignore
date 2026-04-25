@@ -55,3 +55,8 @@ htmlcov/
 
 # uv
 uv.lock
+
+# Frontend deps
+front/node_modules/
+front/dist/
+front/.tanstack/
