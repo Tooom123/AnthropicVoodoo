@@ -58,12 +58,25 @@ The integration contract is `app/models.py`. **Do not modify after Saturday 17:0
 ## Setup
 
 ```bash
-uv venv
-source .venv/bin/activate
-uv pip install -e .
-cp .env.example .env  # add your keys
-streamlit run streamlit_app.py
+# 1. Pin Python via uv (respects .python-version, bypasses any pyenv shim)
+uv python install 3.12
+
+# 2. Sync deps and dev deps in one shot
+uv sync --all-extras
+
+# 3. Configure secrets
+cp .env.example .env  # then fill in the 4 keys
+
+# 4. Run the app (no need to activate the venv — uv run handles it)
+uv run streamlit run streamlit_app.py
+
+# Smoke-test notebook (uv run avoids any pyenv interference)
+uv run jupyter lab notebooks/
 ```
+
+## Agent harness
+
+If you're an AI coding agent (Claude Code, Codex, Cursor) opening this repo, read [`AGENTS.md`](./AGENTS.md) first. It defines workstream ownership, the data contract, and what you must not modify.
 
 ## Required env vars
 
