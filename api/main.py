@@ -10,7 +10,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Literal
 
@@ -465,8 +465,14 @@ def _summarize_step_payload(step_id: str, payload: Any) -> dict[str, Any]:
 @app.get("/api/report/run/stream")
 async def run_report_stream(
     game_name: str = Query(..., description="Game name to analyze"),
-    country: str = Query("US"),
-    network: str = Query("TikTok"),
+    countries: str = Query(
+        "all",
+        description="Comma-separated country codes, or 'all' for the curated worldwide list",
+    ),
+    networks: str = Query(
+        "all",
+        description="Comma-separated networks (TikTok, Facebook, Instagram), or 'all'",
+    ),
     period: str = Query("month"),
     period_date: str = Query("2026-04-01"),
     max_creatives: int = Query(8, ge=1, le=20),
@@ -482,10 +488,13 @@ async def run_report_stream(
     """
     from app.pipeline import PipelineConfig, run_pipeline
 
+    countries_list = [c.strip() for c in countries.split(",") if c.strip()] or ["all"]
+    networks_list = [n.strip() for n in networks.split(",") if n.strip()] or ["all"]
+
     config = PipelineConfig(
         game_name=game_name,
-        country=country,
-        network=network,
+        countries=countries_list,
+        networks=networks_list,
         period=period,
         period_date=period_date,
         max_creatives=max_creatives,
@@ -541,8 +550,8 @@ async def run_report_stream(
                     "game_name": game_name,
                     "total": PIPELINE_TOTAL_STEPS,
                     "config": {
-                        "country": country,
-                        "network": network,
+                        "countries": countries_list,
+                        "networks": networks_list,
                         "max_creatives": max_creatives,
                         "top_k_archetypes": top_k_archetypes,
                         "top_k_variants": top_k_variants,
@@ -578,3 +587,158 @@ async def run_report_stream(
             "Connection": "keep-alive",
         },
     )
+
+
+# ---------------------------------------------------------------------------
+# Voodoo catalog endpoints — power the "analyze a Voodoo title" picker
+# ---------------------------------------------------------------------------
+
+
+class VoodooApp(BaseModel):
+    """Subset of AppMetadata exposed to the frontend pick-list."""
+
+    app_id: str
+    unified_app_id: str | None = None
+    name: str
+    publisher_name: str
+    icon_url: str
+    categories: list[int | str]
+    description: str = ""
+    rating: float | None = None
+    rating_count: int | None = None
+
+
+@app.get("/api/voodoo/apps", response_model=list[VoodooApp])
+def list_voodoo_apps(refresh: bool = Query(False)) -> list[VoodooApp]:
+    """Return Voodoo's full mobile game catalog from SensorTower.
+
+    Cached on disk for 7 days under ``data/cache/voodoo/catalog.json``.
+    Pass ``?refresh=1`` to force a re-fetch. Sorted by ``rating_count``
+    desc, so the frontend can show the most popular Voodoo titles first.
+    """
+    from app.sources.voodoo import fetch_voodoo_catalog
+
+    try:
+        catalog = fetch_voodoo_catalog(refresh=refresh)
+    except Exception:
+        log.exception("fetch_voodoo_catalog failed")
+        raise HTTPException(status_code=502, detail="SensorTower lookup failed")
+
+    return [
+        VoodooApp(
+            app_id=m.app_id,
+            unified_app_id=m.unified_app_id,
+            name=m.name,
+            publisher_name=m.publisher_name,
+            icon_url=str(m.icon_url),
+            categories=list(m.categories),
+            description=(m.description or "")[:300],
+            rating=m.rating,
+            rating_count=m.rating_count,
+        )
+        for m in catalog
+    ]
+
+
+@app.get("/api/voodoo/apps/{app_id}/creatives")
+def voodoo_app_creatives(
+    app_id: str,
+    country: str = Query("US"),
+    limit: int = Query(20, ge=1, le=100),
+    start_date: str | None = Query(
+        None,
+        description=(
+            "Earliest first_seen_at to include (YYYY-MM-DD). Defaults to "
+            "180 days before today, which surfaces a useful active+recent set."
+        ),
+    ),
+):
+    """Return ad creatives where Voodoo is the *advertiser* on this app.
+
+    Hits ``/v1/unified/ad_intel/creatives`` directly with the resolved
+    unified app id — the spec'd "creatives for specific apps" path. This is
+    the "what is Voodoo running on its OWN game RIGHT NOW" benchmark, used
+    later in the brief generation step.
+
+    The endpoint requires a unified app id; we look it up against the
+    cached Voodoo catalog. ``app_id`` may be either the iTunes app id (the
+    public ``app_id`` field) or the unified id directly. Returns ``[]``
+    with a 200 if the app is unknown to the catalog or SensorTower returns
+    no ad units.
+    """
+    from app.sources.sensortower import _get
+    from app.sources.voodoo import fetch_voodoo_catalog
+
+    catalog = fetch_voodoo_catalog()
+    by_itunes = {m.app_id: m for m in catalog}
+    by_unified = {m.unified_app_id: m for m in catalog if m.unified_app_id}
+
+    target = by_itunes.get(app_id) or by_unified.get(app_id)
+    if target is None or not target.unified_app_id:
+        log.info("voodoo_app_creatives: %s not in Voodoo catalog", app_id)
+        return []
+
+    effective_start = (
+        start_date
+        if start_date
+        else (date.today() - timedelta(days=180)).isoformat()
+    )
+
+    params: dict[str, Any] = {
+        "app_ids": target.unified_app_id,
+        "start_date": effective_start,
+        "countries": country,
+        "networks": "Facebook,Instagram,TikTok,Youtube,Unity,Admob,Applovin",
+        "ad_types": "video,video-interstitial,playable,image,banner,full_screen",
+        "limit": limit,
+    }
+
+    try:
+        resp = _get("/v1/unified/ad_intel/creatives", params)
+    except Exception:
+        # Best-effort: log and return empty so the frontend can graceful-empty.
+        # SensorTower frequently returns 422 when an app has zero ad activity
+        # on a given start_date — that is normal, not an error.
+        log.exception(
+            "voodoo_app_creatives: SensorTower /creatives failed for app_id=%s",
+            target.unified_app_id,
+        )
+        return []
+
+    ad_units = resp.get("ad_units") or []
+
+    out: list[dict[str, Any]] = []
+    for au in ad_units:
+        creatives = au.get("creatives") or []
+        if not creatives:
+            continue
+        # /creatives is already scoped by app_ids, so the advertiser is
+        # Voodoo on this app by construction — no further filter needed.
+        first = creatives[0]
+        out.append(
+            {
+                "creative_id": str(first.get("id") or ""),
+                "ad_unit_id": str(au.get("id") or ""),
+                "app_id": app_id,
+                "advertiser_name": target.name,
+                "network": au.get("network") or "",
+                "ad_type": au.get("ad_type") or "video",
+                "creative_url": first.get("creative_url"),
+                "thumb_url": first.get("thumb_url"),
+                "preview_url": first.get("preview_url"),
+                "first_seen_at": au.get("first_seen_at"),
+                "last_seen_at": au.get("last_seen_at"),
+                "share": au.get("share"),
+                "phashion_group": au.get("phashion_group"),
+                "message": first.get("message"),
+                "button_text": first.get("button_text"),
+            }
+        )
+
+    log.info(
+        "voodoo_app_creatives: %s → %d ad_units (raw), %d returned",
+        target.name,
+        len(ad_units),
+        len(out),
+    )
+    return out

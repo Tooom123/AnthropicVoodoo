@@ -74,10 +74,23 @@ interface ErrorEvent {
   message: string;
 }
 
+/**
+ * Pipeline-config params surfaced from the LaunchAnalysisModal. ``"all"`` is
+ * a server-side sentinel that expands to the curated worldwide list.
+ */
+export interface PipelineRunConfig {
+  countries: string[];   // ["all"] or ["US", "JP", ...]
+  networks: string[];    // ["all"] or ["TikTok", "Facebook", ...]
+  maxCreatives?: number; // server default: 8
+  topKArchetypes?: number; // server default: 5
+  topKVariants?: number; // server default: 3
+}
+
 interface RunAnalysisDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   gameName: string;
+  config?: PipelineRunConfig;
   onComplete?: (gameName: string) => void;
 }
 
@@ -85,6 +98,7 @@ export function RunAnalysisDialog({
   open,
   onOpenChange,
   gameName,
+  config,
   onComplete,
 }: RunAnalysisDialogProps) {
   const queryClient = useQueryClient();
@@ -130,6 +144,23 @@ export function RunAnalysisDialog({
 
     const url = new URL("/api/report/run/stream", API_BASE);
     url.searchParams.set("game_name", gameName);
+    if (config) {
+      if (config.countries?.length) {
+        url.searchParams.set("countries", config.countries.join(","));
+      }
+      if (config.networks?.length) {
+        url.searchParams.set("networks", config.networks.join(","));
+      }
+      if (config.maxCreatives) {
+        url.searchParams.set("max_creatives", String(config.maxCreatives));
+      }
+      if (config.topKArchetypes) {
+        url.searchParams.set("top_k_archetypes", String(config.topKArchetypes));
+      }
+      if (config.topKVariants) {
+        url.searchParams.set("top_k_variants", String(config.topKVariants));
+      }
+    }
     const es = new EventSource(url.toString());
     esRef.current = es;
 

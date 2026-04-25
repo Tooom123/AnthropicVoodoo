@@ -23,9 +23,13 @@ import { ArchetypesTable } from "@/components/insights/ArchetypesTable";
 import { BriefsGrid } from "@/components/insights/BriefsGrid";
 import { GameDnaCard } from "@/components/insights/GameDnaCard";
 import { GameFitGrid } from "@/components/insights/GameFitGrid";
+import { LaunchAnalysisModal } from "@/components/insights/LaunchAnalysisModal";
 import { PitchStoryBlock } from "@/components/insights/PitchStoryBlock";
 import { ReportPicker } from "@/components/insights/ReportPicker";
-import { RunAnalysisDialog } from "@/components/insights/RunAnalysisDialog";
+import {
+  RunAnalysisDialog,
+  type PipelineRunConfig,
+} from "@/components/insights/RunAnalysisDialog";
 import { VariantsGallery } from "@/components/insights/VariantsGallery";
 import {
   fmtCurrency,
@@ -37,27 +41,64 @@ export function Insights() {
   const { gameName, setGameName } = useGame();
   const { data: report, isLoading, error } = useReport(gameName);
   const { data: reportList = [] } = useReportList();
+
+  // Two-step flow: configure (LaunchAnalysisModal) → run (RunAnalysisDialog).
+  const [configOpen, setConfigOpen] = useState(false);
   const [runOpen, setRunOpen] = useState(false);
+  const [pendingRun, setPendingRun] = useState<{
+    gameName: string;
+    config: PipelineRunConfig;
+  } | null>(null);
 
   const trimmedGame = gameName.trim();
-  const canRun = trimmedGame.length > 0;
 
-  // Stable game name for the dialog. Prefer the canonical resolved name from a
-  // loaded report (matches SensorTower's exact spelling, e.g. "Block Blast!");
-  // fall back to the user-typed name otherwise. Hoisted above early returns so
-  // the dialog component is mounted exactly once across loading / empty /
-  // loaded states — switching branches must NOT remount the dialog mid-run.
-  const dialogGameName = report?.target_game.name ?? trimmedGame;
+  // Stable game name for the run dialog: prefer the canonical resolved name
+  // from a loaded report; else what the user actually picked in the modal.
+  const dialogGameName =
+    pendingRun?.gameName ?? report?.target_game.name ?? trimmedGame;
 
-  const dialog =
-    canRun || report ? (
+  function openConfigForReRun() {
+    // Pre-fill the modal with the loaded report's params (or sensible defaults).
+    setConfigOpen(true);
+  }
+
+  function handleLaunch(name: string, config: PipelineRunConfig) {
+    setPendingRun({ gameName: name, config });
+    setConfigOpen(false);
+    setRunOpen(true);
+  }
+
+  // Hoisted above early returns so the modal/dialog stay mounted across
+  // loading → empty → loaded transitions (otherwise re-mount auto-fires
+  // a duplicate run when the report becomes available).
+  const modals = (
+    <>
+      <LaunchAnalysisModal
+        open={configOpen}
+        onOpenChange={setConfigOpen}
+        initialGameName={trimmedGame || report?.target_game.name || ""}
+        initialConfig={
+          report
+            ? {
+                countries: report.market_context.countries,
+                networks: report.market_context.networks,
+              }
+            : undefined
+        }
+        onLaunch={handleLaunch}
+      />
       <RunAnalysisDialog
         open={runOpen}
         onOpenChange={setRunOpen}
         gameName={dialogGameName}
-        onComplete={(name) => setGameName(name)}
+        config={pendingRun?.config}
+        onComplete={(name) => {
+          setGameName(name);
+          setPendingRun(null);
+        }}
       />
-    ) : null;
+    </>
+  );
 
   if (isLoading) {
     return (
@@ -65,7 +106,7 @@ export function Insights() {
         <div className="flex items-center justify-center py-20">
           <p className="text-muted-foreground">Loading HookLens report…</p>
         </div>
-        {dialog}
+        {modals}
       </>
     );
   }
@@ -82,7 +123,7 @@ export function Insights() {
             <code>http://localhost:8000</code>.
           </p>
         </div>
-        {dialog}
+        {modals}
       </>
     );
   }
@@ -96,26 +137,25 @@ export function Insights() {
           </h3>
           <p className="mt-2 text-sm text-muted-foreground">
             The full pipeline (Game DNA → archetypes → game-fit → briefs →
-            Scenario) takes ~3–5 min and ~$0.05–1 in API calls.
+            Scenario) takes ~3–5 min and ~$0.05–1 in API calls. Default scan
+            is worldwide × all networks for the broadest signal.
           </p>
-          {canRun && (
-            <div className="mt-4 flex flex-wrap items-center gap-3">
-              <Button onClick={() => setRunOpen(true)} size="lg">
-                <Sparkles className="mr-1.5 h-4 w-4" />
-                Analyze {trimmedGame} now
-              </Button>
-              <span className="text-xs text-muted-foreground">
-                runs the pipeline live · streams progress here
-              </span>
-            </div>
-          )}
+          <div className="mt-4 flex flex-wrap items-center gap-3">
+            <Button onClick={() => setConfigOpen(true)} size="lg">
+              <Sparkles className="mr-1.5 h-4 w-4" />
+              Launch new analysis
+            </Button>
+            <span className="text-xs text-muted-foreground">
+              pick a Voodoo title or any mobile game · streams progress live
+            </span>
+          </div>
           <details className="mt-5 text-xs text-muted-foreground">
             <summary className="cursor-pointer select-none hover:text-foreground">
               Or pre-cache from CLI
             </summary>
             <pre className="mt-2 rounded-md bg-muted px-4 py-3">
               uv run python -m scripts.precache{" "}
-              {JSON.stringify(gameName || "Marble Sort!")}
+              {JSON.stringify(gameName || "Mob Control")}
             </pre>
           </details>
           {reportList.length > 0 && (
@@ -144,7 +184,7 @@ export function Insights() {
             </div>
           )}
         </Card>
-        {dialog}
+        {modals}
       </>
     );
   }
@@ -182,13 +222,21 @@ export function Insights() {
         </div>
         <div className="flex items-center gap-2">
           <Button
+            size="sm"
+            onClick={() => setConfigOpen(true)}
+            title="Launch a new pipeline run with custom params"
+          >
+            <Sparkles className="mr-1.5 h-3.5 w-3.5" />
+            Launch new analysis
+          </Button>
+          <Button
             variant="outline"
             size="sm"
-            onClick={() => setRunOpen(true)}
-            title="Re-run the full pipeline (3-5 min)"
+            onClick={openConfigForReRun}
+            title="Re-run the pipeline on this game (pre-fills its current scope)"
           >
             <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
-            Re-run analysis
+            Re-run
           </Button>
           <ReportPicker
             reports={reportList}
@@ -208,7 +256,7 @@ export function Insights() {
       <VariantsGallery variants={report.final_variants} />
       <PitchStoryBlock report={report} />
 
-      {dialog}
+      {modals}
     </div>
   );
 }
