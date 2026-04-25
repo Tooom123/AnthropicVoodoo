@@ -9,6 +9,7 @@ const TABS = [
   { label: "Performance Signals", to: "/performance" },
   { label: "Competitive Scope", to: "/competitive" },
   { label: "HookLens Insights", to: "/insights" },
+  { label: "Global Market Map", to: "/geo" },
 ];
 
 export function DashboardLayout({

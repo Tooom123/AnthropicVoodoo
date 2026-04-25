@@ -55,7 +55,7 @@ const SECTIONS: Section[] = [
     label: "Game Mapping",
     icon: Map,
     items: [
-      { label: "Genre Map", to: "/mapping/genre", icon: Compass },
+      { label: "Global Market Map", to: "/geo", icon: Compass },
       { label: "Audience Overlap", to: "/mapping/overlap", icon: GitCompare },
     ],
   },

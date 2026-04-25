@@ -295,6 +295,146 @@ def get_advertisers(
     return [_advertiser_to_competitor(adv, rank=i + 1) for i, adv in enumerate(advs)]
 
 
+# ---------------------------------------------------------------------------
+# Geographic heatmap — market intensity per country
+# ---------------------------------------------------------------------------
+
+# 34 major markets with centroids (lat, lng) for the dot-grid SVG projection
+_GEO_COUNTRIES: list[tuple[str, str, str, float, float]] = [
+    # (code, name, continent, lat, lng)
+    ("US", "United States",       "North America", 38.9,  -95.7),
+    ("CA", "Canada",               "North America", 56.1, -106.3),
+    ("MX", "Mexico",               "North America", 23.6, -102.6),
+    ("BR", "Brazil",               "South America",-14.2,  -51.9),
+    ("AR", "Argentina",            "South America",-38.4,  -63.6),
+    ("CO", "Colombia",             "South America",  4.6,  -74.1),
+    ("GB", "United Kingdom",       "Europe",        55.4,   -3.4),
+    ("FR", "France",               "Europe",        46.2,    2.2),
+    ("DE", "Germany",              "Europe",        51.2,   10.5),
+    ("IT", "Italy",                "Europe",        41.9,   12.6),
+    ("ES", "Spain",                "Europe",        40.5,   -3.7),
+    ("NL", "Netherlands",          "Europe",        52.1,    5.3),
+    ("SE", "Sweden",               "Europe",        60.1,   18.6),
+    ("PL", "Poland",               "Europe",        51.9,   19.1),
+    ("RU", "Russia",               "Europe",        61.5,  105.3),
+    ("TR", "Turkey",               "Middle East",   38.9,   35.2),
+    ("SA", "Saudi Arabia",         "Middle East",   23.9,   45.1),
+    ("AE", "UAE",                  "Middle East",   23.4,   53.8),
+    ("IL", "Israel",               "Middle East",   31.0,   34.9),
+    ("JP", "Japan",                "Asia",          36.2,  138.3),
+    ("KR", "South Korea",          "Asia",          35.9,  127.8),
+    ("CN", "China",                "Asia",          35.9,  104.2),
+    ("IN", "India",                "Asia",          20.6,   79.1),
+    ("ID", "Indonesia",            "Asia",          -0.8,  113.9),
+    ("TH", "Thailand",             "Asia",          15.9,  100.9),
+    ("SG", "Singapore",            "Asia",           1.4,  103.8),
+    ("TW", "Taiwan",               "Asia",          23.7,  121.0),
+    ("PH", "Philippines",          "Asia",          12.9,  121.8),
+    ("MY", "Malaysia",             "Asia",           4.2,  108.0),
+    ("AU", "Australia",            "Oceania",      -25.3,  133.8),
+    ("NZ", "New Zealand",          "Oceania",      -40.9,  174.9),
+    ("ZA", "South Africa",         "Africa",       -29.0,   25.1),
+    ("NG", "Nigeria",              "Africa",         9.1,    8.7),
+    ("EG", "Egypt",                "Africa",        26.8,   30.8),
+]
+
+# Approximate capture radius per country code (degrees, for dot-grid coloring)
+_GEO_RADIUS: dict[str, float] = {
+    "RU": 20.0, "CA": 18.0, "CN": 14.0, "US": 13.0, "BR": 13.0,
+    "AU": 12.0, "IN": 10.0, "AR":  9.0, "MX":  8.0, "SA":  8.0,
+    "ID":  8.0, "MY":  5.0, "TR":  6.0, "EG":  6.0, "NG":  6.0,
+}
+_GEO_RADIUS_DEFAULT = 6.0
+
+
+class CountrySignal(BaseModel):
+    country_code: str
+    country_name: str
+    continent: str
+    lat: float
+    lng: float
+    radius: float
+    num_advertisers: int
+    top_sov: float
+    market_intensity: float  # 0–100
+
+
+def _fetch_country_signal(
+    code: str,
+    name: str,
+    continent: str,
+    lat: float,
+    lng: float,
+    *,
+    category_id: int,
+    period: str,
+    period_date: str,
+) -> CountrySignal:
+    from app.sources.sensortower import fetch_top_advertisers
+
+    radius = _GEO_RADIUS.get(code, _GEO_RADIUS_DEFAULT)
+    try:
+        advs = fetch_top_advertisers(
+            category_id=category_id,
+            country=code,
+            period=period,
+            period_date=period_date,
+            limit=10,
+        )
+        top_sov: float = advs[0].get("sov") or advs[0].get("share") or 0.0 if advs else 0.0
+        num_advertisers = len(advs)
+        intensity = min(100.0, top_sov * 700 + num_advertisers * 4)
+    except Exception:
+        log.warning("geo fetch failed for %s", code)
+        top_sov, num_advertisers, intensity = 0.0, 0, 0.0
+
+    return CountrySignal(
+        country_code=code,
+        country_name=name,
+        continent=continent,
+        lat=lat,
+        lng=lng,
+        radius=radius,
+        num_advertisers=num_advertisers,
+        top_sov=round(top_sov, 4),
+        market_intensity=round(intensity, 1),
+    )
+
+
+@app.get("/api/geo-signals", response_model=list[CountrySignal])
+def get_geo_signals(
+    game_name: str | None = Query(None),
+    category_id: int = Query(7012),
+    period: str = Query("month"),
+    period_date: str = Query(DEFAULT_DATE),
+):
+    """Return market-intensity signals for ~34 countries as a dot-grid heatmap source.
+
+    Queries SensorTower top-advertisers per country in a thread pool (cached on
+    disk so subsequent calls are instant). ``market_intensity`` ∈ [0, 100] is a
+    composite of top-advertiser SOV and number of active advertisers — it
+    represents how hotly contested the category is in each market.
+    """
+    import concurrent.futures
+
+    if game_name:
+        category_id, _ = _resolve_category(game_name, category_id)
+
+    def _fetch(row: tuple) -> CountrySignal:
+        code, name, continent, lat, lng = row
+        return _fetch_country_signal(
+            code, name, continent, lat, lng,
+            category_id=category_id,
+            period=period,
+            period_date=period_date,
+        )
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=10) as pool:
+        results = list(pool.map(_fetch, _GEO_COUNTRIES))
+
+    return results
+
+
 @app.get("/health")
 def health():
     return {"status": "ok", "utc": datetime.now(timezone.utc).isoformat()}

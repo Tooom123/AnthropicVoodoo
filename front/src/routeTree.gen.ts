@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as PerformanceRouteImport } from './routes/performance'
 import { Route as InsightsRouteImport } from './routes/insights'
+import { Route as GeoRouteImport } from './routes/geo'
 import { Route as CompetitiveRouteImport } from './routes/competitive'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AdIdRouteImport } from './routes/ad.$id'
@@ -23,6 +24,11 @@ const PerformanceRoute = PerformanceRouteImport.update({
 const InsightsRoute = InsightsRouteImport.update({
   id: '/insights',
   path: '/insights',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const GeoRoute = GeoRouteImport.update({
+  id: '/geo',
+  path: '/geo',
   getParentRoute: () => rootRouteImport,
 } as any)
 const CompetitiveRoute = CompetitiveRouteImport.update({
@@ -44,6 +50,7 @@ const AdIdRoute = AdIdRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/competitive': typeof CompetitiveRoute
+  '/geo': typeof GeoRoute
   '/insights': typeof InsightsRoute
   '/performance': typeof PerformanceRoute
   '/ad/$id': typeof AdIdRoute
@@ -51,6 +58,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/competitive': typeof CompetitiveRoute
+  '/geo': typeof GeoRoute
   '/insights': typeof InsightsRoute
   '/performance': typeof PerformanceRoute
   '/ad/$id': typeof AdIdRoute
@@ -59,19 +67,21 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/competitive': typeof CompetitiveRoute
+  '/geo': typeof GeoRoute
   '/insights': typeof InsightsRoute
   '/performance': typeof PerformanceRoute
   '/ad/$id': typeof AdIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/competitive' | '/insights' | '/performance' | '/ad/$id'
+  fullPaths: '/' | '/competitive' | '/geo' | '/insights' | '/performance' | '/ad/$id'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/competitive' | '/insights' | '/performance' | '/ad/$id'
+  to: '/' | '/competitive' | '/geo' | '/insights' | '/performance' | '/ad/$id'
   id:
     | '__root__'
     | '/'
     | '/competitive'
+    | '/geo'
     | '/insights'
     | '/performance'
     | '/ad/$id'
@@ -80,6 +90,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   CompetitiveRoute: typeof CompetitiveRoute
+  GeoRoute: typeof GeoRoute
   InsightsRoute: typeof InsightsRoute
   PerformanceRoute: typeof PerformanceRoute
   AdIdRoute: typeof AdIdRoute
@@ -99,6 +110,13 @@ declare module '@tanstack/react-router' {
       path: '/insights'
       fullPath: '/insights'
       preLoaderRoute: typeof InsightsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/geo': {
+      id: '/geo'
+      path: '/geo'
+      fullPath: '/geo'
+      preLoaderRoute: typeof GeoRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/competitive': {
@@ -128,6 +146,7 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   CompetitiveRoute: CompetitiveRoute,
+  GeoRoute: GeoRoute,
   InsightsRoute: InsightsRoute,
   PerformanceRoute: PerformanceRoute,
   AdIdRoute: AdIdRoute,

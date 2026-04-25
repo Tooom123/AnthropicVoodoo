@@ -94,6 +94,37 @@ export function useReport(gameName: string) {
   });
 }
 
+export interface CountrySignal {
+  country_code: string;
+  country_name: string;
+  continent: string;
+  lat: number;
+  lng: number;
+  radius: number;
+  num_advertisers: number;
+  top_sov: number;
+  market_intensity: number;
+}
+
+export interface GeoSignalsParams {
+  game_name?: string;
+  category_id?: number;
+  period?: string;
+  period_date?: string;
+}
+
+export function useGeoSignals(params: GeoSignalsParams = {}) {
+  return useQuery<CountrySignal[]>({
+    queryKey: ["geo-signals", params],
+    queryFn: () =>
+      apiFetch<CountrySignal[]>(
+        "/api/geo-signals",
+        params as Record<string, string | number | undefined>,
+      ),
+    staleTime: 10 * 60 * 1000,
+  });
+}
+
 /** List of pre-cached reports — for a "previously analyzed" picker. */
 export function useReportList() {
   return useQuery<ReportSummary[]>({
