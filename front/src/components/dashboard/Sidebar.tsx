@@ -18,6 +18,7 @@ import {
   PieChart,
   Lightbulb,
   Compass,
+  Gamepad2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -55,6 +56,7 @@ const SECTIONS: Section[] = [
     label: "Game Mapping",
     icon: Map,
     items: [
+      { label: "Voodoo Portfolio", to: "/voodoo", icon: Gamepad2 },
       { label: "Genre Map", to: "/mapping/genre", icon: Compass },
       { label: "Audience Overlap", to: "/mapping/overlap", icon: GitCompare },
     ],

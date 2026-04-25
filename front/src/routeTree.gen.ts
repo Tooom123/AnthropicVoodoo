@@ -9,12 +9,18 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as VoodooRouteImport } from './routes/voodoo'
 import { Route as PerformanceRouteImport } from './routes/performance'
 import { Route as InsightsRouteImport } from './routes/insights'
 import { Route as CompetitiveRouteImport } from './routes/competitive'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AdIdRouteImport } from './routes/ad.$id'
 
+const VoodooRoute = VoodooRouteImport.update({
+  id: '/voodoo',
+  path: '/voodoo',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const PerformanceRoute = PerformanceRouteImport.update({
   id: '/performance',
   path: '/performance',
@@ -46,6 +52,7 @@ export interface FileRoutesByFullPath {
   '/competitive': typeof CompetitiveRoute
   '/insights': typeof InsightsRoute
   '/performance': typeof PerformanceRoute
+  '/voodoo': typeof VoodooRoute
   '/ad/$id': typeof AdIdRoute
 }
 export interface FileRoutesByTo {
@@ -53,6 +60,7 @@ export interface FileRoutesByTo {
   '/competitive': typeof CompetitiveRoute
   '/insights': typeof InsightsRoute
   '/performance': typeof PerformanceRoute
+  '/voodoo': typeof VoodooRoute
   '/ad/$id': typeof AdIdRoute
 }
 export interface FileRoutesById {
@@ -61,19 +69,33 @@ export interface FileRoutesById {
   '/competitive': typeof CompetitiveRoute
   '/insights': typeof InsightsRoute
   '/performance': typeof PerformanceRoute
+  '/voodoo': typeof VoodooRoute
   '/ad/$id': typeof AdIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/competitive' | '/insights' | '/performance' | '/ad/$id'
+  fullPaths:
+    | '/'
+    | '/competitive'
+    | '/insights'
+    | '/performance'
+    | '/voodoo'
+    | '/ad/$id'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/competitive' | '/insights' | '/performance' | '/ad/$id'
+  to:
+    | '/'
+    | '/competitive'
+    | '/insights'
+    | '/performance'
+    | '/voodoo'
+    | '/ad/$id'
   id:
     | '__root__'
     | '/'
     | '/competitive'
     | '/insights'
     | '/performance'
+    | '/voodoo'
     | '/ad/$id'
   fileRoutesById: FileRoutesById
 }
@@ -82,11 +104,19 @@ export interface RootRouteChildren {
   CompetitiveRoute: typeof CompetitiveRoute
   InsightsRoute: typeof InsightsRoute
   PerformanceRoute: typeof PerformanceRoute
+  VoodooRoute: typeof VoodooRoute
   AdIdRoute: typeof AdIdRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/voodoo': {
+      id: '/voodoo'
+      path: '/voodoo'
+      fullPath: '/voodoo'
+      preLoaderRoute: typeof VoodooRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/performance': {
       id: '/performance'
       path: '/performance'
@@ -130,6 +160,7 @@ const rootRouteChildren: RootRouteChildren = {
   CompetitiveRoute: CompetitiveRoute,
   InsightsRoute: InsightsRoute,
   PerformanceRoute: PerformanceRoute,
+  VoodooRoute: VoodooRoute,
   AdIdRoute: AdIdRoute,
 }
 export const routeTree = rootRouteImport

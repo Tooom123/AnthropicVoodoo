@@ -102,3 +102,48 @@ export function useReportList() {
     staleTime: 60 * 1000,
   });
 }
+
+// ---------------------------------------------------------------------------
+// Voodoo Portfolio — top games + their currently-running ad creatives
+// ---------------------------------------------------------------------------
+
+export interface VoodooAdSample {
+  creative_id: string;
+  network: string;
+  ad_type: string;
+  thumb_url: string | null;
+  creative_url: string | null;
+  first_seen_at: string | null;
+}
+
+export interface VoodooPortfolioEntry {
+  app_id: string;
+  unified_app_id: string | null;
+  name: string;
+  publisher_name: string;
+  icon_url: string;
+  categories: (number | string)[];
+  rating: number | null;
+  rating_count: number | null;
+  description: string;
+  ads_total: number;
+  ads_by_network: Record<string, number>;
+  ads_latest_first_seen: string | null;
+  ads_sample: VoodooAdSample[];
+}
+
+export interface VoodooPortfolioResponse {
+  generated_at: string | null;
+  country: string;
+  limit: number;
+  apps: VoodooPortfolioEntry[];
+}
+
+export function useVoodooPortfolio(limit = 15) {
+  return useQuery<VoodooPortfolioResponse>({
+    queryKey: ["voodooPortfolio", limit],
+    queryFn: () =>
+      apiFetch<VoodooPortfolioResponse>("/api/voodoo/portfolio", { limit }),
+    staleTime: 5 * 60 * 1000,
+  });
+}

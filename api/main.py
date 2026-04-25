@@ -646,6 +646,80 @@ def list_voodoo_apps(refresh: bool = Query(False)) -> list[VoodooApp]:
     ]
 
 
+class VoodooAdSample(BaseModel):
+    """One ad creative running on a Voodoo title (mp4 + thumb + metadata)."""
+
+    creative_id: str
+    network: str
+    ad_type: str
+    thumb_url: str | None = None
+    creative_url: str | None = None
+    first_seen_at: str | None = None
+
+
+class VoodooPortfolioEntry(BaseModel):
+    """One row in the Voodoo Portfolio page — game + ad activity summary."""
+
+    app_id: str
+    unified_app_id: str | None = None
+    name: str
+    publisher_name: str
+    icon_url: str
+    categories: list[int | str]
+    rating: float | None = None
+    rating_count: int | None = None
+    description: str = ""
+    ads_total: int = 0
+    ads_by_network: dict[str, int] = {}
+    ads_latest_first_seen: str | None = None
+    ads_sample: list[VoodooAdSample] = []
+
+
+class VoodooPortfolioResponse(BaseModel):
+    generated_at: str | None = None
+    country: str = "US"
+    limit: int = 15
+    apps: list[VoodooPortfolioEntry] = []
+
+
+@app.get("/api/voodoo/portfolio", response_model=VoodooPortfolioResponse)
+def voodoo_portfolio(limit: int = Query(15, ge=1, le=50)) -> VoodooPortfolioResponse:
+    """Return the top-N most-rated Voodoo games + their current ad activity.
+
+    Reads from ``data/cache/voodoo/portfolio_summary.json`` (written by
+    ``scripts.precache_voodoo_ads``) for instant load. If the snapshot is
+    missing, returns an empty response with a friendly message hint —
+    the frontend should prompt the user to run the precache script.
+
+    Designed for the Voodoo Portfolio page where every cell needs to render
+    immediately from disk during the demo (no 30s fan-out across 15
+    SensorTower calls).
+    """
+    from app.sources.voodoo import VOODOO_CACHE_DIR
+
+    summary_path = VOODOO_CACHE_DIR / "portfolio_summary.json"
+    if not summary_path.exists():
+        log.info(
+            "voodoo_portfolio: portfolio_summary.json missing — "
+            "run `uv run python -m scripts.precache_voodoo_ads` to populate it."
+        )
+        return VoodooPortfolioResponse()
+
+    try:
+        data = json.loads(summary_path.read_text())
+    except (json.JSONDecodeError, OSError):
+        log.exception("voodoo_portfolio: failed to read portfolio_summary.json")
+        return VoodooPortfolioResponse()
+
+    apps = data.get("apps") or []
+    return VoodooPortfolioResponse(
+        generated_at=data.get("generated_at"),
+        country=data.get("country", "US"),
+        limit=limit,
+        apps=[VoodooPortfolioEntry.model_validate(a) for a in apps[:limit]],
+    )
+
+
 @app.get("/api/voodoo/apps/{app_id}/creatives")
 def voodoo_app_creatives(
     app_id: str,
