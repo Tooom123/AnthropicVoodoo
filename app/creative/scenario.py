@@ -4,10 +4,22 @@ Owner: Partner 2. The production target uses the **Scenario MCP** connector
 inside Claude Code; this module is the v1 REST baseline so the Streamlit
 pipeline runs end-to-end from Python.
 
+Three generation modes (auto-selected based on inputs):
+
+- ``txt2img``: pure prompt-driven. No reference image.
+- ``txt2img-ip-adapter`` (default when refs provided): prompt-driven
+  composition with **IP-Adapter style transfer** from 1-3 game screenshots.
+  This is the right tool for "ad creative that stays on-brand" — the prompt
+  drives the narrative, the references inject palette + character + UI vibe
+  without locking the canvas. Anti-deceptive-ad strategy.
+- ``img2img`` (opt-in via ``img2img_strength=...``): single-reference
+  composition lock. Useful when one screenshot must define the layout
+  exactly (rare for ads — kept for flexibility).
+
 API auth: Basic with ``API_KEY:API_SECRET`` base64-encoded.
-Workflow: POST ``/v1/generate/txt2img`` returns a jobId; poll ``/v1/jobs/{id}``
-until ``status == "success"``, then read ``assetIds`` from the job metadata
-and fetch each asset via ``/v1/assets/{id}``.
+
+Async workflow: trigger → jobId → poll ``/v1/jobs/{id}`` until success →
+read ``assetIds`` from job metadata → fetch each asset via ``/v1/assets/{id}``.
 
 If credentials are missing, ``call_scenario`` falls back to a deterministic
 Picsum URL so the rest of the pipeline still completes end-to-end.
@@ -16,6 +28,7 @@ Picsum URL so the rest of the pipeline still completes end-to-end.
 from __future__ import annotations
 
 import base64
+import hashlib
 import json
 import logging
 import os
@@ -24,7 +37,7 @@ from pathlib import Path
 
 import httpx
 
-from app._cache import disk_cached, hash_key
+from app._cache import hash_key
 from app._paths import CACHE_DIR
 from app.models import CreativeArchetype, CreativeBrief, GameFitScore, GeneratedVariant
 
@@ -33,6 +46,9 @@ log = logging.getLogger(__name__)
 SCENARIO_BASE = "https://api.cloud.scenario.com/v1"
 DEFAULT_MODEL_ID = "flux.1-dev"
 DEFAULT_CACHE_DIR = CACHE_DIR / "scenario"
+ASSETS_CACHE_DIR = CACHE_DIR / "scenario_assets"
+DEFAULT_IMG2IMG_STRENGTH = 0.6  # 0.0 = identical to reference, 1.0 = ignore reference
+MAX_IPADAPTER_REFS = 3  # Scenario / Veo / most IP-Adapter models cap quality at 3 refs
 
 
 def _basic_auth_header() -> str | None:
@@ -49,6 +65,47 @@ def _picsum_stub(prompt: str) -> str:
     return f"https://picsum.photos/seed/{seed}/720/1280"
 
 
+def upload_asset(image_path: Path, *, name: str | None = None) -> str:
+    """Upload a local image to Scenario and return its ``asset_id``.
+
+    Cached by file hash on disk under ``data/cache/scenario_assets/<sha8>.txt``,
+    so the same screenshot is uploaded at most once even across pipeline runs.
+    """
+    auth = _basic_auth_header()
+    if not auth:
+        raise RuntimeError(
+            "SCENARIO_API_KEY/SECRET missing — cannot upload reference image."
+        )
+
+    image_bytes = image_path.read_bytes()
+    sha = hashlib.sha256(image_bytes).hexdigest()[:16]
+    cache_path = ASSETS_CACHE_DIR / f"{sha}.txt"
+    if cache_path.exists():
+        return cache_path.read_text().strip()
+
+    log.info("Scenario asset upload (%d KB) for %s", len(image_bytes) // 1024, image_path.name)
+    payload = {
+        "image": base64.b64encode(image_bytes).decode("utf-8"),
+        "name": name or image_path.name,
+    }
+    headers = {"Content-Type": "application/json", "Authorization": auth}
+    r = httpx.post(
+        f"{SCENARIO_BASE}/assets",
+        headers=headers,
+        json=payload,
+        timeout=60.0,
+    )
+    r.raise_for_status()
+    body = r.json()
+    asset_id = (body.get("asset") or {}).get("id") or body.get("id") or body.get("assetId")
+    if not asset_id:
+        raise RuntimeError(f"Scenario /v1/assets returned no id: {body}")
+
+    ASSETS_CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    cache_path.write_text(asset_id)
+    return asset_id
+
+
 def call_scenario(
     prompt: str,
     *,
@@ -57,8 +114,15 @@ def call_scenario(
     width: int = 720,
     height: int = 1280,
     timeout_s: float = 360.0,
+    reference_image_paths: list[Path] | None = None,
+    ipadapter_type: str = "style",  # "style" or "character"
+    img2img_strength: float | None = None,  # if set, force img2img mode (single ref)
 ) -> tuple[str, dict]:
-    """Generate one image via Scenario REST API.
+    """Generate one image via Scenario REST API. Mode auto-selected:
+
+    - 0 refs                                 → ``txt2img``
+    - 1+ refs, no ``img2img_strength``       → ``txt2img-ip-adapter`` (recommended for ad creatives)
+    - exactly 1 ref + ``img2img_strength``   → ``img2img`` (composition lock, opt-in)
 
     Returns ``(asset_url, metadata_dict)``. ``metadata_dict["stub"]`` is True
     when credentials are missing or when generation timed out (graceful
@@ -68,9 +132,29 @@ def call_scenario(
     On timeout, the failure is *not* cached — re-running may succeed if
     Scenario's queue has cleared.
 
-    Cached on disk by ``(prompt, model_id)`` so successful re-runs are instant.
+    Cached on disk by all inputs that affect the output.
     """
-    cache_path = DEFAULT_CACHE_DIR / f"{label}__{hash_key({'p': prompt, 'm': model_id})}.json"
+    refs = reference_image_paths or []
+    refs = refs[:MAX_IPADAPTER_REFS]  # cap
+
+    if img2img_strength is not None and len(refs) >= 1:
+        mode = "img2img"
+    elif len(refs) >= 1:
+        mode = "txt2img-ip-adapter"
+    else:
+        mode = "txt2img"
+
+    cache_key = {
+        "p": prompt,
+        "m": model_id,
+        "mode": mode,
+        "refs": [
+            hashlib.sha256(p.read_bytes()).hexdigest()[:16] for p in refs
+        ],
+        "strength": img2img_strength,
+        "ipa_type": ipadapter_type if mode == "txt2img-ip-adapter" else None,
+    }
+    cache_path = DEFAULT_CACHE_DIR / f"{label}__{hash_key(cache_key)}.json"
     if cache_path.exists():
         cached = json.loads(cache_path.read_text())
         return cached["url"], cached
@@ -80,13 +164,21 @@ def call_scenario(
     # Stub path — no credentials.
     if not auth:
         url = _picsum_stub(prompt)
-        result = {"url": url, "stub": True, "prompt": prompt, "model_id": model_id}
+        result = {
+            "url": url,
+            "stub": True,
+            "prompt": prompt,
+            "model_id": model_id,
+            "mode": mode,
+        }
         DEFAULT_CACHE_DIR.mkdir(parents=True, exist_ok=True)
         cache_path.write_text(json.dumps(result, indent=2))
         return url, result
 
     headers = {"Content-Type": "application/json", "Authorization": auth}
-    payload = {
+
+    # Build payload — same base for all 3 modes
+    payload: dict = {
         "prompt": prompt,
         "modelId": model_id,
         "numSamples": 1,
@@ -96,9 +188,44 @@ def call_scenario(
         "height": height,
     }
 
-    log.info("Scenario CACHE MISS · POST /generate/txt2img · model=%s", model_id)
+    # Upload refs and add mode-specific fields
+    endpoint = "/generate/txt2img"
+    asset_ids: list[str] = []
+    if mode != "txt2img":
+        try:
+            asset_ids = [
+                upload_asset(p, name=f"ref_{label}_{i}")
+                for i, p in enumerate(refs)
+            ]
+        except Exception as e:  # noqa: BLE001
+            log.warning(
+                "Scenario reference upload failed (%s) — falling back to txt2img.", e
+            )
+            mode = "txt2img"
+
+    if mode == "img2img":
+        payload["image"] = asset_ids[0]
+        payload["strength"] = img2img_strength
+        endpoint = "/generate/img2img"
+    elif mode == "txt2img-ip-adapter":
+        payload["ipAdapterImageIds"] = asset_ids
+        payload["ipAdapterType"] = ipadapter_type
+        endpoint = "/generate/txt2img-ip-adapter"
+
+    log.info(
+        "Scenario CACHE MISS · POST %s · model=%s%s",
+        endpoint,
+        model_id,
+        (
+            f" · {len(asset_ids)} ref(s) · type={ipadapter_type}"
+            if mode == "txt2img-ip-adapter"
+            else f" · ref={refs[0].name}, strength={img2img_strength}"
+            if mode == "img2img"
+            else ""
+        ),
+    )
     r = httpx.post(
-        f"{SCENARIO_BASE}/generate/txt2img",
+        f"{SCENARIO_BASE}{endpoint}",
         headers=headers,
         json=payload,
         timeout=60.0,
@@ -142,6 +269,10 @@ def call_scenario(
                 "stub": False,
                 "prompt": prompt,
                 "model_id": model_id,
+                "mode": mode,
+                "reference_images": [p.name for p in refs] if refs else None,
+                "img2img_strength": img2img_strength if mode == "img2img" else None,
+                "ipadapter_type": ipadapter_type if mode == "txt2img-ip-adapter" else None,
             }
             DEFAULT_CACHE_DIR.mkdir(parents=True, exist_ok=True)
             cache_path.write_text(json.dumps(result, indent=2))
@@ -178,13 +309,27 @@ def generate_variants(
     briefs: list[CreativeBrief],
     *,
     model_id: str = DEFAULT_MODEL_ID,
+    reference_image_paths: list[Path] | None = None,
+    ipadapter_type: str = "style",
 ) -> list[GeneratedVariant]:
     """For each brief, generate one hero frame + storyboard via Scenario.
+
+    When ``reference_image_paths`` is non-empty (typical: the target game's
+    screenshots), uses **txt2img + IP-Adapter** to transfer the game's
+    visual STYLE (palette, character/UI vibe) onto each prompt-driven
+    composition. This is the right tool for ad creatives — palette match
+    without composition lock — and prevents the "deceptive ad" problem
+    where a generated visual looks nothing like the actual game.
+
+    All available refs (capped at 3) are passed as IP-Adapter style refs
+    for every scenario_prompt — every frame of the variant gets the full
+    style anchor.
 
     ``test_priority`` is a final ranking by ``signal_score × game_fit / 100``
     so the publishing team knows which variant to A/B-test first.
     """
     variants: list[GeneratedVariant] = []
+    refs = (reference_image_paths or [])[:MAX_IPADAPTER_REFS]
 
     for arch, sc in chosen:
         brief = next(b for b in briefs if b.archetype_id == arch.archetype_id)
@@ -194,6 +339,8 @@ def generate_variants(
                 prompt,
                 label=f"{brief.archetype_id}_{j}",
                 model_id=model_id,
+                reference_image_paths=refs,
+                ipadapter_type=ipadapter_type,
             )
             urls.append(url)
 

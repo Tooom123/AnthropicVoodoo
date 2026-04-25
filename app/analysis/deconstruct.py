@@ -33,14 +33,23 @@ log = logging.getLogger(__name__)
 # Constants
 # ---------------------------------------------------------------------------
 
-MODEL = "gemini-2.5-pro"
+MODEL = os.environ.get("GEMINI_VIDEO_MODEL", "gemini-3-flash-preview")
+"""Gemini model used for ad-video deconstruction.
+
+Default: ``gemini-3-flash-preview`` — released Q1 2026, Pro-level intelligence
+at Flash speed/cost ($0.50/M input vs $2/M for Pro). Plenty for hook + scene
+extraction tasks. Override via env var ``GEMINI_VIDEO_MODEL`` to e.g.
+``gemini-3.1-pro-preview`` for max quality (4× the cost).
+"""
+
 DEFAULT_VIDEO_CACHE_DIR = CACHE_DIR / "videos"
 DEFAULT_DECONSTRUCT_CACHE_DIR = CACHE_DIR / "deconstruct"
 
-# Gemini 2.5 Pro pricing — rough estimate for budget tracking only.
-COST_INPUT_PER_1M_TOKENS = 1.25
-COST_OUTPUT_PER_1M_TOKENS = 5.00
-VIDEO_TOKENS_PER_SECOND = 263  # per Google docs: ~263 tokens / sec at default sampling
+# Gemini 3 Flash pricing (April 2026): $0.50/M input, $3/M output.
+# Override defaults via env if you switch model.
+COST_INPUT_PER_1M_TOKENS = float(os.environ.get("GEMINI_INPUT_USD_PER_1M", "0.50"))
+COST_OUTPUT_PER_1M_TOKENS = float(os.environ.get("GEMINI_OUTPUT_USD_PER_1M", "3.00"))
+VIDEO_TOKENS_PER_SECOND = 70  # Gemini 3 with media_resolution_low/medium
 
 
 # ---------------------------------------------------------------------------

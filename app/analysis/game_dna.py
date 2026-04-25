@@ -18,7 +18,11 @@ log = logging.getLogger(__name__)
 
 DEFAULT_CACHE_DIR = CACHE_DIR / "game_dna"
 SCREENSHOT_CACHE_DIR = CACHE_DIR / "screenshots"
-MODEL = "gemini-2.5-pro"
+# Default to gemini-3-flash-preview which has Pro-level intelligence with a
+# free tier. gemini-3.1-pro-preview has NO free tier in the Gemini API (per
+# https://ai.google.dev/gemini-api/docs/gemini-3) — opt in via env var if
+# you have a paid plan.
+MODEL = os.environ.get("GEMINI_VISION_MODEL", "gemini-3-flash-preview")
 
 def _build_prompt(description: str) -> str:
     """Build the Game DNA prompt with a description block.
