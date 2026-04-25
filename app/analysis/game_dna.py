@@ -20,16 +20,23 @@ DEFAULT_CACHE_DIR = CACHE_DIR / "game_dna"
 SCREENSHOT_CACHE_DIR = CACHE_DIR / "screenshots"
 MODEL = "gemini-2.5-pro"
 
-PROMPT_TEMPLATE = """You are a senior mobile-game product analyst. Looking at these in-game screenshots and the store description below, extract a precise, structured "Game DNA" matching the schema. Be specific, concrete, never hedge.
+def _build_prompt(description: str) -> str:
+    """Build the Game DNA prompt with a description block.
+
+    We use an f-string-in-a-function instead of a module-level template +
+    ``.format()`` because the prompt body contains literal curly braces
+    (the ui_mood enum example) that would collide with format-field parsing.
+    """
+    return f"""You are a senior mobile-game product analyst. Looking at these in-game screenshots and the store description below, extract a precise, structured "Game DNA" matching the schema. Be specific, concrete, never hedge.
 
 For ``palette``: pick exactly the 3 dominant hex colors of the in-game UI (not the icon).
 For ``audience_proxy``: a one-sentence demographic guess (gender, age range, vibe).
 For ``key_mechanics``: 3-6 short verbs (e.g. "sorting", "stacking", "physics-tap").
-For ``ui_mood``: pick one of {"calm/satisfying", "energetic/competitive", "tense/challenging", "cozy/relaxing"}.
+For ``ui_mood``: pick one of {{"calm/satisfying", "energetic/competitive", "tense/challenging", "cozy/relaxing"}}.
 For ``character_present``: true if a recognizable character or avatar is visible across screenshots, false if it's purely abstract/object-based.
 
 Store description:
-\"\"\"{description}\"\"\"
+\"\"\"{description[:1500]}\"\"\"
 """
 
 
@@ -66,7 +73,7 @@ def extract_game_dna(meta: AppMetadata, *, max_screenshots: int = 3) -> GameDNA:
         return GameDNA.model_validate_json(cache_path.read_text())
 
     screenshot_paths = _download_screenshots(meta, max_n=max_screenshots)
-    prompt = PROMPT_TEMPLATE.format(description=meta.description[:1500])
+    prompt = _build_prompt(meta.description)
 
     client = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
     image_parts = [
