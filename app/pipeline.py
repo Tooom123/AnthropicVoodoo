@@ -373,17 +373,15 @@ def run_pipeline_prototype(
 
     state = PipelineState(config=config)
     state.target_meta = synthetic_meta
-
-    # Synthetically yield step 1 (resolve_game) so the UI gets a "Step 1/10
-    # done" event with the synthetic metadata payload.
-    if on_step is not None:
-        on_step("target_meta", "Resolve target game (prototype)", 1, synthetic_meta, 0.0)
     state.step_durations_s["target_meta"] = 0.0
 
-    # Run the rest of the steps starting from step 2 (game_dna).
+    # In prototype mode we skip step 1 entirely (the SensorTower lookup that
+    # doesn't apply) — the UI shows the PM's actual uploaded inputs instead.
+    # Steps are renumbered 1..9 in the on_step callbacks so the progress bar
+    # and section headings stay coherent.
     remaining = [s for s in STEPS if s.step_id != "target_meta"]
-    for offset, step in enumerate(remaining, start=2):
-        log.info("Step %d/%d · %s", offset, len(STEPS), step.label)
+    for offset, step in enumerate(remaining, start=1):
+        log.info("Step %d/%d · %s", offset, len(remaining), step.label)
         t0 = time.perf_counter()
         try:
             payload = step.runner(state)

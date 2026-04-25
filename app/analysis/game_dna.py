@@ -18,7 +18,9 @@ log = logging.getLogger(__name__)
 
 DEFAULT_CACHE_DIR = CACHE_DIR / "game_dna"
 SCREENSHOT_CACHE_DIR = CACHE_DIR / "screenshots"
-MODEL = "gemini-2.5-pro"
+# Game DNA extraction is a small, high-leverage call (3 screenshots → structured
+# DNA used by EVERY downstream score). Worth Pro-level reasoning, not Flash.
+MODEL = os.environ.get("GEMINI_VISION_MODEL", "gemini-3.1-pro-preview")
 
 def _build_prompt(description: str) -> str:
     """Build the Game DNA prompt with a description block.

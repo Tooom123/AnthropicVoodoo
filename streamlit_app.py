@@ -347,7 +347,30 @@ mode: str = st.session_state.get("mode", "existing")
 # Sections (one st.empty per pipeline step) + progress bar
 # ---------------------------------------------------------------------------
 
-sections = {
+# In prototype mode, render the PM-uploaded inputs as a recap card right at
+# the top, then skip step 1 (target_meta) entirely. In existing-game mode,
+# step 1 renders the real SensorTower metadata as before.
+if mode == "prototype":
+    proto: PrototypeInput = st.session_state.prototype
+    with st.container(border=True):
+        st.markdown(f"### 🧪 Prototype inputs · {proto.name}")
+        cols = st.columns([2, 3])
+        with cols[0]:
+            st.markdown(f"**Description**\n\n_{proto.description}_")
+            if proto.target_audience_proxy:
+                st.markdown(f"**Target audience:** {proto.target_audience_proxy}")
+            st.caption(
+                f"Synthetic app_id: `{st.session_state.config.game_name or 'proto_' + proto.name.lower().replace(' ', '_')}`"
+            )
+        with cols[1]:
+            st.markdown(f"**{len(proto.screenshot_paths)} mockup(s) uploaded**")
+            scols = st.columns(min(len(proto.screenshot_paths), 5))
+            for sc, path in zip(scols, proto.screenshot_paths[:5], strict=False):
+                with sc:
+                    st.image(str(path), use_container_width=True)
+    st.divider()
+
+sections: dict[str, "st.delta_generator.DeltaGenerator"] = {
     "target_meta": st.empty(),
     "game_dna": st.empty(),
     "top_advertisers": st.empty(),
@@ -361,7 +384,7 @@ sections = {
 }
 
 progress_holder = st.empty()
-total_steps = 10
+total_steps = 9 if mode == "prototype" else 10
 
 
 def on_step(
