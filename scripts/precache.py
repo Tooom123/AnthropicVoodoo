@@ -30,6 +30,10 @@ logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s | %(levelname)-7s | %(name)s | %(message)s",
 )
+# httpx logs every request URL at INFO — this leaks the SensorTower auth_token
+# query param into shipping logs. Bump httpx to WARNING so cache misses no
+# longer print full URLs.
+logging.getLogger("httpx").setLevel(logging.WARNING)
 
 
 def main() -> int:

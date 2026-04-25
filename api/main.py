@@ -23,6 +23,12 @@ from pydantic import BaseModel
 load_dotenv()
 log = logging.getLogger(__name__)
 
+# Silence httpx INFO-level URL logging — SensorTower URLs include the
+# auth_token query param, which would otherwise leak into shipping logs every
+# time a cache miss hits the API. Library-level sanitisation is brittle, so
+# we just raise httpx's logger threshold; warnings + errors still surface.
+logging.getLogger("httpx").setLevel(logging.WARNING)
+
 app = FastAPI(title="HookLens API", version="0.1.0")
 
 app.add_middleware(

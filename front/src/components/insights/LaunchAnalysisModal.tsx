@@ -64,6 +64,24 @@ interface VoodooApp {
   description?: string;
 }
 
+/**
+ * iOS App Store game category IDs (from docs/sensortower-api.md §9.1).
+ * 6014 = Games root, 7001–7019 = sub-genres. Voodoo's catalog includes a few
+ * non-game apps (e.g. BeReal, social) — filtering these out keeps the
+ * modal's quick-pick row demo-relevant.
+ */
+const IOS_GAME_CATEGORY_IDS = new Set<number>([
+  6014, 7001, 7002, 7003, 7004, 7005, 7006, 7009, 7011, 7012, 7013, 7014, 7015,
+  7016, 7017, 7018, 7019,
+]);
+
+function isGameApp(app: VoodooApp): boolean {
+  return app.categories.some((c) => {
+    const n = typeof c === "number" ? c : Number(c);
+    return Number.isFinite(n) && IOS_GAME_CATEGORY_IDS.has(n);
+  });
+}
+
 interface CachedReport {
   app_id: string;
   name: string;
@@ -144,14 +162,14 @@ export function LaunchAnalysisModal({
 
   const trimmed = gameName.trim();
 
-  // Filter Voodoo apps as the user types.
+  // Filter Voodoo apps to mobile games only (drops BeReal & friends), then
+  // narrow further by the user's typing.
   const filteredVoodooApps = useMemo(() => {
     if (!voodooApps.length) return [] as VoodooApp[];
-    if (!trimmed) return voodooApps.slice(0, 8);
+    const games = voodooApps.filter(isGameApp);
+    if (!trimmed) return games.slice(0, 8);
     const q = trimmed.toLowerCase();
-    return voodooApps
-      .filter((a) => a.name.toLowerCase().includes(q))
-      .slice(0, 8);
+    return games.filter((a) => a.name.toLowerCase().includes(q)).slice(0, 8);
   }, [voodooApps, trimmed]);
 
   function handleSubmit() {
