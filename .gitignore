@@ -1,0 +1,44 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+env/
+.eggs/
+*.egg-info/
+*.egg
+build/
+dist/
+
+# Env / secrets
+.env
+.env.local
+*.key
+
+# IDE
+.vscode/
+.idea/
+*.swp
+.DS_Store
+
+# Streamlit
+.streamlit/secrets.toml
+
+# Runtime cache (we keep the dir but ignore its contents)
+data/cache/*
+!data/cache/.gitkeep
+
+# Notebooks
+.ipynb_checkpoints/
+*.ipynb_meta
+
+# Test / coverage
+.pytest_cache/
+.coverage
+htmlcov/
+
+# uv
+uv.lock
