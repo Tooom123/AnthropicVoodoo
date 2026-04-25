@@ -146,6 +146,10 @@ through verbatim. Everything else is paraphrased or dropped.
 **Not currently in the prompts:** `core_loop` (verbatim), `key_mechanics` list,
 `character_present`, `ui_mood`, `screenshot_signals`, `palette.description`.
 
+> ✅ **Dashboard**: all six fields above are now surfaced in `GameDnaCard.tsx`
+> (palette swatches + description, core loop, UI mood, character toggle,
+> key mechanics chips, screenshot signals list). See `front/src/components/insights/GameDnaCard.tsx`.
+
 ### B.2 — Source archetype (cluster the brief came from)
 
 ```json
@@ -174,6 +178,13 @@ through verbatim. Everything else is paraphrased or dropped.
 `text_overlay`, `voiceover_transcript`, `emotional_pitch`, the original
 archetype's own palette (different from target game's!), the signal scores, the
 rationale.
+
+> ✅ **Dashboard (partial)**: `emotional_pitch`, palette swatches, velocity /
+> derivative_spread / freshness / overall_signal_score bars, and `rationale` are
+> displayed in `ArchetypesTable.tsx`.
+> ⚠️ **Still missing from dashboard**: `centroid_hook.visual_action` and
+> `centroid_hook.text_overlay` are not separately shown (only `centroid_hook.summary`
+> is rendered). See `front/src/components/insights/ArchetypesTable.tsx:104`.
 
 ### B.3 — Member deconstructed creatives (the actual hook reference set)
 
@@ -225,6 +236,11 @@ For each member of the archetype, we have the full Gemini-Pro deconstruction:
 - `cta_timing_seconds` and `scene_flow` per-second breakdowns (could let us
   generate frames that map exactly to t=0s, t=3s, t=7s, etc.)
 
+> ❌ **Dashboard**: `DeconstructedCreative` objects are **not** part of
+> `HookLensReport` (stored separately as `data/cache/deconstructed/*.parquet`).
+> These fields cannot be surfaced via `/api/report` without extending the report
+> schema or adding a dedicated `/api/deconstructed?archetype_id=…` endpoint.
+
 ### B.4 — Game-fit reasoning (Opus output)
 
 ```json
@@ -242,6 +258,10 @@ For each member of the archetype, we have the full Gemini-Pro deconstruction:
 "recommended adaptation" sentence at the end is GOLD for prompt steering — it
 literally says "show X within hook 3s" which is the EXACT prompt content
 we want in `scenario_prompts[0]`.
+
+> ✅ **Dashboard**: the full `fit_score.rationale` (including the "recommended
+> adaptation" sentence) is displayed in `GameFitGrid.tsx`. See
+> `front/src/components/insights/GameFitGrid.tsx:146`.
 
 ### B.5 — Market context
 
