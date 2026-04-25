@@ -59,12 +59,14 @@ from app.models import (
 
 Stay within your lane. Cross-cutting changes must be coordinated.
 
-| Workstream | Owner | Owned paths | Produces | Consumes |
-|---|---|---|---|---|
-| **A. Sources** | Partner 1 | `app/sources/*` | `AppMetadata`, `list[RawCreative]`, downloaded mp4s | game name |
-| **B. Analysis** | Edouard | `app/analysis/*` | `GameDNA`, `list[DeconstructedCreative]`, `list[CreativeArchetype]`, `list[GameFitScore]` | A's outputs |
-| **C. Creative** | Partner 2 | `app/creative/*` | `list[CreativeBrief]`, `list[GeneratedVariant]` | B's `GameDNA` + top archetypes |
-| **D. UI** | sub-agent + Edouard | `streamlit_app.py`, `app/ui/*` | rendered Streamlit dashboard | `HookLensReport` |
+
+| Workstream      | Owner               | Owned paths                    | Produces                                                                                  | Consumes                       |
+| --------------- | ------------------- | ------------------------------ | ----------------------------------------------------------------------------------------- | ------------------------------ |
+| **A. Sources**  | Partner 1           | `app/sources/*`                | `AppMetadata`, `list[RawCreative]`, downloaded mp4s                                       | game name                      |
+| **B. Analysis** | Edouard             | `app/analysis/*`               | `GameDNA`, `list[DeconstructedCreative]`, `list[CreativeArchetype]`, `list[GameFitScore]` | A's outputs                    |
+| **C. Creative** | Partner 2           | `app/creative/*`               | `list[CreativeBrief]`, `list[GeneratedVariant]`                                           | B's `GameDNA` + top archetypes |
+| **D. UI**       | sub-agent + Edouard | `streamlit_app.py`, `app/ui/*` | rendered Streamlit dashboard                                                              | `HookLensReport`               |
+
 
 **If your task spans two workstreams**, stop and ask the human owner before editing files outside your lane.
 
@@ -149,13 +151,13 @@ We never demo a 5-minute cold pipeline live. Streamlit must support a `?cached=1
 
 Before declaring any task done, verify:
 
-- [ ] Type hints, no implicit `Any`
-- [ ] Pydantic models on every interface boundary
-- [ ] No `print()` in library code; use `logging` or `rich.console.Console`
-- [ ] Cache hit on second run for any expensive call
-- [ ] Empty / failure paths handled (no `raise Exception("oops")`, use specific exceptions)
-- [ ] No broken imports (run `uv run python -c "from app.<module> import *"`)
-- [ ] No file outside your workstream was modified
+- Type hints, no implicit `Any`
+- Pydantic models on every interface boundary
+- No `print()` in library code; use `logging` or `rich.console.Console`
+- Cache hit on second run for any expensive call
+- Empty / failure paths handled (no `raise Exception("oops")`, use specific exceptions)
+- No broken imports (run `uv run python -c "from app.<module> import *"`)
+- No file outside your workstream was modified
 
 ---
 
@@ -178,7 +180,7 @@ These will break the team or the demo. Don't do them, and refuse if asked:
 2. **Push to `main` directly**. Always go through a workstream branch + merge at checkpoint
 3. **Add new top-level dependencies** to `pyproject.toml` without confirmation. New deps cost setup time for the other 2 devs.
 4. **Run database migrations or set up Postgres**. We use SQLite or parquet files only. The user already overruled Postgres.
-5. **Commit secrets**. Anything matching `*KEY*`, `*SECRET*`, or `.env` must stay out. The `.gitignore` covers this; verify with `git status` before commit.
+5. **Commit secrets**. Anything matching `*KEY`*, `*SECRET*`, or `.env` must stay out. The `.gitignore` covers this; verify with `git status` before commit.
 6. **Run destructive commands** (`rm -rf`, `git reset --hard origin/main`, force push) without an explicit human go-ahead in the same turn.
 7. **Spin up Docker, Kubernetes, or any cloud infra** beyond the optional Streamlit Cloud deploy on Sunday morning.
 8. **Refactor working code "for cleanliness"** during build phase. Working ugly > broken pretty in 30h.
@@ -201,13 +203,15 @@ Do not silently change architecture or schemas to work around a problem. Surface
 
 ## 13. Model selection cheat sheet
 
-| Phase | Recommended model | Why |
-|---|---|---|
-| Spec / Plan | Opus 4.7 (max thinking) or GPT-5.5 (extra-high) | reasoning about intent and tradeoffs |
-| Build (code) | Sonnet 4.6 (max thinking) or GPT-5.5 (high) | follows the plan, economical |
-| Pipeline runtime — video analysis | Gemini 2.5 Pro (or 3 Pro if available) | native video, 1M context |
-| Pipeline runtime — text reasoning | Sonnet 4.6 | structured output, fast |
-| Final brief generation | Opus 4.7 | narrative quality matters in jury demo |
+
+| Phase                             | Recommended model                               | Why                                    |
+| --------------------------------- | ----------------------------------------------- | -------------------------------------- |
+| Spec / Plan                       | Opus 4.7 (max thinking) or GPT-5.5 (extra-high) | reasoning about intent and tradeoffs   |
+| Build (code)                      | Sonnet 4.6 (max thinking) or GPT-5.5 (high)     | follows the plan, economical           |
+| Pipeline runtime — video analysis | Gemini 2.5 Pro (or 3 Pro if available)          | native video, 1M context               |
+| Pipeline runtime — text reasoning | Sonnet 4.6                                      | structured output, fast                |
+| Final brief generation            | Opus 4.7                                        | narrative quality matters in jury demo |
+
 
 The Anthropic credits are limited (~$40/team). Save Opus for the spec, plan, and final brief generation. Use Sonnet everywhere else.
 
