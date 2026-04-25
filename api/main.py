@@ -12,11 +12,12 @@ import json
 import logging
 from datetime import date, datetime, timezone
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 load_dotenv()
@@ -402,3 +403,178 @@ def get_report(
     # Return the raw JSON payload — preserves Pydantic schema fidelity for
     # the frontend without forcing FastAPI to re-serialize.
     return json.loads(cache_path.read_text())
+
+
+# ---------------------------------------------------------------------------
+# Live pipeline runner — streams step-by-step progress over Server-Sent Events
+# ---------------------------------------------------------------------------
+
+# Total step count is fixed by app.pipeline.STEPS — kept in sync below.
+PIPELINE_TOTAL_STEPS = 10
+
+
+def _summarize_step_payload(step_id: str, payload: Any) -> dict[str, Any]:
+    """Produce a small JSON-safe summary of a step's output for SSE clients.
+
+    Avoid streaming the full pydantic objects: they can be 20+ KB each and
+    we don't need them client-side until the final report lands on disk.
+    """
+    if payload is None:
+        return {}
+    try:
+        if step_id == "target_meta":
+            return {"name": getattr(payload, "name", None), "app_id": getattr(payload, "app_id", None)}
+        if step_id == "game_dna":
+            return {
+                "name": getattr(payload, "name", None),
+                "genre": getattr(payload, "genre", None),
+                "primary_hex": getattr(getattr(payload, "palette", None), "primary_hex", None),
+            }
+        if step_id == "top_advertisers":
+            return {"count": len(payload) if hasattr(payload, "__len__") else 0}
+        if step_id == "raw_creatives":
+            return {"count": len(payload) if hasattr(payload, "__len__") else 0}
+        if step_id == "deconstructed":
+            return {"count": len(payload) if hasattr(payload, "__len__") else 0}
+        if step_id == "archetypes":
+            labels = []
+            for a in (payload or [])[:5]:
+                lab = getattr(a, "label", None)
+                if lab:
+                    labels.append(lab)
+            return {"count": len(payload) if hasattr(payload, "__len__") else 0, "labels": labels}
+        if step_id == "fit_scores":
+            return {"count": len(payload) if hasattr(payload, "__len__") else 0}
+        if step_id == "briefs":
+            titles = [getattr(b, "title", None) for b in (payload or [])[:3]]
+            return {"count": len(payload) if hasattr(payload, "__len__") else 0, "titles": [t for t in titles if t]}
+        if step_id == "variants":
+            return {"count": len(payload) if hasattr(payload, "__len__") else 0}
+        if step_id == "report":
+            return {
+                "app_id": getattr(getattr(payload, "target_game", None), "app_id", None),
+                "name": getattr(getattr(payload, "target_game", None), "name", None),
+                "duration_s": getattr(payload, "pipeline_duration_seconds", None),
+                "cost_usd": getattr(payload, "total_cost_usd", None),
+            }
+    except Exception:
+        log.exception("payload summary failed for step %s", step_id)
+    return {}
+
+
+@app.get("/api/report/run/stream")
+async def run_report_stream(
+    game_name: str = Query(..., description="Game name to analyze"),
+    country: str = Query("US"),
+    network: str = Query("TikTok"),
+    period: str = Query("month"),
+    period_date: str = Query("2026-04-01"),
+    max_creatives: int = Query(8, ge=1, le=20),
+    top_k_archetypes: int = Query(5, ge=1, le=10),
+    top_k_variants: int = Query(3, ge=1, le=5),
+):
+    """Run the full HookLens pipeline and stream step-by-step progress as SSE.
+
+    The client opens an EventSource on this URL; we emit one ``data: {...}``
+    event after each pipeline step (10 in total) plus a final ``done`` (or
+    ``error``) event. Suitable for a live in-app analyze button — the
+    pipeline takes 3–5 minutes end-to-end and 1–2 dollars in API calls.
+    """
+    from app.pipeline import PipelineConfig, run_pipeline
+
+    config = PipelineConfig(
+        game_name=game_name,
+        country=country,
+        network=network,
+        period=period,
+        period_date=period_date,
+        max_creatives=max_creatives,
+        top_k_archetypes=top_k_archetypes,
+        top_k_variants=top_k_variants,
+    )
+
+    loop = asyncio.get_running_loop()
+    queue: asyncio.Queue[dict[str, Any] | None] = asyncio.Queue()
+
+    def on_step(step_id: str, label: str, idx: int, payload: Any, duration_s: float) -> None:
+        """Pipeline callback (runs in the executor thread)."""
+        event = {
+            "type": "step",
+            "step_id": step_id,
+            "label": label,
+            "idx": idx,
+            "total": PIPELINE_TOTAL_STEPS,
+            "duration_s": round(duration_s, 3),
+            "summary": _summarize_step_payload(step_id, payload),
+        }
+        loop.call_soon_threadsafe(queue.put_nowait, event)
+
+    def _run_blocking() -> dict[str, Any]:
+        report = run_pipeline(config, on_step=on_step)
+        return {
+            "type": "done",
+            "app_id": report.target_game.app_id,
+            "name": report.target_game.name,
+            "duration_s": round(report.pipeline_duration_seconds, 1),
+            "cost_usd": round(report.total_cost_usd, 4),
+        }
+
+    async def _runner() -> None:
+        try:
+            done = await loop.run_in_executor(None, _run_blocking)
+            await queue.put(done)
+        except Exception as exc:
+            log.exception("Pipeline run failed for %r", game_name)
+            await queue.put({"type": "error", "message": str(exc)})
+        finally:
+            await queue.put(None)  # sentinel
+
+    asyncio.create_task(_runner())
+
+    async def event_stream():
+        # Send an initial 'started' event so the client gets immediate feedback.
+        yield (
+            "data: "
+            + json.dumps(
+                {
+                    "type": "started",
+                    "game_name": game_name,
+                    "total": PIPELINE_TOTAL_STEPS,
+                    "config": {
+                        "country": country,
+                        "network": network,
+                        "max_creatives": max_creatives,
+                        "top_k_archetypes": top_k_archetypes,
+                        "top_k_variants": top_k_variants,
+                    },
+                }
+            )
+            + "\n\n"
+        )
+
+        # Heartbeat task: SSE keep-alive every 15 s so proxies don't kill the
+        # connection during the long Gemini step.
+        async def _heartbeat():
+            while True:
+                await asyncio.sleep(15)
+                await queue.put({"type": "heartbeat", "ts": datetime.now(timezone.utc).isoformat()})
+
+        hb_task = asyncio.create_task(_heartbeat())
+        try:
+            while True:
+                event = await queue.get()
+                if event is None:  # sentinel: pipeline finished or errored
+                    break
+                yield f"data: {json.dumps(event)}\n\n"
+        finally:
+            hb_task.cancel()
+
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",  # disable proxy buffering
+            "Connection": "keep-alive",
+        },
+    )
