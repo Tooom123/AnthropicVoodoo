@@ -359,6 +359,177 @@ def list_reports() -> list[ReportSummary]:
     return out
 
 
+class GameScreenshots(BaseModel):
+    """App Store screenshots URLs for a target game."""
+
+    app_id: str
+    name: str | None = None
+    screenshot_urls: list[str] = []
+
+
+@app.get("/api/game/screenshots", response_model=GameScreenshots)
+def get_game_screenshots(
+    game_name: str | None = Query(None),
+    app_id: str | None = Query(None),
+) -> GameScreenshots:
+    """Return App Store screenshot URLs cached from SensorTower's iOS app
+    metadata. Used by GameDnaCard to surface real gameplay screenshots
+    next to the DNA analysis.
+    """
+    if not (game_name or app_id):
+        raise HTTPException(
+            status_code=400,
+            detail="Provide either ?game_name=... or ?app_id=...",
+        )
+
+    resolved_id = app_id
+    if not resolved_id and game_name:
+        try:
+            from app.sources.sensortower import resolve_game
+
+            meta = resolve_game(game_name)
+            return GameScreenshots(
+                app_id=meta.app_id,
+                name=meta.name,
+                screenshot_urls=[str(u) for u in meta.screenshot_urls],
+            )
+        except Exception:
+            log.exception("get_game_screenshots: resolve_game failed for %r", game_name)
+            return GameScreenshots(app_id="", screenshot_urls=[])
+
+    # Fall back to scanning the SensorTower meta cache for app_id matches.
+    st_cache = CACHE_DIR / "sensortower"
+    if not st_cache.exists():
+        return GameScreenshots(app_id=resolved_id or "", screenshot_urls=[])
+
+    for path in st_cache.glob(f"meta_{resolved_id}_*.json"):
+        try:
+            data = json.loads(path.read_text())
+        except (OSError, json.JSONDecodeError):
+            continue
+        apps = data.get("apps") or []
+        if not apps:
+            continue
+        meta = apps[0]
+        return GameScreenshots(
+            app_id=str(meta.get("app_id") or resolved_id or ""),
+            name=meta.get("name"),
+            screenshot_urls=list(meta.get("screenshot_urls") or []),
+        )
+
+    return GameScreenshots(app_id=resolved_id or "", screenshot_urls=[])
+
+
+class SourceCreative(BaseModel):
+    """One source ad creative that was deconstructed into an archetype cluster."""
+
+    creative_id: str
+    network: str
+    ad_type: str = "video"
+    thumb_url: str | None = None
+    creative_url: str | None = None
+    first_seen_at: str | None = None
+    advertiser_name: str | None = None
+
+
+def _index_sensortower_creatives() -> dict[str, dict[str, Any]]:
+    """Build an index of every creative in the SensorTower disk cache,
+    keyed by ``creative_id`` → minimal dict with thumb/creative URLs.
+
+    Caches the index in-memory across calls (cheap to rebuild on file mtime
+    change since the directory only grows, but for the demo we just rebuild
+    on each request — there are ~10-30 files in the cache).
+    """
+    st_cache = CACHE_DIR / "sensortower"
+    out: dict[str, dict[str, Any]] = {}
+    if not st_cache.exists():
+        return out
+
+    for path in st_cache.glob("creatives_top_*.json"):
+        try:
+            data = json.loads(path.read_text())
+        except (OSError, json.JSONDecodeError):
+            continue
+        for au in data.get("ad_units") or []:
+            network = au.get("network") or ""
+            ad_type = au.get("ad_type") or "video"
+            first_seen = au.get("first_seen_at") or ""
+            advertiser = (au.get("app_info") or {}).get("name")
+            for c in au.get("creatives") or []:
+                cid = str(c.get("id") or "")
+                if not cid or cid in out:
+                    continue
+                out[cid] = {
+                    "creative_id": cid,
+                    "network": network,
+                    "ad_type": ad_type,
+                    "thumb_url": c.get("thumb_url"),
+                    "creative_url": c.get("creative_url"),
+                    "first_seen_at": first_seen[:10] if first_seen else None,
+                    "advertiser_name": advertiser,
+                }
+    return out
+
+
+@app.get("/api/report/source_creatives")
+def get_source_creatives(
+    game_name: str | None = Query(None),
+    app_id: str | None = Query(None),
+) -> dict[str, list[SourceCreative]]:
+    """Return the source ad creatives that compose each archetype, keyed by
+    ``archetype_id``. Used by the Insights view to surface real ad thumbnails
+    inside the ArchetypesTable so the user can SEE the creatives that were
+    clustered, not just read about them.
+
+    Strategy: load the cached report, look up every archetype's
+    ``member_creative_ids`` against the SensorTower disk cache (the original
+    ``ad_units[].creatives[]`` payloads). Returns an empty list per archetype
+    when no thumbnail is found (graceful empty-state on the frontend).
+    """
+    if not (game_name or app_id):
+        raise HTTPException(
+            status_code=400,
+            detail="Provide either ?game_name=... or ?app_id=...",
+        )
+
+    resolved_id = app_id
+    if not resolved_id and game_name:
+        try:
+            from app.sources.sensortower import resolve_game
+
+            meta = resolve_game(game_name)
+            resolved_id = meta.app_id
+        except Exception:
+            slug = (game_name or "").lower().replace(" ", "_").replace("-", "_")
+            resolved_id = f"proto_{slug}"
+
+    cache_path = REPORTS_CACHE_DIR / f"{resolved_id}_e2e.json"
+    if not cache_path.exists():
+        return {}
+
+    try:
+        report = json.loads(cache_path.read_text())
+    except (OSError, json.JSONDecodeError):
+        return {}
+
+    creative_index = _index_sensortower_creatives()
+
+    out: dict[str, list[SourceCreative]] = {}
+    for arch in report.get("top_archetypes") or []:
+        arch_id = str(arch.get("archetype_id") or "")
+        if not arch_id:
+            continue
+        ids = arch.get("member_creative_ids") or []
+        thumbs: list[SourceCreative] = []
+        for cid in ids:
+            entry = creative_index.get(str(cid))
+            if entry:
+                thumbs.append(SourceCreative.model_validate(entry))
+        out[arch_id] = thumbs
+
+    return out
+
+
 @app.get("/api/report")
 def get_report(
     game_name: str | None = Query(None, description="Game name to resolve via SensorTower"),

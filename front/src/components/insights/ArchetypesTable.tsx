@@ -1,6 +1,20 @@
-import { Radar, TrendingUp } from "lucide-react";
+import { useState } from "react";
+import {
+  ExternalLink,
+  Image as ImageIcon,
+  Play,
+  Radar,
+  TrendingUp,
+} from "lucide-react";
 import { Card } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import type { CreativeArchetype } from "@/types/hooklens";
+import type { SourceCreative } from "@/lib/api";
 import { SignalBar } from "./SignalBar";
 import {
   PITCH_BADGE_CLASS,
@@ -15,9 +29,18 @@ import {
 
 interface ArchetypesTableProps {
   archetypes: CreativeArchetype[];
+  /**
+   * Map of ``archetype_id → list of source ad creatives`` (raw SensorTower
+   * creatives that were clustered into this archetype). Optional — the
+   * table degrades gracefully when this is unavailable.
+   */
+  sourceCreatives?: Record<string, SourceCreative[]>;
 }
 
-export function ArchetypesTable({ archetypes }: ArchetypesTableProps) {
+export function ArchetypesTable({
+  archetypes,
+  sourceCreatives,
+}: ArchetypesTableProps) {
   if (!archetypes?.length) {
     return (
       <Card className="border-border bg-card p-6 text-sm text-muted-foreground">
@@ -59,7 +82,12 @@ export function ArchetypesTable({ archetypes }: ArchetypesTableProps) {
 
       <div className="divide-y divide-border">
         {sorted.map((arch, i) => (
-          <ArchetypeRow key={arch.archetype_id} arch={arch} rank={i + 1} />
+          <ArchetypeRow
+            key={arch.archetype_id}
+            arch={arch}
+            rank={i + 1}
+            sources={sourceCreatives?.[arch.archetype_id] ?? []}
+          />
         ))}
       </div>
     </Card>
@@ -69,9 +97,11 @@ export function ArchetypesTable({ archetypes }: ArchetypesTableProps) {
 function ArchetypeRow({
   arch,
   rank,
+  sources,
 }: {
   arch: CreativeArchetype;
   rank: number;
+  sources: SourceCreative[];
 }) {
   const pitch = arch.centroid_hook.emotional_pitch;
   return (
@@ -172,6 +202,12 @@ function ArchetypeRow({
         </span>
       </div>
 
+      {sources.length > 0 && (
+        <div className="lg:col-span-3">
+          <SourceCreativesRow sources={sources} archLabel={arch.label} />
+        </div>
+      )}
+
       {arch.rationale && (
         <details className="group lg:col-span-3">
           <summary className="cursor-pointer text-[11px] font-medium text-muted-foreground transition-colors hover:text-foreground">
@@ -183,5 +219,127 @@ function ArchetypeRow({
         </details>
       )}
     </div>
+  );
+}
+
+interface SourceCreativesRowProps {
+  sources: SourceCreative[];
+  archLabel: string;
+}
+
+/**
+ * 3-thumb strip of the actual ads that were clustered into this archetype.
+ * Each thumb opens an inline mp4 preview Dialog when the creative is a
+ * Video format.
+ */
+function SourceCreativesRow({ sources, archLabel }: SourceCreativesRowProps) {
+  return (
+    <details className="group">
+      <summary className="cursor-pointer list-none text-[11px] font-medium text-muted-foreground transition-colors hover:text-foreground">
+        <span className="inline-flex items-center gap-1.5">
+          <ImageIcon className="h-3 w-3" />
+          Source creatives ({sources.length}) — click any to preview the mp4
+        </span>
+      </summary>
+      <div className="mt-2 flex gap-2 overflow-x-auto pb-1">
+        {sources.map((s, i) => (
+          <SourceThumb key={s.creative_id || i} sample={s} archLabel={archLabel} />
+        ))}
+      </div>
+    </details>
+  );
+}
+
+interface SourceThumbProps {
+  sample: SourceCreative;
+  archLabel: string;
+}
+
+function SourceThumb({ sample, archLabel }: SourceThumbProps) {
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [errored, setErrored] = useState(false);
+  const hasVideo = Boolean(sample.creative_url);
+  const showImage = sample.thumb_url && !errored;
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => hasVideo && setPreviewOpen(true)}
+        disabled={!hasVideo}
+        className="group/thumb relative h-32 w-[72px] flex-shrink-0 overflow-hidden rounded-md bg-muted ring-1 ring-border transition-all hover:ring-primary/50"
+        title={`${sample.advertiser_name ?? ""} · ${sample.network} · ${sample.first_seen_at ?? ""}`}
+      >
+        {showImage ? (
+          <img
+            src={sample.thumb_url ?? undefined}
+            alt={`Creative for ${archLabel}`}
+            loading="lazy"
+            onError={() => setErrored(true)}
+            className="h-full w-full object-cover"
+          />
+        ) : (
+          <div className="grid h-full w-full place-items-center text-muted-foreground/40">
+            <ImageIcon className="h-4 w-4" />
+          </div>
+        )}
+        {hasVideo && (
+          <div className="absolute inset-0 grid place-items-center bg-black/0 transition-colors group-hover/thumb:bg-black/40">
+            <div className="grid h-7 w-7 place-items-center rounded-full bg-background/80 opacity-0 transition-opacity group-hover/thumb:opacity-100">
+              <Play className="h-3 w-3 fill-foreground text-foreground" />
+            </div>
+          </div>
+        )}
+        <span className="absolute bottom-0.5 left-0.5 rounded-sm bg-background/85 px-1 text-[8px] font-medium">
+          {sample.network}
+        </span>
+      </button>
+
+      <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
+        <DialogContent className="max-w-2xl overflow-hidden p-0">
+          <DialogHeader className="px-5 pt-5">
+            <DialogTitle className="flex items-center justify-between gap-2">
+              <span className="truncate">
+                {sample.advertiser_name ?? "Source creative"}{" "}
+                <span className="text-xs font-normal text-muted-foreground">
+                  · {sample.network}
+                  {sample.first_seen_at ? ` · ${sample.first_seen_at}` : ""} ·{" "}
+                  {sample.ad_type}
+                </span>
+              </span>
+              {sample.creative_url && (
+                <a
+                  href={sample.creative_url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-xs font-normal text-muted-foreground transition-colors hover:border-primary/50 hover:text-foreground"
+                >
+                  Open original
+                  <ExternalLink className="h-3 w-3" />
+                </a>
+              )}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="relative aspect-[9/16] max-h-[70vh] w-full bg-black">
+            {sample.creative_url ? (
+              <video
+                key={sample.creative_url}
+                src={sample.creative_url}
+                controls
+                autoPlay
+                playsInline
+                className="h-full w-full object-contain"
+              />
+            ) : sample.thumb_url ? (
+              <img
+                src={sample.thumb_url}
+                alt=""
+                className="h-full w-full object-contain"
+              />
+            ) : null}
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }

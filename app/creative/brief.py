@@ -124,7 +124,7 @@ Author a CreativeBrief that adapts the archetype to {dna.name}. Specifically:
 - ``text_overlays`` 3-6 short overlays in chronological order
 - ``cta`` is a punchy 1-3 word CTA
 - ``rationale`` 2-3 sentences, action-oriented for the UA team
-- ``scenario_prompts`` are 2-3 ready-to-paste Scenario txt2img prompts for: hero frame (the strongest single still), and 1-2 storyboard frames. Each prompt MUST mention: aspect 9:16, the game palette ({dna.palette.primary_hex}, {dna.palette.secondary_hex}, {dna.palette.accent_hex}), the visual style "{dna.visual_style}", and one signature on-screen text.
+- ``scenario_prompts`` are 2-3 ready-to-paste Scenario txt2img prompts for: hero frame (the strongest single still), and 1-2 storyboard frames. Each prompt MUST mention: aspect 9:16, the game palette ({dna.palette.primary_hex}, {dna.palette.secondary_hex}, {dna.palette.accent_hex}), the visual style "{dna.visual_style}", and one signature on-screen text. CRITICAL FIDELITY DIRECTIVE: the generated frame must read as an authentic in-game moment from {dna.name} — same UI chrome, same {", ".join(dna.key_mechanics) if dna.key_mechanics else "core mechanic"}, same character/asset style as the IP-Adapter reference screenshots. Avoid generic stock-game tropes; describe the {dna.name}-specific gameplay objects and HUD explicitly. If the game has no character on screen ({dna.character_present}), do not invent one in the prompt.
 
 Then call the tool.
 """

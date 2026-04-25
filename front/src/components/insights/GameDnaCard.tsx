@@ -1,6 +1,13 @@
-import { Sparkles, Users, Palette as PaletteIcon } from "lucide-react";
+import { useState } from "react";
+import {
+  Sparkles,
+  Users,
+  Palette as PaletteIcon,
+  Image as ImageIcon,
+} from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
+import { useGameScreenshots } from "@/lib/api";
 import type { HookLensReport } from "@/types/hooklens";
 
 interface GameDnaCardProps {
@@ -9,6 +16,7 @@ interface GameDnaCardProps {
 
 export function GameDnaCard({ report }: GameDnaCardProps) {
   const dna = report.target_game;
+  const { data: screenshots } = useGameScreenshots(dna?.name ?? "");
   if (!dna) return null;
 
   const swatches: { label: string; hex: string }[] = [
@@ -128,8 +136,25 @@ export function GameDnaCard({ report }: GameDnaCardProps) {
         </div>
       )}
 
+      {screenshots?.screenshot_urls && screenshots.screenshot_urls.length > 0 && (
+        <details className="group mt-5 rounded-md border border-border bg-background/40 px-3 py-2" open>
+          <summary className="cursor-pointer list-none text-xs font-medium text-muted-foreground transition-colors hover:text-foreground">
+            <span className="inline-flex items-center gap-1.5">
+              <ImageIcon className="h-3.5 w-3.5" />
+              App Store screenshots ({screenshots.screenshot_urls.length}) — what
+              the game actually looks like
+            </span>
+          </summary>
+          <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
+            {screenshots.screenshot_urls.slice(0, 8).map((url, i) => (
+              <ScreenshotThumb key={url + i} url={url} alt={`${dna.name} screenshot ${i + 1}`} />
+            ))}
+          </div>
+        </details>
+      )}
+
       {dna.screenshot_signals.length > 0 && (
-        <details className="group mt-5 rounded-md border border-border bg-background/40 px-3 py-2">
+        <details className="group mt-3 rounded-md border border-border bg-background/40 px-3 py-2">
           <summary className="cursor-pointer text-xs font-medium text-muted-foreground transition-colors hover:text-foreground">
             Screenshot signals ({dna.screenshot_signals.length})
           </summary>
@@ -141,5 +166,37 @@ export function GameDnaCard({ report }: GameDnaCardProps) {
         </details>
       )}
     </Card>
+  );
+}
+
+interface ScreenshotThumbProps {
+  url: string;
+  alt: string;
+}
+
+function ScreenshotThumb({ url, alt }: ScreenshotThumbProps) {
+  const [errored, setErrored] = useState(false);
+  if (errored) {
+    return (
+      <div className="grid h-44 w-[88px] flex-shrink-0 place-items-center rounded-md border border-border bg-muted/40 text-muted-foreground/40">
+        <ImageIcon className="h-4 w-4" />
+      </div>
+    );
+  }
+  return (
+    <a
+      href={url}
+      target="_blank"
+      rel="noreferrer"
+      className="group/ss relative h-44 w-[88px] flex-shrink-0 overflow-hidden rounded-md border border-border bg-muted/40 transition-all hover:border-primary/50"
+    >
+      <img
+        src={url}
+        alt={alt}
+        loading="lazy"
+        onError={() => setErrored(true)}
+        className="h-full w-full object-cover transition-transform group-hover/ss:scale-105"
+      />
+    </a>
   );
 }

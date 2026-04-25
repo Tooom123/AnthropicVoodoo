@@ -94,6 +94,58 @@ export function useReport(gameName: string) {
   });
 }
 
+/**
+ * Source ad creatives that fed into a given report's archetype clusters.
+ * Returned as a map of ``archetype_id → list of thumbs/videos`` so the
+ * Insights view can show real S3 thumbnails inside ArchetypesTable.
+ */
+export interface SourceCreative {
+  creative_id: string;
+  network: string;
+  ad_type: string;
+  thumb_url: string | null;
+  creative_url: string | null;
+  first_seen_at: string | null;
+  advertiser_name: string | null;
+}
+
+/** App Store screenshot URLs for a target game (from SensorTower meta cache). */
+export interface GameScreenshots {
+  app_id: string;
+  name: string | null;
+  screenshot_urls: string[];
+}
+
+export function useGameScreenshots(gameName: string) {
+  return useQuery<GameScreenshots>({
+    queryKey: ["gameScreenshots", gameName],
+    queryFn: async () => {
+      const url = new URL("/api/game/screenshots", API_BASE);
+      url.searchParams.set("game_name", gameName);
+      const res = await fetch(url.toString());
+      if (!res.ok) throw new Error(`API → ${res.status}`);
+      return res.json() as Promise<GameScreenshots>;
+    },
+    staleTime: 60 * 60 * 1000,
+    enabled: gameName.trim().length > 0,
+  });
+}
+
+export function useReportSourceCreatives(gameName: string) {
+  return useQuery<Record<string, SourceCreative[]>>({
+    queryKey: ["reportSourceCreatives", gameName],
+    queryFn: async () => {
+      const url = new URL("/api/report/source_creatives", API_BASE);
+      url.searchParams.set("game_name", gameName);
+      const res = await fetch(url.toString());
+      if (!res.ok) throw new Error(`API → ${res.status}`);
+      return res.json() as Promise<Record<string, SourceCreative[]>>;
+    },
+    staleTime: 10 * 60 * 1000,
+    enabled: gameName.trim().length > 0,
+  });
+}
+
 /** List of pre-cached reports — for a "previously analyzed" picker. */
 export function useReportList() {
   return useQuery<ReportSummary[]>({

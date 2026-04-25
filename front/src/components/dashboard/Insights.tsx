@@ -17,7 +17,11 @@ import { useState } from "react";
 import { Clock, DollarSign, Sigma, Sparkles, RefreshCw } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { useReport, useReportList } from "@/lib/api";
+import {
+  useReport,
+  useReportList,
+  useReportSourceCreatives,
+} from "@/lib/api";
 import { useGame } from "@/lib/game-context";
 import { ArchetypesTable } from "@/components/insights/ArchetypesTable";
 import { BriefsGrid } from "@/components/insights/BriefsGrid";
@@ -41,6 +45,10 @@ export function Insights() {
   const { gameName, setGameName } = useGame();
   const { data: report, isLoading, error } = useReport(gameName);
   const { data: reportList = [] } = useReportList();
+  // Source thumbnails per archetype (raw SensorTower creatives that were
+  // clustered) — fetched in parallel with the report; lets ArchetypesTable
+  // surface real ad thumbnails next to the analytical text.
+  const { data: sourceCreatives = {} } = useReportSourceCreatives(gameName);
 
   // Two-step flow: configure (LaunchAnalysisModal) → run (RunAnalysisDialog).
   const [configOpen, setConfigOpen] = useState(false);
@@ -247,7 +255,10 @@ export function Insights() {
       </div>
 
       <GameDnaCard report={report} />
-      <ArchetypesTable archetypes={report.top_archetypes} />
+      <ArchetypesTable
+        archetypes={report.top_archetypes}
+        sourceCreatives={sourceCreatives}
+      />
       <GameFitGrid
         scores={report.game_fit_scores}
         archetypes={report.top_archetypes}

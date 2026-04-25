@@ -367,13 +367,22 @@ def _step_visuals(state: PipelineState) -> list[GeneratedVariant]:
     # IP-Adapter generation — this anchors the generated ad to the game's
     # actual palette/characters/UI and prevents "deceptive ad" syndrome (a
     # player downloading the game shouldn't feel bait-and-switched).
+    #
+    # Bumped from 3 → 6 references per Edouard's feedback that current
+    # generated visuals weren't faithful enough to gameplay. More refs = more
+    # IP-Adapter signal = output stays closer to the actual UI/character.
+    # Scenario's IP-Adapter accepts up to 6 refs cleanly (cf. their docs).
     from app.analysis.game_dna import SCREENSHOT_CACHE_DIR
+
+    MAX_IP_ADAPTER_REFS = 6
 
     reference_paths: list[Path] = []
     if state.target_meta is not None:
         screenshot_dir = SCREENSHOT_CACHE_DIR / state.target_meta.app_id
         if screenshot_dir.exists():
-            reference_paths = sorted(screenshot_dir.glob("*.png"))[:3]
+            reference_paths = sorted(screenshot_dir.glob("*.png"))[
+                :MAX_IP_ADAPTER_REFS
+            ]
         if reference_paths:
             log.info(
                 "Step 9 — using %d game screenshot(s) as IP-Adapter reference",
