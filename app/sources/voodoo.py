@@ -37,6 +37,7 @@ from __future__ import annotations
 import json
 import logging
 import time
+from datetime import date, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -368,8 +369,134 @@ def fetch_voodoo_catalog(*, refresh: bool = False) -> list[AppMetadata]:
     return catalog
 
 
+# ---------------------------------------------------------------------------
+# Advertiser-creatives lookup (what Voodoo is running on its OWN game)
+# ---------------------------------------------------------------------------
+
+
+# Networks the /v1/unified/ad_intel/creatives endpoint accepts. Anything else
+# (ironSource, Pangle, …) returns SensorTower 422.
+VOODOO_ADVERTISER_NETWORKS = "Facebook,Instagram,TikTok,Youtube,Unity,Admob,Applovin"
+
+VOODOO_ADVERTISER_AD_TYPES = (
+    "video,video-interstitial,playable,image,banner,full_screen"
+)
+
+# 180-day window covers most active campaigns while excluding ancient assets.
+DEFAULT_ADVERTISER_LOOKBACK_DAYS = 180
+
+
+def fetch_voodoo_app_creatives(
+    app_id: str,
+    *,
+    country: str = DEFAULT_COUNTRY,
+    limit: int = 20,
+    start_date: str | None = None,
+) -> list[dict[str, Any]]:
+    """Return the ad creatives Voodoo is currently running on its own app.
+
+    ``app_id`` may be either the iTunes id (the public ``app_id`` field on
+    ``AppMetadata``) or the unified id directly. The function looks the
+    target up in the cached Voodoo catalog to resolve to a unified id, then
+    hits ``/v1/unified/ad_intel/creatives`` with networks + ad-types known
+    to be supported.
+
+    Returns ``[]`` if the app is unknown to the catalog or SensorTower
+    returns no ad units (zero ads recently is normal, not an error).
+
+    The returned shape is a list of plain dicts (not Pydantic) — keys map
+    directly onto SensorTower's ``ad_units[].creatives[0]`` fields, ready
+    for the brief-generation prompt or the API response.
+    """
+    catalog = fetch_voodoo_catalog()
+    by_itunes = {m.app_id: m for m in catalog}
+    by_unified = {m.unified_app_id: m for m in catalog if m.unified_app_id}
+
+    target = by_itunes.get(str(app_id)) or by_unified.get(str(app_id))
+    if target is None or not target.unified_app_id:
+        log.info("fetch_voodoo_app_creatives: %s not in Voodoo catalog", app_id)
+        return []
+
+    effective_start = start_date or (
+        date.today() - timedelta(days=DEFAULT_ADVERTISER_LOOKBACK_DAYS)
+    ).isoformat()
+
+    params: dict[str, Any] = {
+        "app_ids": target.unified_app_id,
+        "start_date": effective_start,
+        "countries": country,
+        "networks": VOODOO_ADVERTISER_NETWORKS,
+        "ad_types": VOODOO_ADVERTISER_AD_TYPES,
+        "limit": limit,
+    }
+
+    try:
+        # Cached on disk per (app_id, country, start_date) so re-runs are free.
+        resp = disk_cached(
+            VOODOO_CACHE_DIR / "advertiser_creatives",
+            f"{target.unified_app_id}_{country}_{effective_start}",
+            params,
+            lambda: _get("/v1/unified/ad_intel/creatives", params),
+        )
+    except Exception:
+        # Best-effort: SensorTower 422 is common when an app has zero ad
+        # activity in the window. Treat as empty rather than an error.
+        log.exception(
+            "fetch_voodoo_app_creatives: SensorTower /creatives failed for %s",
+            target.unified_app_id,
+        )
+        return []
+
+    ad_units = resp.get("ad_units") or []
+    out: list[dict[str, Any]] = []
+    for au in ad_units:
+        creatives = au.get("creatives") or []
+        if not creatives:
+            continue
+        first = creatives[0]
+        out.append(
+            {
+                "creative_id": str(first.get("id") or ""),
+                "ad_unit_id": str(au.get("id") or ""),
+                "app_id": str(app_id),
+                "advertiser_name": target.name,
+                "network": au.get("network") or "",
+                "ad_type": au.get("ad_type") or "video",
+                "creative_url": first.get("creative_url"),
+                "thumb_url": first.get("thumb_url"),
+                "preview_url": first.get("preview_url"),
+                "first_seen_at": au.get("first_seen_at"),
+                "last_seen_at": au.get("last_seen_at"),
+                "share": au.get("share"),
+                "phashion_group": au.get("phashion_group"),
+                "message": first.get("message"),
+                "button_text": first.get("button_text"),
+            }
+        )
+
+    log.info(
+        "fetch_voodoo_app_creatives: %s → %d ad_units (raw), %d returned",
+        target.name,
+        len(ad_units),
+        len(out),
+    )
+    return out
+
+
+def is_voodoo_app(app_id: str) -> bool:
+    """Cheap catalog-membership check for the brief-generation pipeline.
+
+    Used to decide whether to fetch the Voodoo benchmark for a given target
+    game. Hits the cached catalog only — never the API.
+    """
+    catalog = fetch_voodoo_catalog()
+    return any(m.app_id == str(app_id) for m in catalog)
+
+
 __all__ = [
     "fetch_voodoo_catalog",
+    "fetch_voodoo_app_creatives",
+    "is_voodoo_app",
     "VOODOO_PUBLISHER_ID",
     "VOODOO_PUBLISHER_NAME",
     "VOODOO_PUBLISHER_NAME_VARIANTS",

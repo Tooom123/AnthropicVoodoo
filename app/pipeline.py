@@ -281,8 +281,54 @@ def _step_game_fit(state: PipelineState) -> list[GameFitScore]:
 
 def _step_briefs(state: PipelineState) -> list[CreativeBrief]:
     assert state.game_dna is not None
-    state.briefs = author_briefs(state.chosen, state.game_dna)
+    benchmark = _build_publisher_benchmark(state)
+    state.briefs = author_briefs(state.chosen, state.game_dna, benchmark=benchmark)
     return state.briefs
+
+
+def _build_publisher_benchmark(state: PipelineState):
+    """Best-effort: look up the target's existing creatives in our Voodoo
+    catalog. Returns ``None`` for non-Voodoo apps or on any lookup failure.
+
+    When the target IS a Voodoo title, we feed Opus the list of creatives
+    Voodoo is currently running so the brief explicitly aims at an
+    underrepresented hook — the "delta" pitch.
+    """
+    if state.target_meta is None or state.game_dna is None:
+        return None
+    try:
+        from app.creative.brief import PublisherBenchmark
+        from app.sources.voodoo import (
+            VOODOO_PUBLISHER_NAME,
+            fetch_voodoo_app_creatives,
+            is_voodoo_app,
+        )
+    except ImportError:
+        return None
+
+    app_id = state.target_meta.app_id
+    if not is_voodoo_app(app_id):
+        return None
+
+    try:
+        creatives = fetch_voodoo_app_creatives(app_id, limit=15)
+    except Exception:
+        log.exception("Voodoo benchmark fetch failed for %s", app_id)
+        return None
+
+    if not creatives:
+        log.info(
+            "Target %s is a Voodoo app but has no recent ad activity; "
+            "skipping benchmark.",
+            app_id,
+        )
+        return None
+
+    return PublisherBenchmark(
+        publisher_name=VOODOO_PUBLISHER_NAME,
+        app_name=state.game_dna.name,
+        creatives=creatives,
+    )
 
 
 def _step_visuals(state: PipelineState) -> list[GeneratedVariant]:

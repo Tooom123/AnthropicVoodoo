@@ -661,90 +661,12 @@ def voodoo_app_creatives(
 ):
     """Return ad creatives where Voodoo is the *advertiser* on this app.
 
-    Hits ``/v1/unified/ad_intel/creatives`` directly with the resolved
-    unified app id — the spec'd "creatives for specific apps" path. This is
-    the "what is Voodoo running on its OWN game RIGHT NOW" benchmark, used
-    later in the brief generation step.
-
-    The endpoint requires a unified app id; we look it up against the
-    cached Voodoo catalog. ``app_id`` may be either the iTunes app id (the
-    public ``app_id`` field) or the unified id directly. Returns ``[]``
-    with a 200 if the app is unknown to the catalog or SensorTower returns
-    no ad units.
+    Thin HTTP wrapper around :func:`app.sources.voodoo.fetch_voodoo_app_creatives`.
+    The shared helper is also called from the brief-generation step in the
+    pipeline so we get a free benchmark of Voodoo's existing rotation.
     """
-    from app.sources.sensortower import _get
-    from app.sources.voodoo import fetch_voodoo_catalog
+    from app.sources.voodoo import fetch_voodoo_app_creatives
 
-    catalog = fetch_voodoo_catalog()
-    by_itunes = {m.app_id: m for m in catalog}
-    by_unified = {m.unified_app_id: m for m in catalog if m.unified_app_id}
-
-    target = by_itunes.get(app_id) or by_unified.get(app_id)
-    if target is None or not target.unified_app_id:
-        log.info("voodoo_app_creatives: %s not in Voodoo catalog", app_id)
-        return []
-
-    effective_start = (
-        start_date
-        if start_date
-        else (date.today() - timedelta(days=180)).isoformat()
+    return fetch_voodoo_app_creatives(
+        app_id, country=country, limit=limit, start_date=start_date
     )
-
-    params: dict[str, Any] = {
-        "app_ids": target.unified_app_id,
-        "start_date": effective_start,
-        "countries": country,
-        "networks": "Facebook,Instagram,TikTok,Youtube,Unity,Admob,Applovin",
-        "ad_types": "video,video-interstitial,playable,image,banner,full_screen",
-        "limit": limit,
-    }
-
-    try:
-        resp = _get("/v1/unified/ad_intel/creatives", params)
-    except Exception:
-        # Best-effort: log and return empty so the frontend can graceful-empty.
-        # SensorTower frequently returns 422 when an app has zero ad activity
-        # on a given start_date — that is normal, not an error.
-        log.exception(
-            "voodoo_app_creatives: SensorTower /creatives failed for app_id=%s",
-            target.unified_app_id,
-        )
-        return []
-
-    ad_units = resp.get("ad_units") or []
-
-    out: list[dict[str, Any]] = []
-    for au in ad_units:
-        creatives = au.get("creatives") or []
-        if not creatives:
-            continue
-        # /creatives is already scoped by app_ids, so the advertiser is
-        # Voodoo on this app by construction — no further filter needed.
-        first = creatives[0]
-        out.append(
-            {
-                "creative_id": str(first.get("id") or ""),
-                "ad_unit_id": str(au.get("id") or ""),
-                "app_id": app_id,
-                "advertiser_name": target.name,
-                "network": au.get("network") or "",
-                "ad_type": au.get("ad_type") or "video",
-                "creative_url": first.get("creative_url"),
-                "thumb_url": first.get("thumb_url"),
-                "preview_url": first.get("preview_url"),
-                "first_seen_at": au.get("first_seen_at"),
-                "last_seen_at": au.get("last_seen_at"),
-                "share": au.get("share"),
-                "phashion_group": au.get("phashion_group"),
-                "message": first.get("message"),
-                "button_text": first.get("button_text"),
-            }
-        )
-
-    log.info(
-        "voodoo_app_creatives: %s → %d ad_units (raw), %d returned",
-        target.name,
-        len(ad_units),
-        len(out),
-    )
-    return out
