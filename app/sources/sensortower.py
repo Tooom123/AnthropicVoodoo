@@ -72,11 +72,22 @@ def resolve_game(term: str, *, country: str = "US") -> AppMetadata:
             f"No SensorTower match for {term!r}. Try a more specific name."
         )
 
-    target = candidates[0]
-    ios_apps = target.get("ios_apps") or []
-    if not ios_apps:
-        raise ValueError(f"No iOS variant for {term!r}.")
+    # Iterate candidates: search-by-name often returns the web/Steam version
+    # of a brand (e.g. "aquapark.io" → the Poki browser game) before its
+    # mobile listing. Pick the first candidate that exposes an iOS variant.
+    target = None
+    for c in candidates:
+        if c.get("ios_apps"):
+            target = c
+            break
+    if target is None:
+        names_seen = [c.get("name") or c.get("humanized_name") for c in candidates]
+        raise ValueError(
+            f"No iOS variant for {term!r} in {len(candidates)} candidates "
+            f"(saw: {names_seen}). Try a more specific App Store name."
+        )
 
+    ios_apps = target.get("ios_apps") or []
     ios_app_id = str(ios_apps[0].get("app_id") or ios_apps[0].get("id"))
 
     meta_params = {"app_ids": ios_app_id, "country": country}

@@ -269,11 +269,11 @@ export function RunAnalysisDialog({
         onOpenChange(o);
       }}
     >
-      <DialogContent className="max-w-xl">
+      <DialogContent className="max-w-2xl overflow-hidden">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Sparkles className="h-5 w-5 text-primary" />
-            Analyze {gameName}
+            <span className="truncate">Analyze {gameName}</span>
           </DialogTitle>
           <DialogDescription>
             Running the full HookLens pipeline (10 steps · ~3–5 min · ~$0.05–1
@@ -355,28 +355,31 @@ interface StepRowProps {
 
 function StepRow({ idx, label, state }: StepRowProps) {
   const status = state?.status ?? "pending";
+  const summaryText =
+    status === "done" && state?.summary ? formatSummary(state.summary) : "";
+
   return (
-    <li className="flex items-center justify-between gap-3 rounded-md border border-transparent px-2 py-1.5 text-sm transition-colors data-[active=true]:border-border data-[active=true]:bg-muted/40">
-      <div className="flex min-w-0 flex-1 items-center gap-2.5">
-        <span className="flex h-5 w-5 flex-shrink-0 items-center justify-center">
-          {status === "pending" && (
-            <CircleDashed className="h-4 w-4 text-muted-foreground/60" />
-          )}
-          {status === "running" && (
-            <Loader2 className="h-4 w-4 animate-spin text-primary" />
-          )}
-          {status === "done" && (
-            <Check className="h-4 w-4 text-emerald-400" strokeWidth={3} />
-          )}
-          {status === "error" && (
-            <AlertCircle className="h-4 w-4 text-destructive" />
-          )}
-        </span>
-        <span className="text-xs font-mono text-muted-foreground tabular-nums">
-          {String(idx).padStart(2, "0")}
-        </span>
+    <li className="flex w-full items-center gap-3 overflow-hidden rounded-md border border-transparent px-2 py-1.5 text-sm transition-colors">
+      <span className="flex h-5 w-5 flex-shrink-0 items-center justify-center">
+        {status === "pending" && (
+          <CircleDashed className="h-4 w-4 text-muted-foreground/60" />
+        )}
+        {status === "running" && (
+          <Loader2 className="h-4 w-4 animate-spin text-primary" />
+        )}
+        {status === "done" && (
+          <Check className="h-4 w-4 text-emerald-400" strokeWidth={3} />
+        )}
+        {status === "error" && (
+          <AlertCircle className="h-4 w-4 text-destructive" />
+        )}
+      </span>
+      <span className="flex-shrink-0 text-xs font-mono text-muted-foreground tabular-nums">
+        {String(idx).padStart(2, "0")}
+      </span>
+      <div className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden">
         <span
-          className={`truncate ${
+          className={`flex-shrink-0 ${
             status === "running"
               ? "font-medium text-foreground"
               : status === "done"
@@ -386,8 +389,13 @@ function StepRow({ idx, label, state }: StepRowProps) {
         >
           {label}
         </span>
-        {status === "done" && state?.summary && (
-          <SummaryChips summary={state.summary} />
+        {summaryText && (
+          <span
+            className="min-w-0 flex-1 truncate text-[11px] text-muted-foreground/80"
+            title={summaryText}
+          >
+            · {summaryText}
+          </span>
         )}
       </div>
       {status === "done" && state?.duration_s != null && (
@@ -399,7 +407,7 @@ function StepRow({ idx, label, state }: StepRowProps) {
   );
 }
 
-function SummaryChips({ summary }: { summary: Record<string, unknown> }) {
+function formatSummary(summary: Record<string, unknown>): string {
   const chips: string[] = [];
   if (typeof summary.count === "number") chips.push(`${summary.count}`);
   if (typeof summary.name === "string") chips.push(summary.name);
@@ -412,10 +420,5 @@ function SummaryChips({ summary }: { summary: Record<string, unknown> }) {
     const titles = (summary.titles as string[]).slice(0, 1);
     if (titles[0]) chips.push(`"${titles[0].slice(0, 28)}…"`);
   }
-  if (!chips.length) return null;
-  return (
-    <span className="ml-1 truncate text-[11px] text-muted-foreground/80">
-      · {chips.join(" · ")}
-    </span>
-  );
+  return chips.join(" · ");
 }

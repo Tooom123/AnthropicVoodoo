@@ -151,8 +151,39 @@ def _step_resolve_game(state: PipelineState) -> AppMetadata:
     state.resolved_countries = _expand_all(state.config.countries, ALL_COUNTRIES)
     state.resolved_networks = _expand_all(state.config.networks, ALL_NETWORKS)
     primary_country = state.resolved_countries[0] if state.resolved_countries else "US"
+
+    # Voodoo-catalog short-circuit: if the user picked a Voodoo title from
+    # the modal autocomplete, we already have its canonical AppMetadata in
+    # the cached catalog. Skip the SensorTower search (which sometimes hits
+    # the web/Steam version of the brand and errors with "No iOS variant",
+    # e.g. "aquapark.io" → Poki) and use the catalog entry directly.
+    voodoo_match = _resolve_via_voodoo_catalog(state.config.game_name)
+    if voodoo_match is not None:
+        log.info(
+            "resolve_game: Voodoo catalog hit for %r → %s",
+            state.config.game_name,
+            voodoo_match.app_id,
+        )
+        state.target_meta = voodoo_match
+        return state.target_meta
+
     state.target_meta = resolve_game(state.config.game_name, country=primary_country)
     return state.target_meta
+
+
+def _resolve_via_voodoo_catalog(game_name: str) -> AppMetadata | None:
+    """Match the user's input (case-insensitive) against the Voodoo catalog."""
+    try:
+        from app.sources.voodoo import fetch_voodoo_catalog
+    except ImportError:
+        return None
+    needle = game_name.strip().casefold()
+    if not needle:
+        return None
+    for app in fetch_voodoo_catalog():
+        if app.name.casefold() == needle:
+            return app
+    return None
 
 
 def _step_game_dna(state: PipelineState) -> GameDNA:
