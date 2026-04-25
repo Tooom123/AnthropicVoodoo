@@ -257,14 +257,86 @@ def render_archetype_card(
                             st.markdown(f"[▶ Open video]({m.raw.creative_url})")
 
 
-def render_fit_score_row(arch: CreativeArchetype, sc: GameFitScore) -> None:
+def render_fit_score_row(
+    arch: CreativeArchetype,
+    sc: GameFitScore,
+    *,
+    deconstructed_index: dict[str, DeconstructedCreative] | None = None,
+) -> None:
+    """Render a fit-score row tied to its archetype.
+
+    Shows a thumbnail of the centroid (highest-share member) creative + the
+    archetype's palette + the emotional pitch chip alongside the 4 scores so
+    you can verify visually that the score makes sense for this cluster.
+    """
+    # Find a representative thumbnail (highest-share member with a thumb)
+    centroid_thumb: str | None = None
+    centroid_advertiser: str | None = None
+    if deconstructed_index:
+        members = [
+            deconstructed_index[cid]
+            for cid in arch.member_creative_ids
+            if cid in deconstructed_index
+        ]
+        members.sort(key=lambda m: m.raw.share or 0.0, reverse=True)
+        for m in members:
+            if m.raw.thumb_url:
+                centroid_thumb = str(m.raw.thumb_url)
+                centroid_advertiser = m.raw.advertiser_name
+                break
+
+    pitch = arch.centroid_hook.emotional_pitch
+    pitch_color = {
+        "satisfaction": "green",
+        "asmr": "violet",
+        "fail": "red",
+        "rage_bait": "red",
+        "curiosity": "orange",
+        "tutorial": "blue",
+        "celebrity": "violet",
+        "challenge": "orange",
+        "transformation": "green",
+        "other": "gray",
+    }.get(pitch, "gray")
+
     with st.container(border=True):
-        cols = st.columns([3, 1, 1, 1, 1])
-        cols[0].markdown(f"**{arch.label}**")
-        cols[1].metric("Visual", sc.visual_match)
-        cols[2].metric("Mechanic", sc.mechanic_match)
-        cols[3].metric("Audience", sc.audience_match)
-        cols[4].metric("Overall", sc.overall)
+        # Top row: thumbnail | label + meta | 4 scores
+        cols = st.columns([1, 4, 1, 1, 1, 1])
+        with cols[0]:
+            if centroid_thumb:
+                st.image(centroid_thumb, use_container_width=True)
+            else:
+                st.markdown(
+                    "<div style='width:100%;aspect-ratio:9/16;"
+                    "background:#eee;border-radius:6px;'></div>",
+                    unsafe_allow_html=True,
+                )
+        with cols[1]:
+            st.markdown(f"**{arch.label}**")
+            chip_line = (
+                f":{pitch_color}-badge[{pitch.replace('_', ' ')}]  "
+                f":gray-badge[{arch.centroid_hook.visual_action[:35] if arch.centroid_hook.visual_action else ''}]"
+            )
+            st.markdown(chip_line)
+            st.caption(
+                (f"top member: *{centroid_advertiser}* · " if centroid_advertiser else "")
+                + f"{len(arch.member_creative_ids)} creatives · "
+                f"signal {arch.overall_signal_score:.2f}"
+            )
+            if arch.palette_hex:
+                st.markdown(
+                    "".join(
+                        f'<span style="display:inline-block;width:14px;height:14px;'
+                        f'background:{c};border-radius:3px;margin-right:3px;'
+                        f'vertical-align:middle"></span>'
+                        for c in arch.palette_hex
+                    ),
+                    unsafe_allow_html=True,
+                )
+        cols[2].metric("Visual", sc.visual_match)
+        cols[3].metric("Mechanic", sc.mechanic_match)
+        cols[4].metric("Audience", sc.audience_match)
+        cols[5].metric("Overall", sc.overall)
         st.caption(sc.rationale)
 
 

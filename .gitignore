@@ -30,6 +30,8 @@ dist/
 # Runtime cache (we keep the dir but ignore its contents)
 data/cache/*
 !data/cache/.gitkeep
+# PM-uploaded screenshots/mockups for the prototype mode
+data/uploads/
 # Notebook stray cache (shouldn't happen anymore — modules now resolve to repo root)
 notebooks/data/
 

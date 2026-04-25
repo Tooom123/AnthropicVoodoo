@@ -12,6 +12,8 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import re
+import shutil
 import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -66,6 +68,22 @@ class PipelineConfig:
     deconstruct_concurrency: int = 5
     top_k_archetypes: int = 5
     top_k_variants: int = 3
+
+
+@dataclass
+class PrototypeInput:
+    """Inputs for the 'unreleased game' use case.
+
+    Replaces SensorTower steps 1-2: instead of looking up an existing app, we
+    build a synthetic AppMetadata from PM-provided assets. Pipeline steps 3-10
+    run identically afterwards.
+    """
+
+    name: str
+    description: str
+    screenshot_paths: list[Path]  # local paths to PM-uploaded mockups/screenshots
+    target_category_id: int  # iOS category id for the market scan (e.g. 7012 Puzzle)
+    target_audience_proxy: str | None = None  # optional hint, not used yet
 
 
 @dataclass
@@ -260,6 +278,101 @@ def run_pipeline(
 
         if on_step is not None:
             on_step(step.step_id, step.label, idx, payload, elapsed)
+
+    assert state.report is not None
+    return state.report
+
+
+def _slug(s: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "_", s.lower()).strip("_") or "proto"
+
+
+def run_pipeline_prototype(
+    proto: PrototypeInput,
+    config: PipelineConfig,
+    *,
+    on_step: Callable[[str, str, int, Any, float], None] | None = None,
+) -> HookLensReport:
+    """Run the pipeline on an unreleased game prototype.
+
+    Skips SensorTower steps 1-2 (no app to resolve) and instead synthesizes
+    an ``AppMetadata`` from PM inputs. Steps 3-10 run unchanged.
+
+    The PM-uploaded screenshots are copied into the Game DNA cache directory
+    using the canonical naming scheme so ``app.analysis.game_dna.extract_game_dna``
+    finds them locally and skips its HTTP download path.
+    """
+    from app.analysis.game_dna import SCREENSHOT_CACHE_DIR
+
+    if not proto.screenshot_paths:
+        raise ValueError("Prototype mode requires at least 1 screenshot.")
+    if not proto.description or len(proto.description) < 30:
+        raise ValueError(
+            "Prototype description must be at least 30 characters — "
+            "Gemini Vision needs context to generate a meaningful Game DNA."
+        )
+
+    proto_app_id = f"proto_{_slug(proto.name)}"
+
+    # Pre-populate the screenshot cache so extract_game_dna treats this as a
+    # cache hit and never calls httpx.
+    screenshot_dir = SCREENSHOT_CACHE_DIR / proto_app_id
+    screenshot_dir.mkdir(parents=True, exist_ok=True)
+    for i, src in enumerate(proto.screenshot_paths):
+        target = screenshot_dir / f"{i:02d}.png"
+        if (
+            not target.exists()
+            or target.stat().st_size == 0
+            or src.stat().st_mtime > target.stat().st_mtime
+        ):
+            shutil.copy(src, target)
+
+    # Build a synthetic AppMetadata. We fill screenshot_urls with valid HttpUrl
+    # placeholders (Picsum) — the URLs are never hit because the cache files
+    # already exist with the canonical names extract_game_dna looks for.
+    synthetic_meta = AppMetadata(
+        app_id=proto_app_id,
+        unified_app_id=None,
+        name=proto.name,
+        publisher_name="(prototype)",
+        icon_url="https://picsum.photos/seed/proto_icon/256",
+        categories=[proto.target_category_id],
+        description=proto.description,
+        screenshot_urls=[
+            f"https://picsum.photos/seed/{proto_app_id}_{i}/640/1136"
+            for i in range(len(proto.screenshot_paths))
+        ],
+        rating=None,
+        rating_count=None,
+    )
+
+    # Force the config category to the prototype's target so step 4 (advertisers)
+    # and step 5 (creatives) scan the right segment of the market.
+    config.category_id = proto.target_category_id
+
+    state = PipelineState(config=config)
+    state.target_meta = synthetic_meta
+
+    # Synthetically yield step 1 (resolve_game) so the UI gets a "Step 1/10
+    # done" event with the synthetic metadata payload.
+    if on_step is not None:
+        on_step("target_meta", "Resolve target game (prototype)", 1, synthetic_meta, 0.0)
+    state.step_durations_s["target_meta"] = 0.0
+
+    # Run the rest of the steps starting from step 2 (game_dna).
+    remaining = [s for s in STEPS if s.step_id != "target_meta"]
+    for offset, step in enumerate(remaining, start=2):
+        log.info("Step %d/%d · %s", offset, len(STEPS), step.label)
+        t0 = time.perf_counter()
+        try:
+            payload = step.runner(state)
+        except Exception:
+            log.exception("Step %s failed", step.step_id)
+            raise
+        elapsed = time.perf_counter() - t0
+        state.step_durations_s[step.step_id] = elapsed
+        if on_step is not None:
+            on_step(step.step_id, step.label, offset, payload, elapsed)
 
     assert state.report is not None
     return state.report
