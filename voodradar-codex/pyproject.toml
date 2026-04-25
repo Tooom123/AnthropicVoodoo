@@ -1,0 +1,39 @@
+[project]
+name = "hooklens"
+version = "0.1.0"
+description = "Market-intelligence-driven ad creative prototype for Voodoo Hack."
+requires-python = ">=3.12"
+readme = "README.md"
+
+dependencies = [
+    "streamlit>=1.39",
+    "pydantic>=2.9",
+    "python-dotenv>=1.0",
+    "httpx>=0.27",
+    "polars>=1.10",
+    "pillow>=11.0",
+    "tenacity>=9.0",
+    "rich>=13.9",
+]
+
+[project.optional-dependencies]
+dev = [
+    "ruff>=0.7",
+    "pytest>=8.3",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP"]
+ignore = ["E501"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["app"]
+
