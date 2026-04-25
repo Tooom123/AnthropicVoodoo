@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as PerformanceRouteImport } from './routes/performance'
+import { Route as InsightsRouteImport } from './routes/insights'
 import { Route as CompetitiveRouteImport } from './routes/competitive'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AdIdRouteImport } from './routes/ad.$id'
@@ -17,6 +18,11 @@ import { Route as AdIdRouteImport } from './routes/ad.$id'
 const PerformanceRoute = PerformanceRouteImport.update({
   id: '/performance',
   path: '/performance',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const InsightsRoute = InsightsRouteImport.update({
+  id: '/insights',
+  path: '/insights',
   getParentRoute: () => rootRouteImport,
 } as any)
 const CompetitiveRoute = CompetitiveRouteImport.update({
@@ -38,12 +44,14 @@ const AdIdRoute = AdIdRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/competitive': typeof CompetitiveRoute
+  '/insights': typeof InsightsRoute
   '/performance': typeof PerformanceRoute
   '/ad/$id': typeof AdIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/competitive': typeof CompetitiveRoute
+  '/insights': typeof InsightsRoute
   '/performance': typeof PerformanceRoute
   '/ad/$id': typeof AdIdRoute
 }
@@ -51,20 +59,28 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/competitive': typeof CompetitiveRoute
+  '/insights': typeof InsightsRoute
   '/performance': typeof PerformanceRoute
   '/ad/$id': typeof AdIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/competitive' | '/performance' | '/ad/$id'
+  fullPaths: '/' | '/competitive' | '/insights' | '/performance' | '/ad/$id'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/competitive' | '/performance' | '/ad/$id'
-  id: '__root__' | '/' | '/competitive' | '/performance' | '/ad/$id'
+  to: '/' | '/competitive' | '/insights' | '/performance' | '/ad/$id'
+  id:
+    | '__root__'
+    | '/'
+    | '/competitive'
+    | '/insights'
+    | '/performance'
+    | '/ad/$id'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   CompetitiveRoute: typeof CompetitiveRoute
+  InsightsRoute: typeof InsightsRoute
   PerformanceRoute: typeof PerformanceRoute
   AdIdRoute: typeof AdIdRoute
 }
@@ -76,6 +92,13 @@ declare module '@tanstack/react-router' {
       path: '/performance'
       fullPath: '/performance'
       preLoaderRoute: typeof PerformanceRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/insights': {
+      id: '/insights'
+      path: '/insights'
+      fullPath: '/insights'
+      preLoaderRoute: typeof InsightsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/competitive': {
@@ -105,6 +128,7 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   CompetitiveRoute: CompetitiveRoute,
+  InsightsRoute: InsightsRoute,
   PerformanceRoute: PerformanceRoute,
   AdIdRoute: AdIdRoute,
 }
