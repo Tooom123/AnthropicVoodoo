@@ -14,7 +14,7 @@ export function DashboardLayout({
   const [sidebarOpen, setSidebarOpen] = useState(true);
 
   return (
-    <div className="flex min-h-screen text-foreground">
+    <div className="flex h-screen overflow-hidden text-foreground">
       <Sidebar
         activePath={path}
         collapsed={!sidebarOpen}
@@ -22,7 +22,7 @@ export function DashboardLayout({
       />
       <div className="flex flex-1 flex-col min-w-0">
         <TopNav sidebarOpen={sidebarOpen} onToggleSidebar={() => setSidebarOpen((v) => !v)} />
-        <main className="flex-1 overflow-auto bg-transparent px-8 py-8">
+        <main className="flex-1 overflow-y-auto bg-transparent px-8 py-8">
           {children}
         </main>
       </div>
