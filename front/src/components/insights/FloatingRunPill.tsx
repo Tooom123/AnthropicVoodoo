@@ -164,7 +164,7 @@ function Wrapper({
         : "border-border ring-primary/10";
   return (
     <div
-      className={`fixed bottom-4 right-4 z-[60] flex w-80 max-w-[calc(100vw-2rem)] items-stretch overflow-hidden rounded-lg border bg-card shadow-lg ring-1 ${ring} animate-in slide-in-from-bottom-2 fade-in`}
+      className={`fixed bottom-4 right-4 z-[60] flex w-[22rem] max-w-[calc(100vw-2rem)] items-stretch overflow-hidden rounded-lg border bg-card shadow-lg ring-1 ${ring} animate-in slide-in-from-bottom-2 fade-in`}
       role="status"
       aria-live="polite"
     >
@@ -186,7 +186,7 @@ function DismissButton({
       onClick={onClick}
       aria-label={label}
       title={label}
-      className="grid w-9 place-items-center border-l border-border text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+      className="grid w-10 flex-shrink-0 place-items-center self-stretch border-l border-border text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
     >
       <X className="h-3.5 w-3.5" />
     </button>

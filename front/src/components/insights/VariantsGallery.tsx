@@ -25,7 +25,18 @@ export function VariantsGallery({ variants }: VariantsGalleryProps) {
     );
   }
 
-  const sorted = [...variants].sort((a, b) => a.test_priority - b.test_priority);
+  // Match the BriefsGrid behaviour — top 3 max, adaptive columns so a
+  // single variant doesn't sit in a narrow lane and 3 don't get cramped.
+  const sorted = [...variants]
+    .sort((a, b) => a.test_priority - b.test_priority)
+    .slice(0, 3);
+  const totalAvailable = variants.length;
+  const colsClass =
+    sorted.length === 1
+      ? "grid-cols-1"
+      : sorted.length === 2
+        ? "grid-cols-1 lg:grid-cols-2"
+        : "grid-cols-1 lg:grid-cols-3";
 
   return (
     <section>
@@ -34,17 +45,24 @@ export function VariantsGallery({ variants }: VariantsGalleryProps) {
         <span className="text-[11px] uppercase tracking-wider text-muted-foreground">
           Generated variants — Scenario MCP
         </span>
+        <span className="text-xs text-muted-foreground">
+          (top {sorted.length}
+          {totalAvailable > sorted.length
+            ? ` of ${totalAvailable}`
+            : ""}
+          )
+        </span>
       </header>
-      <div className="space-y-4">
+      <div className={`grid gap-4 ${colsClass}`}>
         {sorted.map((v) => (
-          <VariantRow key={v.brief.archetype_id} variant={v} />
+          <VariantCard key={v.brief.archetype_id} variant={v} />
         ))}
       </div>
     </section>
   );
 }
 
-function VariantRow({ variant }: { variant: GeneratedVariant }) {
+function VariantCard({ variant }: { variant: GeneratedVariant }) {
   const { brief, hero_frame_path, storyboard_paths, test_priority } = variant;
   const allUrls = [hero_frame_path, ...storyboard_paths];
   const hasPlaceholder = allUrls.some(isPlaceholder);
@@ -53,77 +71,73 @@ function VariantRow({ variant }: { variant: GeneratedVariant }) {
     "bg-muted text-muted-foreground border-border";
 
   return (
-    <Card className="overflow-hidden border-border bg-card p-0">
-      <div className="grid grid-cols-1 gap-5 p-5 lg:grid-cols-[auto_1fr]">
-        <div className="flex flex-col gap-2">
-          <div className="relative aspect-[9/16] w-44 overflow-hidden rounded-md border border-border bg-muted/40">
-            <img
-              src={hero_frame_path}
-              alt={`Hero frame for ${brief.title}`}
-              className="h-full w-full object-cover"
-              loading="lazy"
-            />
-            <span className="absolute left-2 top-2 rounded-md bg-background/80 px-1.5 py-0.5 text-[10px] font-medium backdrop-blur-sm">
-              Hero
-            </span>
-          </div>
-          {storyboard_paths.length > 0 && (
-            <div className="flex w-44 gap-1.5">
-              {storyboard_paths.map((path, i) => (
-                <div
-                  key={path + i}
-                  className="relative aspect-[9/16] flex-1 overflow-hidden rounded-md border border-border bg-muted/40"
-                >
-                  <img
-                    src={path}
-                    alt={`Storyboard frame ${i + 1} for ${brief.title}`}
-                    className="h-full w-full object-cover"
-                    loading="lazy"
-                  />
-                  <span className="absolute left-1 top-1 rounded bg-background/80 px-1 py-0.5 text-[9px] font-medium backdrop-blur-sm">
-                    {i + 2}
-                  </span>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
+    <Card className="flex h-full flex-col overflow-hidden border-border bg-card p-0">
+      {/* Hero frame — full-width 9:16 inside the card. Storyboards
+          land just below as a 3-column strip. */}
+      <div className="relative aspect-[9/16] w-full overflow-hidden bg-muted/40">
+        <img
+          src={hero_frame_path}
+          alt={`Hero frame for ${brief.title}`}
+          className="h-full w-full object-cover"
+          loading="lazy"
+        />
+        <span className="absolute left-2 top-2 rounded-md bg-background/80 px-1.5 py-0.5 text-[10px] font-medium backdrop-blur-sm">
+          Hero
+        </span>
+        <span
+          className={`absolute right-2 top-2 inline-flex items-center rounded-md border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider backdrop-blur-sm ${priorityClass}`}
+        >
+          #{test_priority}
+        </span>
+      </div>
 
-        <div className="flex flex-col gap-3">
-          <div className="flex flex-wrap items-start gap-3">
-            <span
-              className={`inline-flex items-center rounded-md border px-2 py-0.5 text-xs font-semibold uppercase tracking-wider ${priorityClass}`}
+      {storyboard_paths.length > 0 && (
+        <div className="grid grid-cols-3 gap-1 bg-muted/20 p-1">
+          {storyboard_paths.slice(0, 3).map((path, i) => (
+            <div
+              key={path + i}
+              className="relative aspect-[9/16] overflow-hidden rounded-sm border border-border/50 bg-muted/40"
             >
-              #{test_priority} priority
-            </span>
-            <h3 className="text-base font-semibold leading-snug">
-              {brief.title}
-            </h3>
-          </div>
-
-          <p className="text-xs leading-relaxed text-muted-foreground">
-            {variant.test_priority_rationale}
-          </p>
-
-          <div className="rounded-md border border-primary/30 bg-primary/5 p-3">
-            <div className="text-[10px] uppercase tracking-wider text-primary">
-              Hook · 0–3s
-            </div>
-            <p className="mt-1 text-sm leading-relaxed text-foreground">
-              {brief.hook_3s}
-            </p>
-          </div>
-
-          {hasPlaceholder && (
-            <div className="flex items-start gap-2 rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
-              <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-              <span>
-                Placeholder asset (Scenario timeout or missing creds) — re-run
-                the precache to refresh the hero frame and storyboard.
+              <img
+                src={path}
+                alt={`Storyboard frame ${i + 1} for ${brief.title}`}
+                className="h-full w-full object-cover"
+                loading="lazy"
+              />
+              <span className="absolute left-1 top-1 rounded bg-background/80 px-1 py-0.5 text-[9px] font-medium backdrop-blur-sm">
+                {i + 2}
               </span>
             </div>
-          )}
+          ))}
         </div>
+      )}
+
+      <div className="flex flex-1 flex-col gap-3 p-4">
+        <h3 className="text-sm font-semibold leading-snug">
+          {brief.title}
+        </h3>
+
+        <div className="rounded-md border border-primary/30 bg-primary/5 p-3">
+          <div className="text-[10px] uppercase tracking-wider text-primary">
+            Hook · 0–3s
+          </div>
+          <p className="mt-1 text-sm leading-relaxed text-foreground">
+            {brief.hook_3s}
+          </p>
+        </div>
+
+        <p className="text-xs leading-relaxed text-muted-foreground">
+          {variant.test_priority_rationale}
+        </p>
+
+        {hasPlaceholder && (
+          <div className="flex items-start gap-2 rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
+            <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+            <span>
+              Placeholder asset (Scenario timeout or missing creds).
+            </span>
+          </div>
+        )}
       </div>
     </Card>
   );

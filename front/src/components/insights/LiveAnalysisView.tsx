@@ -22,8 +22,14 @@
  * On done/error, falls back to the cached report path (the parent
  * Insights component re-routes via setGameName).
  */
-import { useMemo } from "react";
-import { Sparkles, Loader2, CheckCircle2, AlertCircle } from "lucide-react";
+import { useMemo, useState } from "react";
+import {
+  Sparkles,
+  Loader2,
+  CheckCircle2,
+  AlertCircle,
+  ChevronDown,
+} from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ArchetypesTable } from "./ArchetypesTable";
@@ -273,39 +279,62 @@ function SkeletonSection({
   );
 }
 
-/** Small numbers strip showing the discovery counts (advertisers /
- *  creatives / deconstructions) as they land, before the archetype
- *  step produces its richer card. */
+/**
+ * Market discovery card — three stat cells (top advertisers, creatives
+ * pulled, deconstructed) plus expandable inline tables that show the
+ * actual rows feeding each count, mirroring the Streamlit prototype's
+ * "data appears as tables" feel.
+ *
+ * Source data comes from the rich SSE event payloads stored in
+ * ``run.stepData[step_id]`` — the backend's _full_step_payload ships
+ * the full advertiser/creative lists so we can render real rows here.
+ */
 function DiscoveryStripe({ run }: { run: ActiveRun }) {
-  const adv = run.steps["top_advertisers"]?.summary as
-    | { count?: number }
+  const advData = run.stepData["top_advertisers"] as
+    | Array<Record<string, unknown>>
     | undefined;
-  const raw = run.steps["raw_creatives"]?.summary as
-    | { count?: number }
+  const rawData = run.stepData["raw_creatives"] as
+    | Array<Record<string, unknown>>
     | undefined;
-  const dec = run.steps["deconstructed"]?.summary as
-    | { count?: number }
+  const decData = run.stepData["deconstructed"] as
+    | Array<Record<string, unknown>>
     | undefined;
-  const cells: { label: string; value: number | null; state: StepState }[] =
-    [
-      {
-        label: "Top advertisers",
-        value: adv?.count ?? null,
-        state: run.steps["top_advertisers"],
-      },
-      {
-        label: "Creatives pulled",
-        value: raw?.count ?? null,
-        state: run.steps["raw_creatives"],
-      },
-      {
-        label: "Deconstructed",
-        value: dec?.count ?? null,
-        state: run.steps["deconstructed"],
-      },
-    ];
 
-  // Only render once at least one of the three has started.
+  const cells: {
+    key: "advertisers" | "creatives" | "deconstructed";
+    label: string;
+    value: number | null;
+    state: StepState;
+    rows: Array<Record<string, unknown>> | undefined;
+  }[] = [
+    {
+      key: "advertisers",
+      label: "Top advertisers",
+      value: advData?.length ?? null,
+      state: run.steps["top_advertisers"],
+      rows: advData,
+    },
+    {
+      key: "creatives",
+      label: "Creatives pulled",
+      value: rawData?.length ?? null,
+      state: run.steps["raw_creatives"],
+      rows: rawData,
+    },
+    {
+      key: "deconstructed",
+      label: "Deconstructed",
+      value: decData?.length ?? null,
+      state: run.steps["deconstructed"],
+      rows: decData,
+    },
+  ];
+
+  // Local state — which cell is expanded. Single-select keeps focus.
+  const [openKey, setOpenKey] = useState<
+    "advertisers" | "creatives" | "deconstructed" | null
+  >(null);
+
   const anyActive = cells.some(
     (c) => c.state?.status === "running" || c.state?.status === "done",
   );
@@ -318,30 +347,184 @@ function DiscoveryStripe({ run }: { run: ActiveRun }) {
         <span className="text-[11px] uppercase tracking-wider text-muted-foreground">
           Market discovery
         </span>
+        <span className="ml-auto text-[10px] text-muted-foreground/70">
+          Click a cell to expand the table
+        </span>
       </header>
       <div className="grid grid-cols-3 gap-2">
-        {cells.map((cell) => (
-          <div
-            key={cell.label}
-            className="rounded-md border border-border bg-card px-3 py-2"
-          >
-            <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
-              {cell.label}
-            </div>
-            <div className="mt-1 flex items-baseline gap-1.5">
-              <span className="text-lg font-semibold tabular-nums">
-                {cell.value ?? "—"}
+        {cells.map((cell) => {
+          const isOpen = openKey === cell.key;
+          const clickable = (cell.rows?.length ?? 0) > 0;
+          return (
+            <button
+              key={cell.label}
+              type="button"
+              onClick={() =>
+                clickable ? setOpenKey(isOpen ? null : cell.key) : undefined
+              }
+              disabled={!clickable}
+              className={`rounded-md border bg-card px-3 py-2 text-left transition-colors ${
+                isOpen
+                  ? "border-primary/40 ring-1 ring-primary/20"
+                  : clickable
+                    ? "border-border hover:border-primary/40 cursor-pointer"
+                    : "border-border cursor-default"
+              }`}
+            >
+              <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                {cell.label}
+              </div>
+              <div className="mt-1 flex items-baseline gap-1.5">
+                <span className="text-lg font-semibold tabular-nums">
+                  {cell.value ?? "—"}
+                </span>
+                {cell.state?.status === "running" && (
+                  <Loader2 className="h-3 w-3 animate-spin text-primary/70" />
+                )}
+                {cell.state?.status === "done" && (
+                  <CheckCircle2 className="h-3 w-3 text-emerald-400/70" />
+                )}
+                {clickable && (
+                  <ChevronDown
+                    className={`ml-auto h-3 w-3 text-muted-foreground/60 transition-transform ${
+                      isOpen ? "rotate-180" : ""
+                    }`}
+                  />
+                )}
+              </div>
+            </button>
+          );
+        })}
+      </div>
+
+      {openKey === "advertisers" && advData && advData.length > 0 && (
+        <AdvertisersTable rows={advData} />
+      )}
+      {openKey === "creatives" && rawData && rawData.length > 0 && (
+        <CreativesTable rows={rawData} />
+      )}
+      {openKey === "deconstructed" && decData && decData.length > 0 && (
+        <DeconstructedTable rows={decData} />
+      )}
+    </Card>
+  );
+}
+
+/** Top advertisers expander — name + sov + app_id. Sorted by SoV desc. */
+function AdvertisersTable({ rows }: { rows: Array<Record<string, unknown>> }) {
+  const sorted = [...rows].sort(
+    (a, b) => (Number(b.sov) || 0) - (Number(a.sov) || 0),
+  );
+  return (
+    <div className="mt-3 overflow-hidden rounded-md border border-border bg-card/80">
+      <div className="grid grid-cols-[2fr_auto_auto] gap-3 border-b border-border bg-muted/30 px-3 py-1.5 text-[10px] uppercase tracking-wider text-muted-foreground">
+        <span>Advertiser</span>
+        <span className="text-right">Share of voice</span>
+        <span className="text-right">App ID</span>
+      </div>
+      <div className="divide-y divide-border/60">
+        {sorted.slice(0, 10).map((row, i) => {
+          const name =
+            (row.name as string) ??
+            (row.app_name as string) ??
+            "Unknown";
+          const sov =
+            typeof row.sov === "number"
+              ? row.sov
+              : typeof row.share === "number"
+                ? row.share
+                : 0;
+          const appId =
+            (row.app_id as string) ??
+            (row.unified_app_id as string) ??
+            "";
+          return (
+            <div
+              key={`${appId}-${i}`}
+              className="grid grid-cols-[2fr_auto_auto] gap-3 px-3 py-1.5 text-xs"
+            >
+              <span className="truncate font-medium">{name}</span>
+              <span className="text-right tabular-nums text-foreground/85">
+                {(sov * 100).toFixed(1)}%
               </span>
-              {cell.state?.status === "running" && (
-                <Loader2 className="h-3 w-3 animate-spin text-primary/70" />
-              )}
-              {cell.state?.status === "done" && (
-                <CheckCircle2 className="h-3 w-3 text-emerald-400/70" />
-              )}
+              <span className="text-right font-mono text-[10px] text-muted-foreground">
+                {appId.slice(0, 12) || "—"}
+              </span>
             </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+/** Top creatives expander — advertiser + network + ad_type + first_seen. */
+function CreativesTable({ rows }: { rows: Array<Record<string, unknown>> }) {
+  return (
+    <div className="mt-3 overflow-hidden rounded-md border border-border bg-card/80">
+      <div className="grid grid-cols-[2fr_auto_auto_auto] gap-3 border-b border-border bg-muted/30 px-3 py-1.5 text-[10px] uppercase tracking-wider text-muted-foreground">
+        <span>Advertiser</span>
+        <span>Network</span>
+        <span>Type</span>
+        <span className="text-right">First seen</span>
+      </div>
+      <div className="divide-y divide-border/60">
+        {rows.slice(0, 10).map((row, i) => (
+          <div
+            key={`${row.creative_id ?? i}`}
+            className="grid grid-cols-[2fr_auto_auto_auto] gap-3 px-3 py-1.5 text-xs"
+          >
+            <span className="truncate font-medium">
+              {(row.advertiser_name as string) ?? "Unknown"}
+            </span>
+            <span className="text-foreground/85">
+              {(row.network as string) ?? "—"}
+            </span>
+            <span className="text-foreground/85">
+              {(row.ad_type as string) ?? "—"}
+            </span>
+            <span className="text-right font-mono text-[10px] text-muted-foreground tabular-nums">
+              {(row.first_seen_at as string)?.slice(0, 10) ?? "—"}
+            </span>
           </div>
         ))}
       </div>
-    </Card>
+    </div>
+  );
+}
+
+/** Deconstructed expander — emotional pitch + first scene_flow line. */
+function DeconstructedTable({
+  rows,
+}: {
+  rows: Array<Record<string, unknown>>;
+}) {
+  return (
+    <div className="mt-3 overflow-hidden rounded-md border border-border bg-card/80">
+      <div className="grid grid-cols-[auto_2fr] gap-3 border-b border-border bg-muted/30 px-3 py-1.5 text-[10px] uppercase tracking-wider text-muted-foreground">
+        <span>Pitch</span>
+        <span>Hook summary</span>
+      </div>
+      <div className="divide-y divide-border/60">
+        {rows.slice(0, 10).map((row, i) => {
+          const hook = (row.hook as Record<string, unknown>) ?? {};
+          const pitch = (hook.emotional_pitch as string) ?? "—";
+          const summary = (hook.summary as string) ?? "—";
+          return (
+            <div
+              key={i}
+              className="grid grid-cols-[auto_2fr] items-baseline gap-3 px-3 py-1.5 text-xs"
+            >
+              <span className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                {pitch}
+              </span>
+              <span className="line-clamp-2 leading-relaxed text-foreground/85">
+                {summary}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
   );
 }

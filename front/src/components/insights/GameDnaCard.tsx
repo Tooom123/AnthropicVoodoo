@@ -154,16 +154,34 @@ export function GameDnaCard({ report }: GameDnaCardProps) {
       )}
 
       {dna.screenshot_signals.length > 0 && (
-        <details className="group mt-3 rounded-md border border-border bg-background/40 px-3 py-2">
-          <summary className="cursor-pointer text-xs font-medium text-muted-foreground transition-colors hover:text-foreground">
-            Screenshot signals ({dna.screenshot_signals.length})
-          </summary>
-          <ul className="mt-2 list-disc space-y-1 pl-5 text-xs text-foreground/80">
+        <div className="mt-5">
+          <div className="flex items-baseline justify-between">
+            <div className="text-[11px] uppercase tracking-wider text-muted-foreground">
+              Screenshot signals
+            </div>
+            <span
+              className="text-[10px] text-muted-foreground/70"
+              title="Concrete visual cues Gemini Vision extracted from the App Store screenshots above — used as inputs to the brief and visual generation."
+            >
+              {dna.screenshot_signals.length} signals · from Gemini Vision
+            </span>
+          </div>
+          <div className="mt-2 grid grid-cols-1 gap-1.5 sm:grid-cols-2 lg:grid-cols-3">
             {dna.screenshot_signals.map((s, i) => (
-              <li key={i}>{s}</li>
+              <div
+                key={i}
+                className="flex items-start gap-2 rounded-md border border-border/60 bg-background/40 px-2.5 py-1.5"
+              >
+                <span className="mt-0.5 inline-flex h-4 w-4 flex-shrink-0 items-center justify-center rounded-sm bg-muted text-[9px] font-semibold tabular-nums text-muted-foreground">
+                  {i + 1}
+                </span>
+                <span className="text-xs leading-snug text-foreground/85">
+                  {s}
+                </span>
+              </div>
             ))}
-          </ul>
-        </details>
+          </div>
+        </div>
       )}
     </Card>
   );

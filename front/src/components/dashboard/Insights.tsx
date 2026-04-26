@@ -135,18 +135,18 @@ export function Insights({ autoLaunch = false }: InsightsProps = {}) {
 
   // Live partial-report path. Active when:
   //   1. there is a current run in PipelineRunsContext
-  //   2. its phase is still "running" (or just-erroring), so the cached
-  //      report doesn't exist yet
-  //   3. the user is asking for that run's game (or no game — they
-  //      clicked the running row from the list)
-  // We bypass the normal /api/report path entirely and render sections
-  // from the SSE step buffer instead.
+  //   2. its phase is still "running" (the cached report doesn't exist yet)
+  //   3. the user has explicitly selected that run's game (gameName must
+  //      be non-empty and match the run's gameName) — clicking
+  //      "All analyses" sets gameName to "" so we fall through to the
+  //      list view, even while a run is still streaming in the
+  //      background. The floating pill keeps tracking it.
   const trimmedGameForLive = gameName.trim();
   const isLiveForCurrent =
     run &&
     run.phase === "running" &&
-    (trimmedGameForLive === "" ||
-      trimmedGameForLive.toLowerCase() === run.gameName.toLowerCase() ||
+    trimmedGameForLive.length > 0 &&
+    (trimmedGameForLive.toLowerCase() === run.gameName.toLowerCase() ||
       (run.doneEvent &&
         trimmedGameForLive.toLowerCase() ===
           run.doneEvent.name.toLowerCase()));

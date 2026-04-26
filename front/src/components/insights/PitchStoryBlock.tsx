@@ -7,9 +7,16 @@ interface PitchStoryBlockProps {
 }
 
 /**
- * Renders the auto-generated French pitch paragraph that frames the demo
- * voiceover. Splits each paragraph on `**...**` so we can render markdown
- * bold inline without pulling in a parser.
+ * Auto-generated English summary that frames every report — same
+ * narrative arc as the demo voiceover (market scan → breakout hook →
+ * game-fit score → tailored variant). Splits each paragraph on
+ * ``**...**`` so we can render markdown bold inline without pulling
+ * in a parser.
+ *
+ * (Was previously titled "Demo pitch · auto-generated" in French. The
+ * jury reads English, the PM team reads English, the data is in
+ * English — keeping the prose monolingual avoids a code-switch
+ * mid-report.)
  */
 export function PitchStoryBlock({ report }: PitchStoryBlockProps) {
   const ctx = report.market_context;
@@ -32,10 +39,10 @@ export function PitchStoryBlock({ report }: PitchStoryBlockProps) {
   const country = ctx.countries[0] ?? "US";
 
   const paragraphs: string[] = [
-    `Sur **${report.target_game.name}**, on a scanné **${ctx.num_advertisers_scanned} advertisers** ${ctx.category_name} sur ${network} (${country}) sur la période, et déconstruit **${ctx.num_creatives_analyzed} creatives** via Gemini 2.5 Pro.`,
-    `Le breakout du moment est **« ${top.label} »** : ${top.member_creative_ids.length} creatives, ${Math.round(top.derivative_spread * 100)}% d'advertisers uniques, âge moyen **${Math.round(top.freshness_days)} jours** — c'est le hook qui se fait copier en ce moment, pas un hit établi.`,
-    `On a scoré ce hook contre la Game DNA de **${report.target_game.name}** avec Claude Opus 4.7 → **${bestFit.overall}/100** (visual=${bestFit.visual_match}, mechanic=${bestFit.mechanic_match}, audience=${bestFit.audience_match}). Voici la creative tailored qu'on a générée avec Scenario : **« ${chosenVariant.brief.title} »** — palette \`${palette.primary_hex}\`/\`${palette.secondary_hex}\`, CTA **« ${chosenVariant.brief.cta} »**.`,
-    `Test priority #${chosenVariant.test_priority}, prête pour Meta Ads / TikTok lundi matin.`,
+    `On **${report.target_game.name}**, we scanned **${ctx.num_advertisers_scanned} advertisers** in ${ctx.category_name} on ${network} (${country}) and deconstructed **${ctx.num_creatives_analyzed} creatives** with Gemini 2.5 Pro.`,
+    `The current breakout is **"${top.label}"**: ${top.member_creative_ids.length} ad${top.member_creative_ids.length === 1 ? "" : "s"}, ${Math.round(top.derivative_spread * 100)}% unique advertisers, average age **${Math.round(top.freshness_days)} days** — this is the hook that's being copied right now, not an established hit.`,
+    `We scored that hook against **${report.target_game.name}**'s Game DNA with Claude Opus 4.7 → **${bestFit.overall}/100** (visual=${bestFit.visual_match}, mechanic=${bestFit.mechanic_match}, audience=${bestFit.audience_match}). Here's the tailored variant Scenario produced: **"${chosenVariant.brief.title}"** — palette \`${palette.primary_hex}\`/\`${palette.secondary_hex}\`, CTA **"${chosenVariant.brief.cta}"**.`,
+    `Test priority #${chosenVariant.test_priority}, ready to ship to Meta Ads / TikTok on Monday morning.`,
   ];
 
   return (
@@ -43,7 +50,7 @@ export function PitchStoryBlock({ report }: PitchStoryBlockProps) {
       <div className="flex items-center gap-2">
         <Megaphone className="h-4 w-4 text-primary" />
         <span className="text-[11px] uppercase tracking-wider text-muted-foreground">
-          Demo pitch · auto-generated
+          Summary
         </span>
       </div>
       <div className="mt-3 space-y-3 text-sm leading-relaxed text-foreground/90">
