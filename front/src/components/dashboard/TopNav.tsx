@@ -28,7 +28,7 @@ export function TopNav() {
       <div className="flex items-center gap-3">
         <h1 className="text-base font-semibold">Voodoo</h1>
         <span className="hidden text-xs text-muted-foreground md:inline">
-          / Ad Intelligence — creative trends for Voodoo's publishing team
+          / Ad Intelligence — creative trends analysis for Voodoo's publishing team
         </span>
       </div>
 
