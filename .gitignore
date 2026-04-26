@@ -63,3 +63,5 @@ front/.tanstack/
 
 # Voodoo brand assets (reference only, not used at runtime)
 voodooio_logo.*
+*.brief.json
+/genius-*.json
