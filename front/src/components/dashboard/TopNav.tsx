@@ -1,4 +1,4 @@
-import { Calendar, ChevronDown, Moon, Search, Sun } from "lucide-react";
+import { Calendar, ChevronDown, Moon, Sun } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -7,19 +7,11 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useTheme } from "@/components/theme-provider";
-import { useState } from "react";
 import { PERIOD_OPTIONS, useGame } from "@/lib/game-context";
 
 export function TopNav() {
   const { theme, toggle } = useTheme();
-  const { gameName, setGameName, periodLabel, setPeriodByLabel } = useGame();
-  const [input, setInput] = useState(gameName);
-
-  function handleSearch(e: React.FormEvent) {
-    e.preventDefault();
-    const trimmed = input.trim();
-    if (trimmed) setGameName(trimmed);
-  }
+  const { gameName, periodLabel, setPeriodByLabel } = useGame();
 
   return (
     <header className="flex h-14 items-center justify-between border-b border-border bg-background px-6">
@@ -28,28 +20,12 @@ export function TopNav() {
         <span className="hidden text-xs text-muted-foreground md:inline">
           / Ad Intelligence — creative trends for Voodoo's publishing team
         </span>
-      </div>
-
-      <form onSubmit={handleSearch} className="flex items-center gap-2">
-        <div className="relative">
-          <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-          <input
-            type="text"
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            placeholder="Game name… (e.g. Royal Match)"
-            className="h-8 w-56 rounded-md border border-input bg-background pl-8 pr-3 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
-          />
-        </div>
-        <Button type="submit" size="sm" disabled={!input.trim()}>
-          Search
-        </Button>
         {gameName && (
           <span className="rounded-md bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">
             {gameName}
           </span>
         )}
-      </form>
+      </div>
 
       <div className="flex items-center gap-2">
         <DropdownMenu>

@@ -136,14 +136,41 @@ def _norm_format(ad_type: str) -> FormatFE:
 _MARKET_TOTAL_IMPRESSIONS = 50_000_000
 
 
+# iOS App Store game category IDs (from docs/sensortower-api.md §9.1).
+# 6014 = Games root, 7001–7019 = sub-genres. Used to filter out
+# non-game advertisers (Papa Murphy's, Burger King, etc.) that
+# SensorTower's category filter sometimes leaks through when the
+# advertiser app has ``categories: null``.
+_IOS_GAME_CATEGORY_IDS: set[int] = {
+    6014, 7001, 7002, 7003, 7004, 7005, 7006, 7009, 7011, 7012,
+    7013, 7014, 7015, 7016, 7017, 7018, 7019,
+}
+
+
+def _is_game_advertiser(categories: list[Any] | None) -> bool:
+    """True iff the app declares any iOS Game category. Conservative:
+    when categories is missing or empty, return False so we exclude
+    rather than risk surfacing a pizzeria ad in the gaming Ad Library.
+    """
+    for cat in categories or []:
+        try:
+            if int(cat) in _IOS_GAME_CATEGORY_IDS:
+                return True
+        except (TypeError, ValueError):
+            continue
+    return False
+
+
 def _index_sensortower_app_info() -> dict[str, dict[str, Any]]:
-    """Build a creative_id → {publisher_name, icon_url, advertiser_name}
-    index by scanning every cached SensorTower ``creatives_top_*.json``
-    on disk. Cheap (10-30 small files for the whole demo cache).
+    """Build a creative_id → {publisher_name, icon_url, advertiser_name,
+    categories, is_game} index by scanning every cached SensorTower
+    ``creatives_top_*.json`` on disk. Cheap (10-30 small files for the
+    whole demo cache).
 
     Used to enrich ``/api/creatives`` responses with real publisher /
     icon data that ``fetch_top_creatives`` flattens away into the
-    ``RawCreative`` shape.
+    ``RawCreative`` shape, AND to filter out non-game advertisers in
+    the AdLibrary.
     """
     st_cache = CACHE_DIR / "sensortower"
     out: dict[str, dict[str, Any]] = {}
@@ -156,6 +183,7 @@ def _index_sensortower_app_info() -> dict[str, dict[str, Any]]:
             continue
         for au in data.get("ad_units") or []:
             info = au.get("app_info") or {}
+            categories = info.get("categories")
             for c in au.get("creatives") or []:
                 cid = str(c.get("id") or "")
                 if not cid or cid in out:
@@ -164,6 +192,8 @@ def _index_sensortower_app_info() -> dict[str, dict[str, Any]]:
                     "publisher_name": info.get("publisher_name"),
                     "icon_url": info.get("icon_url"),
                     "advertiser_name": info.get("name"),
+                    "categories": categories,
+                    "is_game": _is_game_advertiser(categories),
                 }
     return out
 
@@ -359,6 +389,13 @@ def get_creatives(
                 if rc.creative_id in seen_ids:
                     continue
                 seen_ids.add(rc.creative_id)
+                # Skip non-game advertisers (Papa Murphy's, Burger King…)
+                # that SensorTower's category filter sometimes leaks
+                # through when the advertiser's app_info has
+                # categories=null.
+                extra = app_info_index.get(rc.creative_id) or {}
+                if extra and extra.get("is_game") is False:
+                    continue
                 c = _raw_to_creative(rc, app_info_index=app_info_index)
                 results.append(c.model_copy(update={"network": fe_network}))
                 if len(results) >= limit:

@@ -68,7 +68,7 @@ export function VoodooPortfolio() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { setGameName } = useGame();
-  const { data, isLoading, error } = useVoodooPortfolio(25);
+  const { data, isLoading, error } = useVoodooPortfolio(30);
 
   const [configOpen, setConfigOpen] = useState(false);
   const [runOpen, setRunOpen] = useState(false);
