@@ -200,6 +200,27 @@ function ArchetypeRow({
         <span className="text-[10px] text-muted-foreground">
           0.4·v + 0.35·d + 0.25·(1/f)
         </span>
+        {/* Sample-size disclosure. derivative_spread can read 100% on a
+            cluster of 1 creative — we show the underlying creative count
+            so a juror (or PM) can immediately tell whether the score is
+            backed by a real pattern or an isolated outlier. */}
+        <span
+          className={`mt-1 inline-flex items-center rounded-full px-1.5 py-0.5 text-[9px] font-medium tabular-nums ${
+            arch.member_creative_ids.length >= 3
+              ? "bg-emerald-500/10 text-emerald-300 ring-1 ring-emerald-500/20"
+              : arch.member_creative_ids.length === 2
+                ? "bg-amber-500/10 text-amber-300 ring-1 ring-amber-500/20"
+                : "bg-muted text-muted-foreground ring-1 ring-border"
+          }`}
+          title={
+            arch.member_creative_ids.length === 1
+              ? "Singleton — only one creative supports this archetype. Use with caution."
+              : `Backed by ${arch.member_creative_ids.length} deconstructed creatives`
+          }
+        >
+          n={arch.member_creative_ids.length} creative
+          {arch.member_creative_ids.length === 1 ? "" : "s"}
+        </span>
       </div>
 
       {sources.length > 0 && (
