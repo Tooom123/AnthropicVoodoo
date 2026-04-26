@@ -86,6 +86,14 @@ def main() -> int:
         default=None,
         help="Optional prompt override. If absent, derived from the brief's hook_3s.",
     )
+    parser.add_argument(
+        "--multi-clip",
+        action="store_true",
+        help=(
+            "Generate one Kling clip per frame (hero + storyboards) and "
+            "concat into a single mp4 via ffmpeg. Produces ~15s 3-act ad."
+        ),
+    )
     args = parser.parse_args()
 
     report_path = Path(args.report)
@@ -144,8 +152,17 @@ def main() -> int:
             print(f"  ✓ frame {i + 1}/{len(frame_urls)} cached: {dest.name}")
         local_frames.append(dest)
 
-    # Generate video.
+    # Generate video(s).
     from app.creative.scenario import call_scenario_video
+
+    if args.multi_clip:
+        return _multi_clip_pipeline(
+            slug=slug,
+            local_frames=local_frames,
+            model=args.model,
+            prompt=prompt,
+            scene_flow=brief.get("scene_flow") or [],
+        )
 
     print(f"\n→ Calling Scenario video API (timeout 12 min)…")
     t0 = time.perf_counter()
@@ -168,7 +185,6 @@ def main() -> int:
         )
         return 1
 
-    # Download the mp4 next to the report.
     output_path = VIDEOS_DIR / f"demo_{slug}.mp4"
     print(f"\n↓ downloading mp4 → {output_path}")
     _download(video_url, output_path)
@@ -182,6 +198,105 @@ def main() -> int:
         f"  Preview:  open {output_path}\n"
         f"  CDN URL:  {video_url}\n"
     )
+    return 0
+
+
+def _multi_clip_pipeline(
+    *,
+    slug: str,
+    local_frames: list[Path],
+    model: str,
+    prompt: str,
+    scene_flow: list[str],
+) -> int:
+    """Generate N Kling clips (one per frame) and concat into a single mp4.
+
+    Each frame becomes a 5-second clip with a per-frame motion prompt
+    derived from the brief's ``scene_flow`` (one beat per clip when
+    available, falling back to the global hook prompt).
+    """
+    import subprocess
+
+    from app.creative.scenario import call_scenario_video
+
+    if model.startswith("model_kling-o1") and len(local_frames) > 1:
+        # Kling i2v is single-frame; multi-clip uses one call per frame.
+        pass
+
+    n = len(local_frames)
+    print(
+        f"\n→ Multi-clip mode: {n} clips × ~60s each. Total budget ≈ {n * 60}s.\n"
+    )
+
+    clip_paths: list[Path] = []
+    for i, frame in enumerate(local_frames):
+        # Prefer the matching scene_flow beat as motion prompt; fall back to
+        # the global hook so every clip still has motion guidance.
+        beat_prompt = scene_flow[i] if i < len(scene_flow) else prompt
+        # Trim ridiculously long beats — Kling's prompt budget is ~500 chars.
+        beat_prompt = (beat_prompt or prompt or "")[:500]
+
+        print(f"  [{i + 1}/{n}] frame={frame.name} prompt={beat_prompt[:80]!r}")
+        t0 = time.perf_counter()
+        try:
+            url, meta = call_scenario_video(
+                model_id=model,
+                image_paths=[frame],
+                prompt=beat_prompt,
+                label=f"demo_{slug}_clip{i}",
+            )
+        except Exception as e:
+            print(f"      ✗ clip {i + 1} failed: {e}")
+            return 1
+        elapsed = time.perf_counter() - t0
+        if meta.get("stub"):
+            print(f"      ⚠ clip {i + 1} returned stub — aborting concat.")
+            return 1
+
+        clip_path = VIDEOS_DIR / f"demo_{slug}_clip{i}.mp4"
+        _download(url, clip_path)
+        clip_paths.append(clip_path)
+        print(f"      ✓ {elapsed:.0f}s · {clip_path.stat().st_size / 1024:.0f} KB")
+
+    # Concat via ffmpeg's concat demuxer (no re-encode = fast, lossless).
+    concat_list = VIDEOS_DIR / f"demo_{slug}_concat.txt"
+    concat_list.write_text(
+        "\n".join(f"file '{p.name}'" for p in clip_paths) + "\n"
+    )
+    output_path = VIDEOS_DIR / f"demo_{slug}_full.mp4"
+
+    print(f"\n→ ffmpeg concat → {output_path}")
+    cmd = [
+        "ffmpeg", "-y", "-f", "concat", "-safe", "0",
+        "-i", str(concat_list.name),
+        "-c", "copy",
+        str(output_path.name),
+    ]
+    proc = subprocess.run(cmd, cwd=VIDEOS_DIR, capture_output=True, text=True)
+    if proc.returncode != 0:
+        # If -c copy fails (codec/timestamp mismatch), retry with re-encode.
+        print("  ↻ -c copy failed (likely codec mismatch), retrying with re-encode…")
+        cmd_reencode = [
+            "ffmpeg", "-y", "-f", "concat", "-safe", "0",
+            "-i", str(concat_list.name),
+            "-c:v", "libx264", "-preset", "fast", "-crf", "23",
+            str(output_path.name),
+        ]
+        proc = subprocess.run(cmd_reencode, cwd=VIDEOS_DIR, capture_output=True, text=True)
+        if proc.returncode != 0:
+            print(f"      ✗ ffmpeg failed:\n{proc.stderr[-800:]}")
+            return 1
+
+    size_kb = output_path.stat().st_size / 1024
+    print(
+        f"\n{'=' * 70}\n"
+        f"DONE — {n}-clip ad assembled · {size_kb:.0f} KB\n"
+        f"{'=' * 70}\n"
+        f"  Output:   {output_path}\n"
+        f"  Preview:  open {output_path}\n"
+    )
+    # Auto-open at the end for convenience.
+    subprocess.run(["open", str(output_path)], check=False)
     return 0
 
 
