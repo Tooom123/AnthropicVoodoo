@@ -301,8 +301,8 @@ function CreativeCard({ creative: c }: CreativeCardProps) {
             <NetworkBadge network={c.network} />
           </div>
 
-          {/* Honest stats: run duration + REAL SoV (no more synthetic
-              impressions / score / spend). */}
+          {/* Honest stats: run duration + (Share of Voice when SensorTower
+              provides it, else first-seen date — never a fake numeric). */}
           <div className="grid grid-cols-2 gap-2 text-xs">
             <div className="rounded-md bg-muted/50 px-2 py-1.5">
               <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
@@ -312,21 +312,31 @@ function CreativeCard({ creative: c }: CreativeCardProps) {
                 {c.runDays}d
               </div>
             </div>
-            <div
-              className="rounded-md bg-muted/50 px-2 py-1.5"
-              title="Share of Voice in category × network × period (SensorTower)"
-            >
-              <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
-                SoV
+            {c.sov != null && c.sov > 0 ? (
+              <div
+                className="rounded-md bg-muted/50 px-2 py-1.5"
+                title="Share of Voice in category × network × period (SensorTower)"
+              >
+                <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                  SoV
+                </div>
+                <div className="font-medium tabular-nums text-foreground">
+                  {c.sov >= 0.001 ? `${(c.sov * 100).toFixed(2)}%` : "<0.1%"}
+                </div>
               </div>
-              <div className="font-medium tabular-nums text-foreground">
-                {c.sov != null && c.sov > 0
-                  ? c.sov >= 0.001
-                    ? `${(c.sov * 100).toFixed(2)}%`
-                    : "<0.1%"
-                  : "—"}
+            ) : (
+              <div
+                className="rounded-md bg-muted/50 px-2 py-1.5"
+                title="First time this creative was seen by SensorTower"
+              >
+                <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                  Started
+                </div>
+                <div className="font-medium tabular-nums text-foreground">
+                  {c.startedAt.slice(0, 7)}
+                </div>
               </div>
-            </div>
+            )}
           </div>
 
           <Button size="sm" variant="secondary" className="mt-auto w-full" asChild>
