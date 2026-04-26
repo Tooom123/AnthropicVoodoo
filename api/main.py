@@ -383,7 +383,11 @@ def _fetch_country_signal(
         )
         top_sov: float = advs[0].get("sov") or advs[0].get("share") or 0.0 if advs else 0.0
         num_advertisers = len(advs)
-        intensity = min(100.0, top_sov * 700 + num_advertisers * 4)
+        # top_sov is already a percentage (0–100 scale).
+        # Use it directly — frontend normalize() maps min→blue, max→red.
+        # High top_sov = one dominant advertiser (concentrated market).
+        # Low top_sov = spread competition (fragmented market).
+        intensity = round(top_sov, 2) if num_advertisers > 0 else 0.0
     except Exception:
         log.warning("geo fetch failed for %s", code)
         top_sov, num_advertisers, intensity = 0.0, 0, 0.0
@@ -748,18 +752,40 @@ from app.creative.video_brief import (  # noqa: E402
 
 
 def _load_game_dna(game_name: str):
-    """Shared helper: load GameDNA from the most recent cached report."""
+    """Shared helper: load GameDNA from the most recent cached report.
+
+    Supports multiple naming conventions used by different pipeline versions:
+      - report_{slug}*.json   (canonical)
+      - {app_id}_e2e.json     (notebook runner)
+      - any .json in REPORTS_CACHE_DIR whose target_game.name matches
+    """
     from app.models import HookLensReport  # noqa: PLC0415
 
     slug = game_name.strip().lower().replace(" ", "_")
-    candidates = list(REPORTS_CACHE_DIR.glob(f"report_{slug}*.json")) + list(
-        REPORTS_CACHE_DIR.glob(f"report_*{slug}*.json")
+
+    # Fast path — pattern-based
+    candidates = (
+        list(REPORTS_CACHE_DIR.glob(f"report_{slug}*.json"))
+        + list(REPORTS_CACHE_DIR.glob(f"report_*{slug}*.json"))
     )
+
+    # Slow path — scan all .json files for a name match
+    if not candidates:
+        for path in REPORTS_CACHE_DIR.glob("*.json"):
+            try:
+                raw = json.loads(path.read_text())
+                name = (raw.get("target_game") or {}).get("name", "")
+                if name.strip().lower() == game_name.strip().lower():
+                    candidates.append(path)
+            except Exception:
+                continue
+
     if not candidates:
         raise HTTPException(
             status_code=404,
             detail=f"No cached report for '{game_name}'. Run the pipeline first.",
         )
+
     candidates.sort(key=lambda p: p.stat().st_mtime, reverse=True)
     try:
         report = HookLensReport.model_validate_json(candidates[0].read_text())
@@ -777,7 +803,7 @@ def get_video_brief(game_name: str = Query(...)) -> VideoAdConcept:
     return generate_video_concept(dna)
 
 
-@app.post("/api/video-brief/generate", response_model=VideoAdResult)
+@app.get("/api/video-brief/generate", response_model=VideoAdResult)
 def generate_video(game_name: str = Query(...)) -> VideoAdResult:
     """Trigger Scenario video generation for the brainrot concept and return the video URL.
 
