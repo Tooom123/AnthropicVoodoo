@@ -1,27 +1,35 @@
 /**
- * GeoHeatmap — dot-grid world map using react-simple-maps + SVG pattern fills.
+ * GeoHeatmap — dot-grid world map.
  *
- * Each country is rendered with its real GeoJSON outline filled by a small-dot
- * SVG pattern. Countries with SensorTower data get a heat-scale color; the rest
- * get a dim slate silhouette so the world map is always legible.
+ * A lat/lng grid is generated at mount time. Each point is tested with
+ * geoContains() against the loaded world topojson: points on land become
+ * fully-colored circles (heat scale for tracked countries, silhouette for the
+ * rest). Ocean grid points are simply skipped. This means every dot is either
+ * fully rendered or absent — no SVG clipping artifacts at borders.
  */
-import { useMemo, useState } from "react";
-import {
-  ComposableMap,
-  Geographies,
-  Geography,
-  Marker,
-} from "react-simple-maps";
+import { useMemo, useState, useEffect, useCallback } from "react";
+import { geoMercator, geoContains } from "d3-geo";
+import { feature as topoFeature } from "topojson-client";
 import { Globe } from "lucide-react";
 import { useGame } from "@/lib/game-context";
 import { useGeoSignals, type CountrySignal } from "@/lib/api";
 
 // ---------------------------------------------------------------------------
-// World topojson fetched from CDN — no extra package needed
+// SVG viewport & dot grid config
 // ---------------------------------------------------------------------------
 
-const GEO_URL =
-  "https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json";
+const SVG_W = 800;
+const SVG_H = 420;
+const DOT_STEP = 3.8;   // degrees between dot centres (controls density)
+const DOT_R    = 4.2;   // dot radius in SVG units
+
+const GEO_URL = "https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json";
+
+// Mercator projection — same params as the previous react-simple-maps config
+const projection = geoMercator()
+  .scale(128)
+  .center([10, 10])
+  .translate([SVG_W / 2, SVG_H / 2]);
 
 // ---------------------------------------------------------------------------
 // ISO 3166-1 numeric → alpha-2 mapping for the 34 countries we track
@@ -38,23 +46,6 @@ const NUMERIC_TO_CODE: Record<string, string> = {
   "608": "PH", "458": "MY",
   "036": "AU", "554": "NZ",
   "710": "ZA", "566": "NG", "818": "EG",
-};
-
-// Country centroids [lng, lat] for Marker positioning
-const CENTROIDS: Record<string, [number, number]> = {
-  US: [-95.7, 38.9],  CA: [-106.3, 56.1], MX: [-102.6, 23.6],
-  BR: [-51.9, -14.2], AR: [-63.6, -38.4], CO: [-74.1, 4.6],
-  GB: [-3.4, 55.4],   FR: [2.2, 46.2],    DE: [10.5, 51.2],
-  IT: [12.6, 41.9],   ES: [-3.7, 40.5],   NL: [5.3, 52.1],
-  SE: [18.6, 60.1],   PL: [19.1, 51.9],   RU: [105.3, 61.5],
-  TR: [35.2, 38.9],   SA: [45.1, 23.9],   AE: [53.8, 23.4],
-  IL: [34.9, 31.0],
-  JP: [138.3, 36.2],  KR: [127.8, 35.9],  CN: [104.2, 35.9],
-  IN: [79.1, 20.6],   ID: [113.9, -0.8],  TH: [100.9, 15.9],
-  SG: [103.8, 1.4],   TW: [121.0, 23.7],  PH: [121.8, 12.9],
-  MY: [108.0, 4.2],
-  AU: [133.8, -25.3], NZ: [174.9, -40.9],
-  ZA: [25.1, -29.0],  NG: [8.7, 9.1],     EG: [30.8, 26.8],
 };
 
 // Continent colors for pills
@@ -90,54 +81,14 @@ function heatColor(intensity: number): string {
 }
 
 // ---------------------------------------------------------------------------
-// SVG dot-pattern definitions
+// Types
 // ---------------------------------------------------------------------------
 
-const DOT_STEP = 6;   // spacing between dot centres (px in pattern space)
-const DOT_R_HEAT = 2; // radius for heat dots
-const DOT_R_LAND = 1.4; // radius for untracked land
-
-interface PatternDefsProps {
-  signals: CountrySignal[];
+interface DotData {
+  x: number;
+  y: number;
+  countryCode: string | null; // null = untracked land
 }
-
-function PatternDefs({ signals }: PatternDefsProps) {
-  return (
-    <defs>
-      {/* Untracked land silhouette */}
-      <pattern
-        id="dots-land"
-        x="0" y="0"
-        width={DOT_STEP} height={DOT_STEP}
-        patternUnits="userSpaceOnUse"
-      >
-        <circle cx={DOT_STEP / 2} cy={DOT_STEP / 2} r={DOT_R_LAND} fill="#1e3352" />
-      </pattern>
-
-      {/* One pattern per tracked country */}
-      {signals.map((s) => (
-        <pattern
-          key={s.country_code}
-          id={`dots-${s.country_code}`}
-          x="0" y="0"
-          width={DOT_STEP} height={DOT_STEP}
-          patternUnits="userSpaceOnUse"
-        >
-          <circle
-            cx={DOT_STEP / 2}
-            cy={DOT_STEP / 2}
-            r={DOT_R_HEAT}
-            fill={heatColor(s.market_intensity)}
-          />
-        </pattern>
-      ))}
-    </defs>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Tooltip
-// ---------------------------------------------------------------------------
 
 interface TooltipState {
   x: number;
@@ -155,10 +106,22 @@ export function GeoHeatmap() {
     gameName ? { game_name: gameName } : {},
   );
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [geoFeatures, setGeoFeatures] = useState<any[]>([]);
   const [tooltip, setTooltip] = useState<TooltipState | null>(null);
   const [hoveredContinent, setHoveredContinent] = useState<string | null>(null);
 
-  // Map from country code → signal for O(1) lookup inside Geography loop
+  // Fetch world topojson once
+  useEffect(() => {
+    fetch(GEO_URL)
+      .then((r) => r.json())
+      .then((topo) => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const world = topoFeature(topo as any, (topo as any).objects.countries) as any;
+        setGeoFeatures(world.features);
+      });
+  }, []);
+
   const signalByCode = useMemo(
     () => Object.fromEntries(signals.map((s) => [s.country_code, s])),
     [signals],
@@ -169,12 +132,17 @@ export function GeoHeatmap() {
     [signals],
   );
 
-  const maxIntensity = useMemo(
-    () => Math.max(1, ...signals.map((s) => s.market_intensity)),
-    [signals],
+  // Normalize intensity to full 0-100 range so color spread is always visible
+  const { minI, maxI } = useMemo(() => {
+    const vals = signals.map((s) => s.market_intensity);
+    return { minI: Math.min(...vals, 0), maxI: Math.max(...vals, 1) };
+  }, [signals]);
+
+  const normalize = useCallback(
+    (v: number) => (maxI === minI ? 50 : ((v - minI) / (maxI - minI)) * 100),
+    [minI, maxI],
   );
 
-  // Filter visible signals when a continent pill is active
   const visibleCodes = useMemo(
     () =>
       new Set(
@@ -184,6 +152,57 @@ export function GeoHeatmap() {
       ),
     [signals, hoveredContinent],
   );
+
+  // ---------------------------------------------------------------------------
+  // Build dot grid — runs once after topojson is loaded.
+  // For each lat/lng grid point we test geoContains against all country
+  // features. Tracked countries come first in the feature list so the loop
+  // exits early for most land points.
+  // ---------------------------------------------------------------------------
+  const dots = useMemo((): DotData[] => {
+    if (!geoFeatures.length) return [];
+
+    // Split features: tracked first (fast exit), then rest (for silhouette)
+    const trackedCodes = new Set(Object.values(NUMERIC_TO_CODE));
+    const trackedFeatures = geoFeatures.filter((f) => trackedCodes.has(NUMERIC_TO_CODE[f.id]));
+    const otherFeatures   = geoFeatures.filter((f) => !trackedCodes.has(NUMERIC_TO_CODE[f.id]));
+
+    const result: DotData[] = [];
+
+    for (let lat = -57; lat <= 75; lat += DOT_STEP) {
+      for (let lng = -175; lng <= 180; lng += DOT_STEP) {
+        const point: [number, number] = [lng, lat];
+        const svgPos = projection(point);
+        if (!svgPos) continue;
+
+        // 1. Check tracked countries first
+        let countryCode: string | null = null;
+        for (const feat of trackedFeatures) {
+          if (geoContains(feat, point)) {
+            countryCode = NUMERIC_TO_CODE[feat.id as string] ?? null;
+            break;
+          }
+        }
+
+        if (countryCode !== null) {
+          result.push({ x: svgPos[0], y: svgPos[1], countryCode });
+          continue;
+        }
+
+        // 2. Check remaining land for silhouette dots
+        for (const feat of otherFeatures) {
+          if (geoContains(feat, point)) {
+            result.push({ x: svgPos[0], y: svgPos[1], countryCode: null });
+            break;
+          }
+        }
+      }
+    }
+
+    return result;
+  }, [geoFeatures]);
+
+  const dotsLoading = !geoFeatures.length;
 
   return (
     <div className="space-y-4">
@@ -242,9 +261,7 @@ export function GeoHeatmap() {
                   ? (CONTINENT_COLOR[c] ?? "#64748b")
                   : "#475569",
               background:
-                hoveredContinent === c
-                  ? `${CONTINENT_COLOR[c]}22`
-                  : "transparent",
+                hoveredContinent === c ? `${CONTINENT_COLOR[c]}22` : "transparent",
             }}
           >
             {c}
@@ -254,96 +271,69 @@ export function GeoHeatmap() {
 
       {/* Map */}
       <div className="relative rounded-xl border border-border bg-[#060d18] overflow-hidden">
-        {isLoading && (
+        {(isLoading || dotsLoading) && (
           <div className="absolute inset-0 z-10 flex items-center justify-center bg-[#060d18]/80">
             <span className="text-xs text-muted-foreground animate-pulse">
-              Querying 34 markets…
+              {dotsLoading ? "Building dot map…" : "Querying 34 markets…"}
             </span>
           </div>
         )}
 
-        <ComposableMap
-          projectionConfig={{ scale: 147, center: [10, 10] }}
-          style={{ width: "100%", height: "auto" }}
+        <svg
+          viewBox={`0 0 ${SVG_W} ${SVG_H}`}
+          style={{ width: "100%", height: "auto", display: "block" }}
         >
-          <PatternDefs signals={signals} />
+          {dots.map((dot, i) => {
+            const signal = dot.countryCode ? signalByCode[dot.countryCode] : undefined;
+            const tracked = !!signal;
+            const dimmed = tracked && !visibleCodes.has(dot.countryCode!);
 
-          <Geographies geography={GEO_URL}>
-            {({ geographies }) =>
-              geographies.map((geo) => {
-                const code = NUMERIC_TO_CODE[geo.id as string];
-                const signal = code ? signalByCode[code] : undefined;
-                const tracked = !!signal;
-                const dimmed = tracked && !visibleCodes.has(code!);
-
-                const fillId = tracked && !dimmed
-                  ? `dots-${code}`
-                  : "dots-land";
-
-                return (
-                  <Geography
-                    key={geo.rsmKey}
-                    geography={geo}
-                    fill={`url(#${fillId})`}
-                    stroke="#0a1628"
-                    strokeWidth={0.4}
-                    style={{
-                      default: { outline: "none", opacity: dimmed ? 0.25 : 1 },
-                      hover:   { outline: "none", opacity: tracked ? 0.85 : 0.7 },
-                      pressed: { outline: "none" },
-                    }}
-                  />
-                );
-              })
-            }
-          </Geographies>
-
-          {/* Markers — circle + country code label at centroid */}
-          {signals.map((s) => {
-            const coords = CENTROIDS[s.country_code];
-            if (!coords) return null;
-            const dimmed = !visibleCodes.has(s.country_code);
-            const r = 3 + (s.market_intensity / maxIntensity) * 5;
+            const fill = tracked && !dimmed
+              ? heatColor(normalize(signal!.market_intensity))
+              : "#1e3352";
 
             return (
-              <Marker
-                key={s.country_code}
-                coordinates={coords}
-                onMouseEnter={(e: React.MouseEvent) => {
-                  const rect = (e.currentTarget as SVGElement)
-                    .closest("svg")!
-                    .getBoundingClientRect();
-                  setTooltip({
-                    x: e.clientX - rect.left,
-                    y: e.clientY - rect.top,
-                    signal: s,
-                  });
-                }}
-                onMouseLeave={() => setTooltip(null)}
-              >
-                <circle
-                  r={r}
-                  fill={dimmed ? "transparent" : heatColor(s.market_intensity)}
-                  stroke={dimmed ? "transparent" : "rgba(0,0,0,0.4)"}
-                  strokeWidth={0.8}
-                  opacity={dimmed ? 0 : 0.9}
-                  style={{ cursor: "pointer", transition: "opacity 0.3s" }}
-                />
-                {!dimmed && s.market_intensity >= 15 && (
-                  <text
-                    y={-r - 2}
-                    textAnchor="middle"
-                    fontSize={6}
-                    fill="#cbd5e1"
-                    style={{ pointerEvents: "none", userSelect: "none" }}
-                  >
-                    {s.country_code}
-                  </text>
-                )}
-              </Marker>
+              <circle
+                key={i}
+                cx={dot.x}
+                cy={dot.y}
+                r={DOT_R}
+                fill={fill}
+                opacity={dimmed ? 0.2 : 1}
+                style={{ cursor: tracked ? "pointer" : "default" }}
+                onMouseEnter={
+                  tracked && signal
+                    ? (e) => {
+                        const rect = (e.currentTarget as SVGElement)
+                          .closest("svg")!
+                          .getBoundingClientRect();
+                        setTooltip({
+                          x: e.clientX - rect.left,
+                          y: e.clientY - rect.top,
+                          signal: signal!,
+                        });
+                      }
+                    : undefined
+                }
+                onMouseMove={
+                  tracked && signal
+                    ? (e) => {
+                        const rect = (e.currentTarget as SVGElement)
+                          .closest("svg")!
+                          .getBoundingClientRect();
+                        setTooltip({
+                          x: e.clientX - rect.left,
+                          y: e.clientY - rect.top,
+                          signal: signal!,
+                        });
+                      }
+                    : undefined
+                }
+                onMouseLeave={tracked ? () => setTooltip(null) : undefined}
+              />
             );
           })}
-        </ComposableMap>
+        </svg>
 
         {/* Floating tooltip */}
         {tooltip && (
@@ -358,7 +348,7 @@ export function GeoHeatmap() {
                 <span className="text-slate-400">Intensity</span>
                 <span
                   className="font-bold"
-                  style={{ color: heatColor(tooltip.signal.market_intensity) }}
+                  style={{ color: heatColor(normalize(tooltip.signal.market_intensity)) }}
                 >
                   {tooltip.signal.market_intensity.toFixed(0)}
                 </span>
@@ -422,14 +412,14 @@ export function GeoHeatmap() {
                         <div
                           className="h-full rounded-full"
                           style={{
-                            width: `${s.market_intensity}%`,
-                            background: heatColor(s.market_intensity),
+                            width: `${normalize(s.market_intensity)}%`,
+                            background: heatColor(normalize(s.market_intensity)),
                           }}
                         />
                       </div>
                       <span
                         className="w-6 text-right font-mono font-semibold"
-                        style={{ color: heatColor(s.market_intensity) }}
+                        style={{ color: heatColor(normalize(s.market_intensity)) }}
                       >
                         {s.market_intensity.toFixed(0)}
                       </span>
