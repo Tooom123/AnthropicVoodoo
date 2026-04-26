@@ -736,6 +736,62 @@ async def run_report_stream(
 
 
 # ---------------------------------------------------------------------------
+# Video brief endpoint — brainrot video ad concept from cached GameDNA
+# ---------------------------------------------------------------------------
+
+from app.creative.video_brief import (  # noqa: E402
+    VideoAdConcept,
+    VideoAdResult,
+    generate_video_concept,
+    generate_scenario_video,
+)
+
+
+def _load_game_dna(game_name: str):
+    """Shared helper: load GameDNA from the most recent cached report."""
+    from app.models import HookLensReport  # noqa: PLC0415
+
+    slug = game_name.strip().lower().replace(" ", "_")
+    candidates = list(REPORTS_CACHE_DIR.glob(f"report_{slug}*.json")) + list(
+        REPORTS_CACHE_DIR.glob(f"report_*{slug}*.json")
+    )
+    if not candidates:
+        raise HTTPException(
+            status_code=404,
+            detail=f"No cached report for '{game_name}'. Run the pipeline first.",
+        )
+    candidates.sort(key=lambda p: p.stat().st_mtime, reverse=True)
+    try:
+        report = HookLensReport.model_validate_json(candidates[0].read_text())
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Failed to parse report: {exc}") from exc
+    return report.target_game
+
+
+@app.get("/api/video-brief", response_model=VideoAdConcept)
+def get_video_brief(game_name: str = Query(...)) -> VideoAdConcept:
+    """Return (or generate) the brainrot VideoAdConcept for a game (LLM step only, fast)."""
+    if not game_name.strip():
+        raise HTTPException(status_code=400, detail="game_name is required")
+    dna = _load_game_dna(game_name)
+    return generate_video_concept(dna)
+
+
+@app.post("/api/video-brief/generate", response_model=VideoAdResult)
+def generate_video(game_name: str = Query(...)) -> VideoAdResult:
+    """Trigger Scenario video generation for the brainrot concept and return the video URL.
+
+    This is the slow step (Veo 3 takes 2-5 min). The result is disk-cached
+    so subsequent calls return immediately.
+    """
+    if not game_name.strip():
+        raise HTTPException(status_code=400, detail="game_name is required")
+    dna = _load_game_dna(game_name)
+    concept = generate_video_concept(dna)
+    return generate_scenario_video(concept)
+
+
+# ---------------------------------------------------------------------------
 # Voodoo catalog endpoints — power the "analyze a Voodoo title" picker
 # ---------------------------------------------------------------------------
 

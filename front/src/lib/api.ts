@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import type { Creative, CompetitorGame } from "@/data/sample";
-import type { HookLensReport, ReportSummary } from "@/types/hooklens";
+import type { HookLensReport, ReportSummary, VideoAdConcept, VideoAdResult } from "@/types/hooklens";
 
 const API_BASE = (import.meta.env.VITE_API_URL as string | undefined) ?? "http://localhost:8000";
 
@@ -131,5 +131,27 @@ export function useReportList() {
     queryKey: ["reports"],
     queryFn: () => apiFetch<ReportSummary[]>("/api/reports"),
     staleTime: 60 * 1000,
+  });
+}
+
+/** Brainrot video ad concept — LLM step only, fast. */
+export function useVideoBrief(gameName: string | undefined) {
+  return useQuery<VideoAdConcept>({
+    queryKey: ["video-brief", gameName],
+    queryFn: () => apiFetch<VideoAdConcept>("/api/video-brief", { game_name: gameName }),
+    enabled: !!gameName,
+    staleTime: Infinity,
+  });
+}
+
+/** Trigger Scenario video generation (slow — 2-5 min). Returns video_url when done. */
+export function useGenerateVideo(gameName: string | undefined, enabled: boolean) {
+  return useQuery<VideoAdResult>({
+    queryKey: ["video-generate", gameName],
+    queryFn: () =>
+      apiFetch<VideoAdResult>("/api/video-brief/generate", { game_name: gameName }),
+    enabled: !!gameName && enabled,
+    staleTime: Infinity,
+    retry: false,
   });
 }
