@@ -259,6 +259,165 @@ def call_scenario_custom(
     }
 
 
+def call_scenario_video(
+    *,
+    model_id: str,
+    image_paths: list[Path],
+    prompt: str | None = None,
+    label: str = "video",
+    timeout_s: float = 720.0,  # video gen is slow (1-5 min typical)
+) -> tuple[str, dict]:
+    """Generate a video via Scenario's custom endpoint for video models.
+
+    Supports two shapes today:
+
+    - **Sequence-to-video** (e.g. ``model_scenario-image-seq-to-video``):
+      pass 2-5 keyframe images as ``image_paths`` (uploaded as Scenario
+      assets first). Optional ``prompt`` adds a textual transition hint.
+    - **Image-to-video** (e.g. ``model_kling-v2-6-i2v-pro``,
+      ``model_kling-o1-i2v``): pass a single image_path. Prompt is
+      typically required for these.
+
+    Returns ``(video_url, metadata_dict)``. The video URL points at a
+    Scenario CDN-hosted mp4 with a signed expiration ~6 months out.
+
+    On timeout, falls back to a Picsum stub so the caller doesn't crash.
+    Cached on disk under ``data/cache/scenario/`` keyed by
+    (model_id, image hashes, prompt).
+    """
+    if not image_paths:
+        raise ValueError("call_scenario_video requires at least one image_path")
+
+    image_hashes = [
+        hashlib.sha256(p.read_bytes()).hexdigest()[:16] for p in image_paths
+    ]
+    cache_key = {
+        "p": prompt or "",
+        "m": model_id,
+        "endpoint": "video",
+        "frames": image_hashes,
+    }
+    cache_path = DEFAULT_CACHE_DIR / f"{label}__{hash_key(cache_key)}.json"
+    if cache_path.exists():
+        cached = json.loads(cache_path.read_text())
+        return cached["url"], cached
+
+    auth = _basic_auth_header()
+    if not auth:
+        url = _picsum_stub(f"{model_id}_{prompt or 'video'}")
+        result = {
+            "url": url,
+            "stub": True,
+            "model_id": model_id,
+            "prompt": prompt,
+            "mode": "video",
+        }
+        DEFAULT_CACHE_DIR.mkdir(parents=True, exist_ok=True)
+        cache_path.write_text(json.dumps(result, indent=2))
+        return url, result
+
+    # Upload each frame as a Scenario asset.
+    asset_ids: list[str] = []
+    for i, p in enumerate(image_paths):
+        asset_ids.append(upload_asset(p, name=f"vidframe_{label}_{i}"))
+
+    # Payload shape (probed against Scenario's actual API on 2026-04-26):
+    #   - sequence/keyframe models accept ``images: [assetId, ...]``
+    #     (validated empirically: ``imageIds``, ``imageAssetIds``,
+    #     ``frames``, ``keyframes`` all return 400 "Input images is required")
+    #   - single-image i2v (kling/veo/luma) accept ``image: assetId``
+    payload: dict = {}
+    if "seq" in model_id or "keyframe" in model_id or len(asset_ids) > 1:
+        payload["images"] = asset_ids
+        if prompt:
+            payload["prompt"] = prompt
+    else:
+        payload["image"] = asset_ids[0]
+        if prompt:
+            payload["prompt"] = prompt
+
+    headers = {"Content-Type": "application/json", "Authorization": auth}
+    log.info(
+        "Scenario CACHE MISS · POST /generate/custom/%s · video · %d frame(s)",
+        model_id,
+        len(asset_ids),
+    )
+    r = httpx.post(
+        f"{SCENARIO_BASE}/generate/custom/{model_id}",
+        headers=headers,
+        json=payload,
+        timeout=60.0,
+    )
+    r.raise_for_status()
+    job_id = r.json()["job"]["jobId"]
+
+    deadline = time.time() + timeout_s
+    while time.time() < deadline:
+        rr = httpx.get(
+            f"{SCENARIO_BASE}/jobs/{job_id}",
+            headers={"Authorization": auth},
+            timeout=30.0,
+        )
+        rr.raise_for_status()
+        body = rr.json()
+        status = body["job"]["status"]
+
+        if status == "success":
+            metadata = body["job"].get("metadata") or {}
+            asset_ids_out = metadata.get("assetIds") or []
+            if not asset_ids_out:
+                raise RuntimeError(
+                    f"Scenario video job {job_id} succeeded but no assetIds"
+                )
+            asset_id = asset_ids_out[0]
+            ar = httpx.get(
+                f"{SCENARIO_BASE}/assets/{asset_id}",
+                headers={"Authorization": auth},
+                timeout=30.0,
+            )
+            ar.raise_for_status()
+            ar_body = ar.json()
+            asset_url = (
+                (ar_body.get("asset") or {}).get("url")
+                or ar_body.get("url")
+                or ""
+            )
+            result = {
+                "url": asset_url,
+                "job_id": job_id,
+                "asset_id": asset_id,
+                "stub": False,
+                "model_id": model_id,
+                "prompt": prompt,
+                "mode": "video",
+                "input_frames": len(image_paths),
+            }
+            DEFAULT_CACHE_DIR.mkdir(parents=True, exist_ok=True)
+            cache_path.write_text(json.dumps(result, indent=2))
+            return asset_url, result
+
+        if status in ("failure", "canceled"):
+            raise RuntimeError(
+                f"Scenario video job {job_id} ended with status={status}"
+            )
+        time.sleep(5.0)  # video gen polls less aggressively
+
+    log.warning(
+        "Scenario video job %s timed out after %.0fs — returning stub.",
+        job_id,
+        timeout_s,
+    )
+    fallback_url = _picsum_stub(f"video_{model_id}")
+    return fallback_url, {
+        "url": fallback_url,
+        "stub": True,
+        "stub_reason": "scenario_video_timeout",
+        "job_id": job_id,
+        "model_id": model_id,
+        "mode": "video",
+    }
+
+
 def call_scenario(
     prompt: str,
     *,
