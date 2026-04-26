@@ -1,0 +1,203 @@
+{
+  "target_game": {
+    "app_id": "6458097001",
+    "name": "Archery Clash!",
+    "genre": "Action",
+    "sub_genre": "Archery",
+    "core_loop": "Engage in turn-based weapon duels, earn rewards, and collect/upgrade gear to progress through increasingly difficult levels.",
+    "audience_proxy": "Young adult males interested in competitive PvP, weapon upgrades, and stylized female characters.",
+    "visual_style": "3D stylized with vibrant colors, slightly cartoonish character models, and realistic lighting.",
+    "palette": {
+      "primary_hex": "#2A9DF4",
+      "secondary_hex": "#FFD700",
+      "accent_hex": "#32CD32",
+      "description": "Bright blue banners with vibrant yellow text and colorful item rarity backgrounds."
+    },
+    "key_mechanics": [
+      "aiming",
+      "shooting",
+      "upgrading",
+      "collecting",
+      "dueling"
+    ],
+    "character_present": true,
+    "ui_mood": "energetic/competitive",
+    "screenshot_signals": [
+      "3D environment",
+      "female protagonist",
+      "aiming trajectory",
+      "level progression",
+      "gear collection",
+      "health bars",
+      "weapon variety"
+    ]
+  },
+  "market_context": {
+    "category_id": "7012",
+    "category_name": "Puzzle",
+    "countries": [
+      "US",
+      "GB",
+      "DE",
+      "FR",
+      "JP",
+      "BR",
+      "KR"
+    ],
+    "networks": [
+      "TikTok",
+      "Facebook",
+      "Instagram"
+    ],
+    "period_start": "2026-04-01T00:00:00Z",
+    "period_end": "2026-04-01T00:00:00Z",
+    "num_advertisers_scanned": 10,
+    "num_creatives_analyzed": 16,
+    "num_phashion_groups": 16
+  },
+  "top_archetypes": [
+    {
+      "archetype_id": "satisfaction-in-game",
+      "label": "Satisfaction · in-game",
+      "member_creative_ids": [
+        "67a7083d6f23bd94"
+      ],
+      "centroid_hook": {
+        "summary": "Rapid-fire block placement filling a grid.",
+        "visual_action": "Green blocks are snapped into a grid until it is completely full.",
+        "text_overlay": "SMART GENIUS PSYCHOPATH",
+        "voiceover_transcript": null,
+        "emotional_pitch": "satisfaction"
+      },
+      "palette_hex": [
+        "#48B484",
+        "#F8E444",
+        "#4454BC"
+      ],
+      "common_mechanics": [],
+      "velocity_score": 0.861,
+      "derivative_spread": 1.0,
+      "freshness_days": 3.0,
+      "overall_signal_score": 3.194,
+      "rationale": "1 creatives across 1 unique advertisers, average age 3d (velocity source: sov). Hook representative: \"Rapid-fire block placement filling a grid.\""
+    },
+    {
+      "archetype_id": "curiosity-3d-render",
+      "label": "Curiosity · 3D-render",
+      "member_creative_ids": [
+        "9eb52675da998d86"
+      ],
+      "centroid_hook": {
+        "summary": "A suburban crime scene at night with police and forensic investigators.",
+        "visual_action": "Police tape is being set up and a forensic photographer flashes a camera at evidence.",
+        "text_overlay": null,
+        "voiceover_transcript": null,
+        "emotional_pitch": "curiosity"
+      },
+      "palette_hex": [
+        "#1a1a2e",
+        "#f4d03f",
+        "#5d4037"
+      ],
+      "common_mechanics": [],
+      "velocity_score": 1.119,
+      "derivative_spread": 1.0,
+      "freshness_days": 5.0,
+      "overall_signal_score": 2.298,
+      "rationale": "1 creatives across 1 unique advertisers, average age 5d (velocity source: sov). Hook representative: \"A suburban crime scene at night with police and forensic investigators.\""
+    },
+    {
+      "archetype_id": "other-animation",
+      "label": "Other · animation",
+      "member_creative_ids": [
+        "5d287f88cf4759b9"
+      ],
+      "centroid_hook": {
+        "summary": "High-energy character showcase of Goku in Ultra Instinct form.",
+        "visual_action": "Goku charging a blue energy sphere against a vibrant rainbow background with pulsing light effects.",
+        "text_overlay": "PLAY NOW!",
+        "voiceover_transcript": null,
+        "emotional_pitch": "other"
+      },
+      "palette_hex": [
+        "#00AEEF",
+        "#FFFFFF",
+        "#FF00FF"
+      ],
+      "common_mechanics": [],
+      "velocity_score": 1.745,
+      "derivative_spread": 1.0,
+      "freshness_days": 620.0,
+      "overall_signal_score": 1.06,
+      "rationale": "1 creatives across 1 unique advertisers, average age 620d (velocity source: sov). Hook representative: \"High-energy character showcase of Goku in Ultra Instinct form.\""
+    }
+  ],
+  "game_fit_scores": [
+    {
+      "archetype_id": "satisfaction-in-game",
+      "visual_match": 20,
+      "mechanic_match": 10,
+      "audience_match": 25,
+      "overall": 18,
+      "rationale": "This block-fill satisfaction hook is a casual puzzle/ASMR archetype that has almost zero overlap with Archery Clash's PvP archery dueling loop — there is no aiming, shooting, or character moment to anchor the hook, so users clicking through would face a hard expectation mismatch and likely tank D1 retention. The green/yellow/blue palette is coincidentally adjacent to the game's brand colors, but the flat grid aesthetic clashes with the 3D stylized characters and competitive UI mood. Skip unless the team wants to test a hybrid \"fill the bar / power up the shot\" reskin that grafts the satisfaction beat onto an actual archery payoff in seconds 3-6."
+    },
+    {
+      "archetype_id": "curiosity-3d-render",
+      "visual_match": 18,
+      "mechanic_match": 10,
+      "audience_match": 25,
+      "overall": 17,
+      "rationale": "Hard pass for Archery Clash. The dark noir crime-scene palette (#1a1a2e/brown) and investigative mystery framing clash directly with the game's bright blue/gold competitive PvP energy and stylized female-archer fantasy — there's no narrative bridge to aiming, dueling, or gear collection. Audience overlap is also weak: curiosity/whodunit viewers skew toward narrative puzzle and sim players, not the young-male PvP shooter crowd. Only worth testing if the team can radically reskin the hook (e.g., archer investigating the scene, then drawing a bow), otherwise skip."
+    },
+    {
+      "archetype_id": "other-animation",
+      "visual_match": 42,
+      "mechanic_match": 25,
+      "audience_match": 55,
+      "overall": 32,
+      "rationale": "The bright blue/high-energy palette and young-male anime audience have some surface overlap with Archery Clash!'s competitive PvP demo, but a Goku Ultra Instinct charge-up has zero connection to aiming/shooting/dueling mechanics and would mislead installs into a bait-and-switch experience. Major frictions: IP/legal risk using Goku likeness, no archery or trajectory hook, and the install intent skews toward anime ARPG fans rather than skill-shot duelers. Skip unless reworked into an original anime-styled archer character showcase that retains the rainbow VFX energy but swaps the charge-sphere for a bow-draw payoff."
+    }
+  ],
+  "final_variants": [
+    {
+      "brief": {
+        "archetype_id": "other-animation",
+        "target_game_id": "6458097001",
+        "title": "Ultra Instinct Archer — Rainbow Charge Shot Showcase",
+        "hook_3s": "Anime-style archer pulls back the bowstring as a crackling blue energy arrow ignites against a pulsing rainbow sky.",
+        "scene_flow": [
+          "0-3s: Tight close-up on the female archer's eyes glowing electric blue, bowstring drawing back as cyan energy crackles around the arrowhead — rainbow light pulses behind her.",
+          "3-7s: Camera whips to over-the-shoulder aiming view; the signature Archery Clash! trajectory arc materializes in gold across a vibrant arena, locking onto a rival duelist's health bar.",
+          "7-11s: Release — arrow rips through frame in a streak of blue/yellow/green VFX, slow-mo impact shatters opponent shield, KO banner explodes on screen.",
+          "11-14s: Quick montage: rarity-coloured gear cards rain down, bow upgrade tier-up flash (+ATK), level progression bar fills.",
+          "14-15s: Hero archer strikes a victory pose against rainbow backdrop, CTA stamp lands."
+        ],
+        "visual_direction": "Lean into Archery Clash!'s 3D stylized cartoonish-but-realistically-lit look, then crank the saturation: bright #2A9DF4 energy auras around the bow, #FFD700 trajectory arc and damage numbers, #32CD32 rarity glows on dropped gear. Rainbow gradient skybox borrowed from the anime archetype but grounded in the game's existing arena geometry, banners, and HUD chrome. Energetic/competitive pacing — fast cuts, screen-shake on release, anime-style speed lines on the arrow streak. Female protagonist stays on-model with current in-game character, no Goku likeness.",
+        "text_overlays": [
+          "UNLEASH ULTRA AIM",
+          "LOCK ON 🎯",
+          "PERFECT SHOT!",
+          "+LEGENDARY BOW",
+          "CAN YOU WIN THE DUEL?"
+        ],
+        "cta": "PLAY NOW!",
+        "rationale": "Voodoo's current Archery Clash! rotation is dominated by silent playables and a self-aware \"I paid for this ad\" video — there is zero high-energy anime/VFX character-showcase angle in their mix, despite the audience skewing young male anime-adjacent. This brief imports the trending rainbow charge-up hook from the market scan but legally reskins it onto the game's own female archer with a bow-draw payoff, solving the IP risk while filling the showcase gap. UA should A/B this against the existing playable-heavy lineup on Applovin/Admob to capture anime-leaning installs the current creatives miss.",
+        "scenario_prompts": [
+          "Hero frame, aspect 9:16: in-game moment from Archery Clash!, stylized female archer protagonist at full bowstring draw in over-the-shoulder duel stance, glowing electric blue (#2A9DF4) energy crackling along a nocked arrow, golden (#FFD700) parabolic aiming trajectory arc projecting toward an opponent silhouette across a colorful PvP arena, vibrant green (#32CD32) rarity glow on equipped bow, authentic Archery Clash! HUD with health bars top-left and right, turn indicator, gear slots, pulsing rainbow gradient skybox behind, 3D stylized with vibrant colors, slightly cartoonish character models, and realistic lighting, on-screen text 'UNLEASH ULTRA AIM' in bold yellow #FFD700 with blue #2A9DF4 outline",
+          "Storyboard frame, aspect 9:16: in-game Archery Clash! impact moment, blue (#2A9DF4) energy arrow striking opponent duelist mid-arena, shattered shield VFX, large yellow (#FFD700) 'PERFECT SHOT!' damage callout, green (#32CD32) critical-hit number popping, opponent health bar draining red, signature game HUD chrome intact with turn timer and gear icons, rainbow light rays in background, 3D stylized with vibrant colors, slightly cartoonish character models, and realistic lighting, on-screen text 'PERFECT SHOT!' in bold #FFD700",
+          "Storyboard frame, aspect 9:16: Archery Clash! post-victory loot reveal, three gear cards fanned out with rarity backgrounds in #2A9DF4 blue, #FFD700 gold, and #32CD32 green, legendary bow card center with upgrade arrow +1 tier, confetti VFX, level progression bar filling on top, authentic in-game results screen UI with XP bar and reward chest, female archer protagonist celebrating in background on the arena platform, 3D stylized with vibrant colors, slightly cartoonish character models, and realistic lighting, on-screen text '+LEGENDARY BOW' in bold #FFD700"
+        ]
+      },
+      "hero_frame_path": "https://cdn.cloud.scenario.com/assets-transform/asset_edBx4nVs7qBu8pvX14BMK3CM?p=100&Policy=eyJTdGF0ZW1lbnQiOlt7IlJlc291cmNlIjoiaHR0cHM6Ly9jZG4uY2xvdWQuc2NlbmFyaW8uY29tL2Fzc2V0cy10cmFuc2Zvcm0vYXNzZXRfZWRCeDRuVnM3cUJ1OHB2WDE0Qk1LM0NNP3A9MTAwKiIsIkNvbmRpdGlvbiI6eyJEYXRlTGVzc1RoYW4iOnsiQVdTOkVwb2NoVGltZSI6MTc3ODE5ODM5OX19fV19&Key-Pair-Id=K36FIAB9LE2OLR&Signature=vBNKOlN4pwjXset33m3dncnmFPG7itycYhOBB9W8stiv5gH5FP12hVygLIDivBELgzUq74D0RVJlSynmaAgUyO1v1ZIUw-9tojRhz4qXQuACy9Qbx1lRSbTgTK7ivqRop%7E2Ki-vCuNndS35TnDVU4ncUOSah1B8-EgjrRIo4jLdBUYDIrbO%7EiZoAT2oB6-vEUmVpa6Y57Pjjd-KfpzEYk56FWy3jo1lK-fJJiCAFk0skOPcB9YCjvrxCgquy3zZhw0-Dr24xm3ejVBY9vOfkpH58blT-c%7EblYoaxWkfIyTOB-OrPcs7MtwiG0X-4ImIiH6lmoNn4GbZAcwXxdbccwA__",
+      "storyboard_paths": [
+        "https://cdn.cloud.scenario.com/assets-transform/asset_WdiKnDgQ6yzjWzxHefbCTRW3?p=100&Policy=eyJTdGF0ZW1lbnQiOlt7IlJlc291cmNlIjoiaHR0cHM6Ly9jZG4uY2xvdWQuc2NlbmFyaW8uY29tL2Fzc2V0cy10cmFuc2Zvcm0vYXNzZXRfV2RpS25EZ1E2eXpqV3p4SGVmYkNUUlczP3A9MTAwKiIsIkNvbmRpdGlvbiI6eyJEYXRlTGVzc1RoYW4iOnsiQVdTOkVwb2NoVGltZSI6MTc3ODE5ODM5OX19fV19&Key-Pair-Id=K36FIAB9LE2OLR&Signature=P3DrFDSGJr4RZGUnx%7EYYbPyleUbFY%7EMN05lEfl5x3W13%7ENc1WFlwFoLB6fJE53MXkjDjZ2yP714H6d0oCZopVs3nE2o7Ihl2IBeTASm1Z6hHKTUdM2bZmRB3McbxHn0UUKO7V9HnB2fzfWGGdQbdR408s%7EYYwIGgETfMFCAk04paOpwtaBHCi0lfOZ99bkDjzD52youUt55EWYz3zTKT1lin7FVjDAZOPqC26Mg1jtZuTl1JhJRVuUr60GtZO2PEeiGHtqUCrDk22c43NiGs5lU19DkGyrBvWyBmstXf19gqBDcsgEW7CHJtcpB6P2aQbLyPN8hZRhTAlw5E7Q0ghg__",
+        "https://cdn.cloud.scenario.com/assets-transform/asset_G97JJP3aynzTztwByE5EkFx7?p=100&Policy=eyJTdGF0ZW1lbnQiOlt7IlJlc291cmNlIjoiaHR0cHM6Ly9jZG4uY2xvdWQuc2NlbmFyaW8uY29tL2Fzc2V0cy10cmFuc2Zvcm0vYXNzZXRfRzk3SkpQM2F5bnpUenR3QnlFNUVrRng3P3A9MTAwKiIsIkNvbmRpdGlvbiI6eyJEYXRlTGVzc1RoYW4iOnsiQVdTOkVwb2NoVGltZSI6MTc3ODE5ODM5OX19fV19&Key-Pair-Id=K36FIAB9LE2OLR&Signature=SQHzbrk71jv66MXmCi3N4XoqfUfshRKe7GZJqIH2pztPQgyGP4%7ERWwuKt1d2PE5MFnd62Vhw5mJBEhyXcMn7RTi8QHPXqqrgSWyngVIeCXljpWkL6Z0IK-eii-iqpWnnPNozGCI0R-eksiCBXDYsaoGARbq%7EOzpj8V9sgfD9DBfacrZD-dzxT-zcLzq28pDQkWpTvFZxpo2diWatsjYN1pV2ZLkS0PBWYPZoJdSCjBVga8loBSLZpGk36vERGd%7EYMqRzzp4dtjqjEPdJ9mYoTi15-EGYx%7EUpaHYjdbdBvZm0S%7EGUXmV7mAq061vEQcLMkZs9DceYagShoSeb66PXYQ__"
+      ],
+      "test_priority": 1,
+      "test_priority_rationale": "signal_score=1.06 × game_fit=32/100 ⇒ priority=0.34"
+    }
+  ],
+  "pipeline_duration_seconds": 494.9412393320017,
+  "total_cost_usd": 0.024006,
+  "generated_at": "2026-04-26T05:40:54.289444Z"
+}

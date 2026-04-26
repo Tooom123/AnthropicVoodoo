@@ -1,0 +1,305 @@
+{
+  "target_game": {
+    "app_id": "1423046460",
+    "name": "Paper.io 2",
+    "genre": "Arcade",
+    "sub_genre": ".io",
+    "core_loop": "Draw trails to capture territory, expand your zone, and eliminate opponents by crossing their paths.",
+    "audience_proxy": "Broad casual audience, appealing to both male and female players across a wide age range (10-35) looking for quick, competitive bursts.",
+    "visual_style": "Vibrant, minimalist 3D top-down with bright, solid colors.",
+    "palette": {
+      "primary_hex": "#FFD700",
+      "secondary_hex": "#00BFFF",
+      "accent_hex": "#FF00FF",
+      "description": "Bright, high-contrast primary colors with neon accents."
+    },
+    "key_mechanics": [
+      "drawing-trails",
+      "capturing-territory",
+      "dodging-enemies",
+      "collecting-items"
+    ],
+    "character_present": true,
+    "ui_mood": "energetic/competitive",
+    "screenshot_signals": [
+      "progress-bar",
+      "kill-feed-text",
+      "bonus-level-screen",
+      "collectible-coins",
+      "collectible-gems",
+      "player-avatars",
+      "territory-colors"
+    ]
+  },
+  "market_context": {
+    "category_id": "7012",
+    "category_name": "Puzzle",
+    "countries": [
+      "US",
+      "GB",
+      "DE",
+      "FR",
+      "JP",
+      "BR",
+      "KR"
+    ],
+    "networks": [
+      "TikTok",
+      "Facebook",
+      "Instagram"
+    ],
+    "period_start": "2026-04-01T00:00:00Z",
+    "period_end": "2026-04-01T00:00:00Z",
+    "num_advertisers_scanned": 10,
+    "num_creatives_analyzed": 10,
+    "num_phashion_groups": 10
+  },
+  "top_archetypes": [
+    {
+      "archetype_id": "satisfaction-mixed",
+      "label": "Satisfaction · mixed",
+      "member_creative_ids": [
+        "5ba7458dea1165c1"
+      ],
+      "centroid_hook": {
+        "summary": "High-energy POV of a player rushing home to play the game.",
+        "visual_action": "A person in a black hoodie enters a house and performs a backflip onto a bed while holding a tablet.",
+        "text_overlay": "POV: When I got home, I opened Tetris Block Party.",
+        "voiceover_transcript": null,
+        "emotional_pitch": "satisfaction"
+      },
+      "palette_hex": [
+        "#7B2CBF",
+        "#FFD700",
+        "#FFFFFF"
+      ],
+      "common_mechanics": [],
+      "velocity_score": 0.3,
+      "derivative_spread": 1.0,
+      "freshness_days": 100.0,
+      "overall_signal_score": 0.545,
+      "rationale": "1 creatives across 1 unique advertisers, average age 100d. Hook representative: \"High-energy POV of a player rushing home to play the game.\""
+    },
+    {
+      "archetype_id": "satisfaction-in-game",
+      "label": "Satisfaction · in-game",
+      "member_creative_ids": [
+        "bdf6fd7b1032fa14"
+      ],
+      "centroid_hook": {
+        "summary": "A hand moves colorful buses in a crowded lot to clear traffic while asking a question about relaxation.",
+        "visual_action": "A hand with a stylus interacts with a grid of buses, moving them one by one to clear a path.",
+        "text_overlay": "Hey! Played a game that Actually makes you Feel relaxed?",
+        "voiceover_transcript": "Hey! Have you ever played a game that actually makes you feel relaxed?",
+        "emotional_pitch": "satisfaction"
+      },
+      "palette_hex": [
+        "#F0F4F8",
+        "#FFFFFF",
+        "#FF4D4D"
+      ],
+      "common_mechanics": [],
+      "velocity_score": 0.244,
+      "derivative_spread": 1.0,
+      "freshness_days": 123.0,
+      "overall_signal_score": 0.509,
+      "rationale": "1 creatives across 1 unique advertisers, average age 123d. Hook representative: \"A hand moves colorful buses in a crowded lot to clear traffic while asking a que\""
+    },
+    {
+      "archetype_id": "fail-in-game",
+      "label": "Fail · in-game",
+      "member_creative_ids": [
+        "0f1d747b3e7d863f"
+      ],
+      "centroid_hook": {
+        "summary": "Challenging puzzle gameplay with immediate failure.",
+        "visual_action": "A hand icon attempts to move buses in a crowded lot, resulting in multiple collisions and a 'fail' sound effect.",
+        "text_overlay": "WHY THIS LEVEL IS SO HARD, CAN YOU WIN?",
+        "voiceover_transcript": null,
+        "emotional_pitch": "fail"
+      },
+      "palette_hex": [
+        "#808080",
+        "#FFFFFF",
+        "#4CAF50"
+      ],
+      "common_mechanics": [],
+      "velocity_score": 0.116,
+      "derivative_spread": 1.0,
+      "freshness_days": 258.0,
+      "overall_signal_score": 0.426,
+      "rationale": "1 creatives across 1 unique advertisers, average age 258d. Hook representative: \"Challenging puzzle gameplay with immediate failure.\""
+    },
+    {
+      "archetype_id": "curiosity-animation",
+      "label": "Curiosity · animation",
+      "member_creative_ids": [
+        "0d364815e2ca3d52"
+      ],
+      "centroid_hook": {
+        "summary": "A cross-section reveal of a secret underground bunker beneath the Eiffel Tower.",
+        "visual_action": "The scene pans down from the landmark to show a detailed subterranean living space.",
+        "text_overlay": null,
+        "voiceover_transcript": null,
+        "emotional_pitch": "curiosity"
+      },
+      "palette_hex": [
+        "#4A5D6A",
+        "#8B7355",
+        "#2F3E46"
+      ],
+      "common_mechanics": [],
+      "velocity_score": 0.092,
+      "derivative_spread": 1.0,
+      "freshness_days": 327.0,
+      "overall_signal_score": 0.41,
+      "rationale": "1 creatives across 1 unique advertisers, average age 327d. Hook representative: \"A cross-section reveal of a secret underground bunker beneath the Eiffel Tower.\""
+    },
+    {
+      "archetype_id": "curiosity-3d-render",
+      "label": "Curiosity · 3D-render",
+      "member_creative_ids": [
+        "a501f1d09aa3b810"
+      ],
+      "centroid_hook": {
+        "summary": "A cat jumps on a keyboard, causing a man to fall back in his chair.",
+        "visual_action": "A ginger cat leaps onto a desk and keyboard, startling a man who falls backward in his office chair.",
+        "text_overlay": "Gardenscapes",
+        "voiceover_transcript": null,
+        "emotional_pitch": "curiosity"
+      },
+      "palette_hex": [
+        "#D96C45",
+        "#4A90E2",
+        "#76B900"
+      ],
+      "common_mechanics": [],
+      "velocity_score": 0.079,
+      "derivative_spread": 1.0,
+      "freshness_days": 380.0,
+      "overall_signal_score": 0.401,
+      "rationale": "1 creatives across 1 unique advertisers, average age 380d. Hook representative: \"A cat jumps on a keyboard, causing a man to fall back in his chair.\""
+    }
+  ],
+  "game_fit_scores": [
+    {
+      "archetype_id": "satisfaction-mixed",
+      "visual_match": 35,
+      "mechanic_match": 15,
+      "audience_match": 55,
+      "overall": 30,
+      "rationale": "This live-action \"POV rushing home\" hook shows zero gameplay and explicitly references a different title (Tetris Block Party), which is a hard friction — Paper.io 2's UA historically converts on fast, readable territory-capture gameplay loops, not lifestyle skits. The palette overlaps only on #FFD700 and the hoodie/bedroom aesthetic clashes with the bright, minimalist 3D top-down look. Audience skew (teen/young adult casual) is plausibly compatible, but the cluster is tiny (n=1, single advertiser) and unproven — only worth testing if reshot with Paper.io 2 gameplay swapped into the tablet, otherwise skip."
+    },
+    {
+      "archetype_id": "satisfaction-in-game",
+      "visual_match": 25,
+      "mechanic_match": 20,
+      "audience_match": 55,
+      "overall": 28,
+      "rationale": "This is a Bus Jam / parking-puzzle satisfaction hook — its slow, deliberate \"relax\" pitch directly contradicts Paper.io 2's energetic, competitive arcade DNA, and the muted white/red palette clashes with the game's neon primaries. Mechanically there is no overlap: trail-drawing/territory capture cannot be faked into a grid-clearing puzzle without misleading-ad risk and poor IPM post-install. Only the casual broad audience loosely overlaps; recommend skipping this archetype and instead testing satisfying-territory-fill or near-miss tension hooks that stay native to the .io loop."
+    },
+    {
+      "archetype_id": "fail-in-game",
+      "visual_match": 20,
+      "mechanic_match": 15,
+      "audience_match": 45,
+      "overall": 22,
+      "rationale": "The \"fail · in-game\" hook is built around a hand-driven traffic/parking puzzle with collision fails — a fundamentally different mechanic from Paper.io 2's trail-drawing territory capture, so the gameplay shown would mislead users and tank IPM/retention. The muted gray/white/green palette also clashes hard with Paper.io's bright primary + neon accent identity, and there's no character or top-down arena read. Audience has partial overlap (broad casual puzzle players), but recommend NOT adapting this archetype as-is; if the team wants to test a \"fail\" hook, rebuild it natively around a near-miss trail crossing or a player getting cut off mid-capture."
+    },
+    {
+      "archetype_id": "curiosity-animation",
+      "visual_match": 12,
+      "mechanic_match": 8,
+      "audience_match": 35,
+      "overall": 15,
+      "rationale": "Hard pass for Paper.io 2. The muted earth-tone palette (#4A5D6A, #8B7355, #2F3E46) and architectural cross-section storytelling are the polar opposite of the game's bright neon top-down territory grab — there is no plausible bridge from \"secret bunker reveal\" to drawing trails and capturing zones, so the hook would massively mis-set expectations and tank IPM/D1. Additionally the archetype is a single-creative cluster (327d old, velocity 0.092), so there's no market validation to justify the production cost of force-fitting it."
+    },
+    {
+      "archetype_id": "curiosity-3d-render",
+      "visual_match": 20,
+      "mechanic_match": 10,
+      "audience_match": 45,
+      "overall": 22,
+      "rationale": "This is a live-action/3D-render slapstick skit borrowed from the Gardenscapes playbook — palette, character (real human + cat), and tone have zero overlap with Paper.io 2's bright, minimalist top-down arcade DNA. The hook also tells viewers nothing about drawing trails or capturing territory, so even if curiosity drives the click, install-to-engagement will collapse on a snackable .io loop. Skip unless you're willing to fund a custom shoot AND bolt on a clear gameplay payoff in seconds 3-6, which isn't justified by a single 380-day-old reference creative."
+    }
+  ],
+  "final_variants": [
+    {
+      "brief": {
+        "archetype_id": "satisfaction-mixed",
+        "target_game_id": "1423046460",
+        "title": "POV: I Got Home and Opened Paper.io 2",
+        "hook_3s": "POV: backpack drops, phone unlocks, screen explodes with neon yellow territory swallowing the map.",
+        "scene_flow": [
+          "0-3s: Live-action POV — hand pushes open bedroom door, flops onto bed, phone lights up with Paper.io 2 icon glowing.",
+          "3-6s: Tap. Hard cut into the game — bright top-down arena, our yellow #FFD700 square bursts out of home base carving a clean trail.",
+          "6-10s: Quick montage of satisfying captures — sweeping a huge loop, slicing a cyan #00BFFF rival's trail, kill-feed pops, territory floods yellow.",
+          "10-13s: Greedy run across the map for the win — magenta #FF00FF rival closes in, last-second dodge, claim 80% of the board.",
+          "13-15s: Player on bed grins, phone tilts to camera showing victory screen, CTA slams in."
+        ],
+        "visual_direction": "Split-personality spot: gritty handheld live-action bookends (warm bedroom light, hoodie, tablet/phone POV) crashing into the hyper-clean Paper.io 2 world — vibrant minimalist 3D top-down, solid #FFD700 hero territory, #00BFFF and #FF00FF rivals, white grid floor. The contrast between messy real life and the crisp, high-contrast arcade arena IS the hook. Energetic competitive UI: progress bar, kill-feed flashes, coin pings. Cuts on the beat, punchy SFX, no filler frames.",
+        "text_overlays": [
+          "POV: I finally got home…",
+          "…and opened Paper.io 2",
+          "one more round 👀",
+          "87% of the map. MINE.",
+          "Can you beat my score?"
+        ],
+        "cta": "Play Free",
+        "rationale": "Voodoo's current Paper.io 2 rotation is 100% in-engine Unity/Admob gameplay cuts with no copy and no creator-style framing — this brief injects the trending live-action \"POV rushing home\" UGC hook the market scan flagged, but fixes the archetype's fatal flaw by swapping in real Paper.io 2 gameplay on the phone instead of referencing a competitor title. UA team: ship this as the UGC/lifestyle top-of-funnel test against the existing pure-gameplay control, same audience, expect stronger thumb-stop on TikTok/Reels placements where lo-fi POV outperforms clean capture footage.",
+        "scenario_prompts": [
+          "Hero frame, vertical 9:16 aspect ratio: extreme close-up over-the-shoulder of a teen's hand holding a phone on a messy bed, phone screen fills 70% of frame showing Paper.io 2 gameplay — vibrant minimalist 3D top-down with bright solid colors, bold #FFD700 yellow territory dominating a white grid arena, #00BFFF cyan and #FF00FF magenta rival trails, clean UI with progress bar, on-screen text overlay '…and opened Paper.io 2' in bold white sans-serif with drop shadow, warm bedroom bokeh background, high contrast, mobile-ad composition",
+          "Storyboard frame, vertical 9:16 aspect ratio: pure in-game shot, vibrant minimalist 3D top-down with bright solid colors, hero #FFD700 yellow square mid-sweep carving a massive loop across the arena, trailing line glowing, a #00BFFF cyan opponent and #FF00FF magenta opponent visible, kill-feed text in upper right, on-screen text overlay '87% of the map. MINE.' in chunky yellow stroked type, energetic competitive mood, crisp solid colors, no gradients",
+          "Storyboard frame, vertical 9:16 aspect ratio: live-action POV of a hoodie-wearing player flopping back on a bed grinning, phone held up toward camera showing Paper.io 2 victory screen filled with #FFD700 yellow territory and accents of #00BFFF and #FF00FF, vibrant minimalist 3D top-down game art visible on the screen, on-screen text overlay 'Can you beat my score?' in bold white, golden hour bedroom lighting, UGC selfie energy"
+        ]
+      },
+      "hero_frame_path": "https://cdn.cloud.scenario.com/assets-transform/asset_SsF6XDLvQfeFWQ4SqreL9TNm?p=100&Policy=eyJTdGF0ZW1lbnQiOlt7IlJlc291cmNlIjoiaHR0cHM6Ly9jZG4uY2xvdWQuc2NlbmFyaW8uY29tL2Fzc2V0cy10cmFuc2Zvcm0vYXNzZXRfU3NGNlhETHZRZmVGV1E0U3FyZUw5VE5tP3A9MTAwKiIsIkNvbmRpdGlvbiI6eyJEYXRlTGVzc1RoYW4iOnsiQVdTOkVwb2NoVGltZSI6MTc3ODE5ODM5OX19fV19&Key-Pair-Id=K36FIAB9LE2OLR&Signature=DR20GVXKkUH8rOxb-9NfjRIzANGODfNPy9jB89N0izYk4ICGvcrU0PDc3npJyVoEhbLjitGkE16vzKuQ817N0vUfShIQ6SldGAenWh84YZLASBDzZ2n9rr7YTOTtWVK4RnwQGFDqD3HTG67L%7EYzn68e1y6qRAWloOMlOeny71kDSzRXzBFLIMK7fyeywqbA5hSw3GPHtD62eUkdaTcs7z8H%7EzQYwfAPWAemBNLBvcFz9zmak3VRqz5rzYSYokuOcg1AFaV1zAo-h4bBMPk5Wbo3pf7Hr9gY5-npYGg9Epa72AUFHP9qderRtqpfoCmqUct28aPrAVXsNpiJym55-vw__",
+      "storyboard_paths": [
+        "https://cdn.cloud.scenario.com/assets-transform/asset_hUaADijYNwRUxf55U7hbuQTK?p=100&Policy=eyJTdGF0ZW1lbnQiOlt7IlJlc291cmNlIjoiaHR0cHM6Ly9jZG4uY2xvdWQuc2NlbmFyaW8uY29tL2Fzc2V0cy10cmFuc2Zvcm0vYXNzZXRfaFVhQURpallOd1JVeGY1NVU3aGJ1UVRLP3A9MTAwKiIsIkNvbmRpdGlvbiI6eyJEYXRlTGVzc1RoYW4iOnsiQVdTOkVwb2NoVGltZSI6MTc3ODE5ODM5OX19fV19&Key-Pair-Id=K36FIAB9LE2OLR&Signature=hcVvQB2fvHFgTwLsZzo4uYA49Its9W6ax5qmKHwr4O-KIug8Y0fuLGN6RWZ9vN--zBw9PbgdXgs%7Ep6MPqYAXwi%7Eb8jwv-mNvK%7EYoe3oaqe4h9lodys6oROVCifGw1EaHRdD29suWJTtM0HYWFL3f%7Eve9OysyE8kJc623c1BHleisx9u9-aoFM0wF6w0MrLAlystbEEl-qPdhJ2ezrD4NnbF8q2r2BmIWtm3%7EUpS1Qt5YAHgzkBNJ5VwlWs3q%7E58Wz7zNvo2Cc3g6Z72oJ5%7Egig0sFts%7E8AjVhfRvxhk3efu62iGhwG0tM0pJpuX9sfIP7tQS-DS0QTo1aS2MkZTAuw__",
+        "https://cdn.cloud.scenario.com/assets-transform/asset_rUoDNxLdxfQd323QJXnAfJke?p=100&Policy=eyJTdGF0ZW1lbnQiOlt7IlJlc291cmNlIjoiaHR0cHM6Ly9jZG4uY2xvdWQuc2NlbmFyaW8uY29tL2Fzc2V0cy10cmFuc2Zvcm0vYXNzZXRfclVvRE54TGR4ZlFkMzIzUUpYbkFmSmtlP3A9MTAwKiIsIkNvbmRpdGlvbiI6eyJEYXRlTGVzc1RoYW4iOnsiQVdTOkVwb2NoVGltZSI6MTc3ODE5ODM5OX19fV19&Key-Pair-Id=K36FIAB9LE2OLR&Signature=lOv8Sr2GOZ71svTsMEL6NOSvnufpGuStPCLIKmokNI5bzBmTdTZR%7EchcdtBnbDaYIX2Dcv2fraJhNXTe7wykJnVEWj5DkmwYpoFtpGeIk86Pe51Feklv%7EPFENyA5cx2o8mr6ZaG296nyipSTWJxr9lhnz0pwgOKQ7Q%7Edw2du8m90EEpvcKdZKc%7EBg%7EPYOuxVcG0%7EvzLLrwC3UukTylLvEbQTcGBNwCLn8CzmF7oZW3A9gZNRy5MRfxEhkFu8WCsM9%7EMh28V5zUpvHowtsk6hcRvNpAIMT6zJMs8MgQ2Xu3Syp1w320cXOOIYBclvGLUVGlJ6X%7EbM2cATu2VbVbxkVg__"
+      ],
+      "test_priority": 1,
+      "test_priority_rationale": "signal_score=0.55 × game_fit=30/100 ⇒ priority=0.16"
+    },
+    {
+      "brief": {
+        "archetype_id": "satisfaction-in-game",
+        "target_game_id": "1423046460",
+        "title": "Oddly Satisfying Territory Fill — ASMR Paper.io",
+        "hook_3s": "A neon-yellow square slowly carves a perfect spiral into a deep blue grid — every snap of color triggers a crisp ASMR pop.",
+        "scene_flow": [
+          "0-3s: Top-down close-up of a tiny yellow cube tracing a clean magenta-edged trail across a pristine cyan board, ASMR 'snap' as the first chunk fills in.",
+          "3-7s: Camera pulls back slightly — player carves bigger and bigger loops, each fill triggering a satisfying color-pop and percentage counter ticking up (12%… 28%… 47%).",
+          "7-11s: Tension beat: a red enemy creeps toward the trail, near-miss dodge, then player loops back and ENGULFS the enemy's whole territory in one sweep — explosion of magenta confetti.",
+          "11-14s: Board is now 90% gold, percentage hits 100%, screen flashes with 'SO SATISFYING' overlay and a clean victory chime.",
+          "14-15s: CTA card with Paper.io 2 logo and 'Play Free' button pulse."
+        ],
+        "visual_direction": "Lean fully into Paper.io 2's vibrant minimalist 3D top-down DNA: glossy solid-color territories with soft drop shadows, the gold (#FFD700) player against deep cyan (#00BFFF) board, magenta (#FF00FF) trail edges that glow on contact. Slow, deliberate camera with micro-zooms on each fill — borrow the satisfying 'reveal' rhythm from the bus-jam archetype but expressed through territory paint, not grid-clearing. Crisp ASMR sound design (paper crinkles, soft pops, click of the percentage counter) replaces voiceover. No UI clutter — let the colors breathe.",
+        "text_overlays": [
+          "Ever played something this satisfying?",
+          "Watch the board fill up…",
+          "47% … 78% … 100%",
+          "SO SATISFYING 🤤",
+          "Can YOU finish the map?"
+        ],
+        "cta": "Play Free",
+        "rationale": "Voodoo's current Paper.io 2 rotation is all unlabeled Unity/Admob playables and videos with no satisfaction/ASMR angle — they're missing the trending 'oddly satisfying' hook that's dominating casual feeds. This brief adapts the satisfaction archetype natively (territory paint instead of bus-jam) so it stays truthful to the install experience while capturing a fresh emotional lane. UA should test against the existing competitive/tension creatives to see if calm-satisfying outperforms on female 25-35 and broad casual segments.",
+        "scenario_prompts": [
+          "Hero frame, aspect 9:16, top-down view of a glossy minimalist 3D game board, deep cyan (#00BFFF) territory background, a small golden yellow (#FFD700) cube character in the center trailing a glowing magenta (#FF00FF) ribbon that carves a perfect spiral, vibrant minimalist 3D top-down with bright solid colors, soft drop shadows, on-screen text overlay 'Ever played something THIS satisfying?' in bold rounded white sans-serif at the top, clean uncluttered composition, high contrast, mobile ad still",
+          "Storyboard frame, aspect 9:16, top-down 3D view of a game board roughly 70% filled with bright golden yellow (#FFD700) territory eating into deep cyan (#00BFFF) zones, magenta (#FF00FF) trail edges glowing, a tiny red enemy cube approaching the trail in the lower right, vibrant minimalist 3D top-down with bright solid colors, large on-screen text overlay 'SO SATISFYING 🤤' centered in chunky white font with subtle shadow, energetic but clean mobile ad frame",
+          "Storyboard frame, aspect 9:16, top-down 3D view of a fully captured game board, 100% bright golden yellow (#FFD700) territory with magenta (#FF00FF) confetti particles bursting outward and faint cyan (#00BFFF) edge glow, vibrant minimalist 3D top-down with bright solid colors, on-screen text overlay 'Can YOU finish the map?' in bold white rounded sans-serif at bottom above a glowing Play Free button, victory celebration mood, mobile portrait ad"
+        ]
+      },
+      "hero_frame_path": "https://cdn.cloud.scenario.com/assets-transform/asset_eJq645MvYQUrYy147uN2FuLo?p=100&Policy=eyJTdGF0ZW1lbnQiOlt7IlJlc291cmNlIjoiaHR0cHM6Ly9jZG4uY2xvdWQuc2NlbmFyaW8uY29tL2Fzc2V0cy10cmFuc2Zvcm0vYXNzZXRfZUpxNjQ1TXZZUVVyWXkxNDd1TjJGdUxvP3A9MTAwKiIsIkNvbmRpdGlvbiI6eyJEYXRlTGVzc1RoYW4iOnsiQVdTOkVwb2NoVGltZSI6MTc3ODE5ODM5OX19fV19&Key-Pair-Id=K36FIAB9LE2OLR&Signature=ti%7EtV8UfYT6Ep%7EV4vqbJBnv-Vi6dPGEF4VIB8ERFi3bnO5xEmNyK9JNFTImaTwq2PcyT88tS-P32UbQaXbbewYBVJQ1PcsO1GT%7EtK0ZyGYCyQipWDbJ-9Ku7enrmH7uv6pq0l%7Ei%7EMFIqFwWWhVJJ-ASGZHCNe5Jkc4I%7ELgEVTsj0Br7NBrHO4jYkllovJZm2dAy5tpOhePlBwU8k3fsRxK4TclYTUyAaZED6zz2VRU1EIup0g8qDlP%7EaF6K4j2bDO5zUpFcjtvFKkJ7jp6QEH60jK5X4kTetSTcFt3lcysOTCH%7EpglM0jT-66bgiapMX8A5JCJ7AztY4Ly%7EHz4pleQ__",
+      "storyboard_paths": [
+        "https://cdn.cloud.scenario.com/assets-transform/asset_vUWUc3dQvTGeeaCfXWBZmzrH?p=100&Policy=eyJTdGF0ZW1lbnQiOlt7IlJlc291cmNlIjoiaHR0cHM6Ly9jZG4uY2xvdWQuc2NlbmFyaW8uY29tL2Fzc2V0cy10cmFuc2Zvcm0vYXNzZXRfdlVXVWMzZFF2VEdlZWFDZlhXQlptenJIP3A9MTAwKiIsIkNvbmRpdGlvbiI6eyJEYXRlTGVzc1RoYW4iOnsiQVdTOkVwb2NoVGltZSI6MTc3ODE5ODM5OX19fV19&Key-Pair-Id=K36FIAB9LE2OLR&Signature=Qgg0uKPO0EgHDZM4HYcmv3RBolb5JJlYJaKZJaOIgspzrN5cWxud38PXn%7ERW7Ll0w7PWpk1gL6CyoCGwYDkHwLhFHiLQLE45Ieo2A9FKRRn7k7kZDPki69KLMop9eXmEnPXNAJzAkQoaUIu-59ZoRcZaHuNlpn3WNTW5o-MM0xUbkkR%7E2GozZczhNAzFNG%7EvyqkQ1N3aRchMwBkUSj0qQ-aGmWhBcZvJUQCZHtSVunuFzeQbGS6ygpP11unYRSfQ%7Eh8UMDr2AQKivHUc19sk7scv%7ESwmoTterNN9uyGAFUOL3-AgBWdQZKrLeirB4FueUpAMcMPPtx49puA0ueEFOA__",
+        "https://cdn.cloud.scenario.com/assets-transform/asset_3VBA2NZf4MHvdCeJ4Rd53XRZ?p=100&Policy=eyJTdGF0ZW1lbnQiOlt7IlJlc291cmNlIjoiaHR0cHM6Ly9jZG4uY2xvdWQuc2NlbmFyaW8uY29tL2Fzc2V0cy10cmFuc2Zvcm0vYXNzZXRfM1ZCQTJOWmY0TUh2ZENlSjRSZDUzWFJaP3A9MTAwKiIsIkNvbmRpdGlvbiI6eyJEYXRlTGVzc1RoYW4iOnsiQVdTOkVwb2NoVGltZSI6MTc3ODE5ODM5OX19fV19&Key-Pair-Id=K36FIAB9LE2OLR&Signature=F1D948c8%7Eym0iUHFyA9Vl5m83C5e-ZZ%7EZx1oSZ44ekV4dGPz2VJz%7EiTM8%7EQ48wLuLNjo5eGyd5OK2XuDcYSmdS1blFwYP8M278EjJqfI2LqwSDA5ZGq38-C%7Emd6P472fKp5nqdXHJ9F3nhdJ1L7-8W2Ogj48hqByOt6e-DT96VwPP7QVYoe8qymanlI7peX3ThK2TdjN8nUUcY65kwbhnTiBGPReioKhvc0mlJYnrsKOLh9Ete1peJA%7EjH9K%7ExjtY9bzKwP68LN-nT8uqeYeD9F%7EsnWsLijwW0OhRpeMcpEei8BGVR-GgwE2uft0S67-DArwQhhsBNbROPm4oexNkw__"
+      ],
+      "test_priority": 2,
+      "test_priority_rationale": "signal_score=0.51 × game_fit=28/100 ⇒ priority=0.14"
+    }
+  ],
+  "pipeline_duration_seconds": 689.4517758739994,
+  "total_cost_usd": 0.015014,
+  "generated_at": "2026-04-25T22:48:45.802632Z"
+}

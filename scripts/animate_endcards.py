@@ -141,22 +141,45 @@ def animate_one(
     prompt: str,
     overwrite: bool,
     trim_seconds: float | None,
+    max_retries: int = 3,
+    base_backoff_s: float = 30.0,
 ) -> Path | None:
     out_mp4 = png.with_suffix(".mp4")
     if out_mp4.exists() and not overwrite:
-        print(f"  ↪ {png.name} → cached {out_mp4.name}")
+        # Skip cleanly — no Scenario call, no asset upload, no rate-limit
+        # exposure. Re-running the script after a 429 storm always picks
+        # up exactly the still-missing endcards.
+        print(f"  ↪ {png.name} → cached (skipped)")
         return out_mp4
 
-    print(f"  ✚ animating {png.name}")
-    try:
-        url, meta = call_scenario_video(
-            model_id=model,
-            image_paths=[png],
-            prompt=prompt,
-            label=f"endcard_anim_{png.stem}",
-        )
-    except Exception as exc:
-        print(f"      ✗ {png.name}: {exc}")
+    # Inline retry on Scenario's 429 (rate limit). The default tier
+    # caps concurrent video jobs at ~3-5, and a --all run easily hits
+    # that. Exponential backoff (30s, 60s, 120s) usually clears.
+    import time as _time
+    for attempt in range(1, max_retries + 1):
+        attempt_label = "" if attempt == 1 else f" (retry {attempt}/{max_retries})"
+        print(f"  ✚ animating {png.name}{attempt_label}")
+        try:
+            url, meta = call_scenario_video(
+                model_id=model,
+                image_paths=[png],
+                prompt=prompt,
+                label=f"endcard_anim_{png.stem}",
+            )
+            break
+        except Exception as exc:
+            msg = str(exc)
+            is_rate_limited = "429" in msg or "rate limit" in msg.lower()
+            if is_rate_limited and attempt < max_retries:
+                wait = base_backoff_s * (2 ** (attempt - 1))
+                print(f"      ⌛ Scenario 429; backing off {wait:.0f}s before retry…")
+                _time.sleep(wait)
+                continue
+            print(f"      ✗ {png.name}: {exc}")
+            return None
+    else:
+        # Loop completed without break — all retries exhausted.
+        print(f"      ✗ {png.name}: rate-limited after {max_retries} attempts")
         return None
 
     if meta.get("stub"):
@@ -231,6 +254,17 @@ def main() -> int:
         action="store_true",
         help="Keep the full untrimmed Scenario clip (overrides --trim-seconds).",
     )
+    parser.add_argument(
+        "--delay",
+        type=float,
+        default=8.0,
+        help=(
+            "Seconds of pause between consecutive Scenario calls (default: "
+            "8). Scenario's free tier caps concurrent video jobs at 3-5; "
+            "without a delay, a --all run quickly trips 429 errors. Set "
+            "to 0 to disable."
+        ),
+    )
     args = parser.parse_args()
 
     targets = _resolve_target_pngs(args)
@@ -242,10 +276,12 @@ def main() -> int:
     print(
         f"Animating {len(targets)} endcards via {args.model}"
         + (f" (trim → {trim:.1f}s)" if trim else " (untrimmed)")
+        + (f" · {args.delay:.0f}s between calls" if args.delay > 0 else "")
         + "…\n"
     )
+    import time as _time
     failed = 0
-    for png in targets:
+    for i, png in enumerate(targets):
         if animate_one(
             png,
             model=args.model,
@@ -254,6 +290,11 @@ def main() -> int:
             trim_seconds=trim,
         ) is None:
             failed += 1
+        # Spacing between calls — only matters when we actually called
+        # Scenario (cached skips return in <10ms anyway). Conservative
+        # 8s default keeps us well under any reasonable rate limit.
+        if args.delay > 0 and i < len(targets) - 1:
+            _time.sleep(args.delay)
 
     print(
         f"\n{'=' * 50}\n"

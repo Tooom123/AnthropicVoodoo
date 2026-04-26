@@ -892,14 +892,20 @@ def get_source_creatives(
 
     resolved_id = app_id
     if not resolved_id and game_name:
-        try:
-            from app.sources.sensortower import resolve_game
+        # Same fix as /api/report: scan cached reports by name first
+        # (handles dots / unicode / anything SensorTower chokes on)
+        # before falling back to the SensorTower resolver and finally
+        # the proto_<slug> shape.
+        resolved_id = _try_resolve_by_cached_name(game_name)
+        if not resolved_id:
+            try:
+                from app.sources.sensortower import resolve_game
 
-            meta = resolve_game(game_name)
-            resolved_id = meta.app_id
-        except Exception:
-            slug = (game_name or "").lower().replace(" ", "_").replace("-", "_")
-            resolved_id = f"proto_{slug}"
+                meta = resolve_game(game_name)
+                resolved_id = meta.app_id
+            except Exception:
+                slug = (game_name or "").lower().replace(" ", "_").replace("-", "_")
+                resolved_id = f"proto_{slug}"
 
     cache_path = REPORTS_CACHE_DIR / f"{resolved_id}_e2e.json"
     if not cache_path.exists():
@@ -928,6 +934,33 @@ def get_source_creatives(
     return out
 
 
+def _try_resolve_by_cached_name(game_name: str) -> str | None:
+    """Look for a cached HookLensReport whose ``target_game.name``
+    case-insensitively matches ``game_name``. Returns the app_id (the
+    file stem without ``_e2e``) on a hit, ``None`` otherwise.
+
+    This is the most reliable resolver for games with dots / unicode /
+    other characters that SensorTower's search endpoint mangles
+    (``aquapark.io`` was the trigger). Beats the SensorTower lookup
+    when we already analysed the game once — and we always have, as
+    that's how the report got cached in the first place.
+    """
+    if not REPORTS_CACHE_DIR.exists():
+        return None
+    needle = game_name.strip().lower()
+    if not needle:
+        return None
+    for path in REPORTS_CACHE_DIR.glob("*_e2e.json"):
+        try:
+            data = json.loads(path.read_text())
+        except (OSError, json.JSONDecodeError):
+            continue
+        cached_name = (data.get("target_game", {}).get("name") or "").lower()
+        if cached_name == needle:
+            return path.stem.removesuffix("_e2e")
+    return None
+
+
 @app.get("/api/report")
 def get_report(
     game_name: str | None = Query(None, description="Game name to resolve via SensorTower"),
@@ -950,16 +983,22 @@ def get_report(
 
     resolved_id = app_id
     if not resolved_id and game_name:
-        try:
-            from app.sources.sensortower import resolve_game
+        # Step 1: scan the reports cache for an exact name match — fast,
+        # offline, handles every game we've already analysed (including
+        # ones with dots/underscores/special chars in the name like
+        # "aquapark.io" that SensorTower's resolver chokes on).
+        resolved_id = _try_resolve_by_cached_name(game_name)
+        if not resolved_id:
+            try:
+                from app.sources.sensortower import resolve_game
 
-            meta = resolve_game(game_name)
-            resolved_id = meta.app_id
-        except Exception:
-            log.exception("resolve_game failed for %r", game_name)
-            # Fall back to slug-based lookup for prototype reports
-            slug = game_name.lower().replace(" ", "_").replace("-", "_")
-            resolved_id = f"proto_{slug}"
+                meta = resolve_game(game_name)
+                resolved_id = meta.app_id
+            except Exception:
+                log.exception("resolve_game failed for %r", game_name)
+                # Final fallback: slug-based lookup for prototype reports
+                slug = game_name.lower().replace(" ", "_").replace("-", "_")
+                resolved_id = f"proto_{slug}"
 
     cache_path = REPORTS_CACHE_DIR / f"{resolved_id}_e2e.json"
     if not cache_path.exists():
@@ -1760,6 +1799,15 @@ _VARIANT_VIDEO_MODEL = _os.environ.get(
     "SCENARIO_VARIANT_VIDEO_MODEL",
     "model_kling-o1-i2v",
 )
+# "rich" mode: Kling 2.6 Pro generates native synchronized audio per clip
+# (sfx + music + voice based on the brief's audio cues). Costs more
+# (~+15 CU/clip ≈ +$0.05) but gives diegetic SFX synced to the visual
+# events (whoosh on swipe, chime on combo, drop on absorption) which
+# OpenAI TTS / ElevenLabs alone can never match.
+_VARIANT_VIDEO_MODEL_RICH = _os.environ.get(
+    "SCENARIO_VARIANT_VIDEO_MODEL_RICH",
+    "model_kling-v2-6-i2v-pro",
+)
 _ENDCARDS_DIR = CACHE_DIR / "endcards"
 
 
@@ -1785,6 +1833,25 @@ class VariantVideoResponse(BaseModel):
     stub: bool
     """``True`` when one or more clips fell back to a Picsum placeholder
     (e.g. Scenario auth missing or job timed out). Frontend should warn."""
+
+    has_audio: bool = False
+    """``True`` when an audio overlay was applied to the final mp4."""
+
+
+class VariantVideoStatus(BaseModel):
+    """Lightweight existence check used by the React UI on Insights load.
+
+    Mirrors the fields of VariantVideoResponse but with ``exists`` so the
+    frontend can render a previously-rendered video instantly (no need
+    to re-trigger the 5-min generation just because the user navigated
+    away and came back).
+    """
+
+    exists: bool
+    video_url: str | None = None
+    duration_s: float = 0.0
+    has_audio: bool = False
+    endcard_appended: bool = False
 
 
 def _slugify_game(name: str) -> str:
@@ -1813,6 +1880,53 @@ async def render_variant_video(
     include_endcard: bool = Query(
         True,
         description="Append the game's pre-rendered endcard at the end if available",
+    ),
+    include_audio: bool = Query(
+        True,
+        description="Overlay an emotional-pitch-matched soundtrack from data/cache/audio/library/",
+    ),
+    include_voice: bool = Query(
+        False,
+        description=(
+            "Generate a brainrot voiceover (OpenAI TTS) from the brief's "
+            "text_overlays + cta and mix it on top of the music bed."
+        ),
+    ),
+    include_sfx: bool = Query(
+        True,
+        description=(
+            "Splice mobile-game SFX (whoosh, swoosh × 2, drop, brand "
+            "chime) at fixed beats matching the 5-second clip boundaries. "
+            "Reads from data/cache/audio/sfx/<stem>.mp3 — missing files "
+            "are silently skipped so you can drop in just the sfx you "
+            "want."
+        ),
+    ),
+    voice: str = Query(
+        "alloy",
+        description=(
+            "OpenAI TTS voice id. Recommended for brainrot energy: "
+            "'alloy' (neutral/punchy), 'nova' (young female), 'echo' (smoky)."
+        ),
+    ),
+    audio_quality: Literal["fast", "rich"] = Query(
+        "fast",
+        description=(
+            "'fast' = Kling O1 silent clips + post-hoc music/voice overlay "
+            "(default, ~$0.30/render). 'rich' = Kling 2.6 Pro with native "
+            "audio per clip — diegetic SFX synced to visuals (whoosh on "
+            "swipe, chime on combo, etc.), no post-hoc overlay. ~$1/render."
+        ),
+    ),
+    correction: str | None = Query(
+        None,
+        description=(
+            "Natural-language refinement appended to every per-clip prompt "
+            "on this render. Example: 'make the music more energetic', "
+            "'voice should sound surprised', 'use darker palette'. Hashed "
+            "into the cache key so the previous output isn't reused."
+        ),
+        max_length=500,
     ),
     model: str | None = Query(
         None,
@@ -1876,24 +1990,62 @@ async def render_variant_video(
             detail="Variant has no hero/storyboard frames to videofy",
         )
 
+    # Normalize the user correction up-front so both step 3 (prompt
+    # building) and step 4 (filename hashing) can reference it.
+    import hashlib
+
+    correction_clean = (correction or "").strip()
+    correction_tag = (
+        f"_c{hashlib.sha256(correction_clean.encode()).hexdigest()[:8]}"
+        if correction_clean
+        else ""
+    )
+
     # 3. Per-frame motion prompts. Prefer the brief's own scenario_prompts
     #    (which Opus tailored per frame, including audio cues), fall back
     #    to scene_flow beats, then to the global hook.
+    #
+    #    When ``correction`` is provided (the React UI's "Regenerate with
+    #    refinement" textarea), append it to every clip's prompt. The
+    #    video model treats it as the most recent / overriding directive.
     scenario_prompts = brief.get("scenario_prompts") or []
     scene_flow = brief.get("scene_flow") or []
     hook_3s = brief.get("hook_3s") or ""
     per_frame_prompts: list[str] = []
     for i in range(len(frame_urls)):
         if i < len(scenario_prompts) and scenario_prompts[i]:
-            per_frame_prompts.append(str(scenario_prompts[i])[:500])
+            base = str(scenario_prompts[i])
         elif i < len(scene_flow) and scene_flow[i]:
-            per_frame_prompts.append(str(scene_flow[i])[:500])
+            base = str(scene_flow[i])
         else:
-            per_frame_prompts.append(hook_3s[:500] or "5-second cinematic gameplay clip")
+            base = hook_3s or "5-second cinematic gameplay clip"
+        if correction_clean:
+            # Place the user note at the END so it's the last thing the
+            # model reads. Cap the merged result so we stay under each
+            # video model's prompt length cap (Kling 2.6 Pro = 2048,
+            # Kling O1 = ~500). Reserve ~200 chars for the correction.
+            base = base[: 2048 - len(correction_clean) - 60]
+            base = f"{base}\n\nUSER REFINEMENT (highest priority): {correction_clean}"
+        per_frame_prompts.append(base[:2048])
 
-    # 4. Final output path — keyed by archetype_id to make caching trivial
+    # 4. Final output path — keyed by (archetype_id + endcard mtime +
+    #    audio_quality + correction hash) so any change in inputs
+    #    triggers a fresh render. Fast vs rich outputs and any
+    #    user-corrected variants all coexist on disk for A/B'ing.
     safe_archetype = re.sub(r"[^a-zA-Z0-9_-]+", "-", archetype_id)[:40]
-    final_filename = f"variant_{game_slug}_{safe_archetype}.mp4"
+    endcard_for_cache = (
+        _endcard_path_for(app_id) if include_endcard else None
+    )
+    endcard_tag = (
+        f"_ec{int(endcard_for_cache.stat().st_mtime)}"
+        if endcard_for_cache
+        else "_noec"
+    )
+    quality_tag = "_rich" if audio_quality == "rich" else ""
+    final_filename = (
+        f"variant_{game_slug}_{safe_archetype}"
+        f"{endcard_tag}{quality_tag}{correction_tag}.mp4"
+    )
     final_path = _VIDEOS_DIR / final_filename
     if final_path.exists() and final_path.stat().st_size > 0:
         return VariantVideoResponse(
@@ -1901,7 +2053,7 @@ async def render_variant_video(
             cached=True,
             duration_s=_estimate_video_duration(final_path),
             clips=len(frame_urls),
-            endcard_appended=_endcard_path_for(app_id) is not None and include_endcard,
+            endcard_appended=endcard_for_cache is not None,
             job_ids=[],
             stub=False,
         )
@@ -1922,14 +2074,42 @@ async def render_variant_video(
                 ) from exc
         local_frames.append(dest)
 
-    # 6. Fire N parallel Scenario img2video calls
+    # 6. Fire N parallel Scenario img2video calls.
+    #
+    # Special handling for the LAST clip when an endcard PNG is on
+    # disk: pass it as ``tail_image`` (Kling O1 / Kling 2.6 Pro's
+    # ``lastFrameImage`` parameter). The model interpolates between
+    # the variant's storyboard frame and the endcard so the concat
+    # handoff is a smooth morph rather than a hard cut. Costs the
+    # same (single Scenario call, just with one extra asset upload).
     from app.creative.scenario import call_scenario_video
 
-    chosen_model = model or _VARIANT_VIDEO_MODEL
+    # Quality dispatch:
+    #   fast → Kling O1 i2v (silent clips, post-hoc audio overlay)
+    #   rich → Kling 2.6 Pro i2v with generateAudio=True (per-clip
+    #          diegetic SFX/music/voice from the brief's audio cues,
+    #          no post-hoc overlay needed)
+    is_rich = audio_quality == "rich"
+    chosen_model = model or (
+        _VARIANT_VIDEO_MODEL_RICH if is_rich else _VARIANT_VIDEO_MODEL
+    )
+    endcard_png = (
+        _ENDCARDS_DIR / f"{app_id}.png"
+        if include_endcard and app_id
+        else None
+    )
+    if endcard_png is not None and not endcard_png.exists():
+        endcard_png = None
+
     loop = asyncio.get_running_loop()
     sem = asyncio.Semaphore(3)  # never more than 3 in flight per request
 
-    async def _gen_clip(idx: int, frame: Path, prompt: str) -> tuple[int, str, dict]:
+    async def _gen_clip(
+        idx: int,
+        frame: Path,
+        prompt: str,
+        tail: Path | None,
+    ) -> tuple[int, str, dict]:
         async with sem:
             return await loop.run_in_executor(
                 None,
@@ -1939,22 +2119,55 @@ async def render_variant_video(
                         model_id=chosen_model,
                         image_paths=[frame],
                         prompt=prompt,
-                        label=f"variant_{game_slug}_{safe_archetype}_clip{idx}",
+                        # correction_tag flows into the on-disk label so
+                        # different refinement attempts get distinct cache
+                        # entries. Different prompts already produce
+                        # different cache keys inside call_scenario_video,
+                        # but having it in the label too makes the
+                        # downloaded mp4 filenames self-documenting.
+                        label=(
+                            f"variant_{game_slug}_{safe_archetype}_"
+                            f"clip{idx}{quality_tag}{correction_tag}"
+                        ),
+                        tail_image_path=tail,
+                        generate_audio=is_rich,
                     ),
                 ),
             )
 
+    last_idx = len(local_frames) - 1
+    # Kling 2.6 Pro REJECTS `lastFrameImage` + `generateAudio` together
+    # (verified empirically: the API returns a job-level error
+    # "End image is not supported when audio generation is enabled").
+    # Trade-off:
+    #   fast → lastFrameImage on clip 3 = smooth visual morph into
+    #          endcard. Clips silent (post-hoc music overlay).
+    #   rich → no lastFrameImage. Clips have native audio, accept a
+    #          visual cut at the clip 3 → endcard handoff (the audio
+    #          cuts there too anyway since the endcard is silent).
+    use_tail_on_last = endcard_png is not None and not is_rich
     log.info(
-        "render_variant_video: %s · archetype=%s · %d clips × %s",
+        "render_variant_video: %s · archetype=%s · %d clips × %s · "
+        "audio=%s · tail_image=%s",
         game_name,
         archetype_id,
         len(local_frames),
         chosen_model,
+        "native" if is_rich else "post-hoc",
+        "endcard" if use_tail_on_last else "off",
     )
     try:
         results = await asyncio.gather(
             *[
-                _gen_clip(i, frame, per_frame_prompts[i])
+                _gen_clip(
+                    i,
+                    frame,
+                    per_frame_prompts[i],
+                    # Only the LAST clip gets the endcard tail in fast
+                    # mode. In rich mode no clip gets a tail (Kling 2.6
+                    # Pro can't combine tail + audio).
+                    endcard_png if (i == last_idx and use_tail_on_last) else None,
+                )
                 for i, frame in enumerate(local_frames)
             ]
         )
@@ -1974,7 +2187,16 @@ async def render_variant_video(
             any_stub = True
         if jid := meta.get("job_id"):
             job_ids.append(str(jid))
-        clip_path = _VIDEOS_DIR / f"variant_{game_slug}_{safe_archetype}_clip{idx}.mp4"
+        # Include both quality_tag and correction_tag in the on-disk
+        # filename so distinct (quality, refinement) tuples don't
+        # shadow each other. The earlier bug here: a Fast-mode silent
+        # clip was being reused as the Rich-mode clip because the
+        # filename was quality-agnostic.
+        clip_path = (
+            _VIDEOS_DIR
+            / f"variant_{game_slug}_{safe_archetype}_clip{idx}"
+              f"{quality_tag}{correction_tag}.mp4"
+        )
         if not clip_path.exists() or clip_path.stat().st_size == 0:
             try:
                 _download_to(video_url, clip_path)
@@ -2000,6 +2222,32 @@ async def render_variant_video(
             detail="ffmpeg concat failed — check server logs",
         )
 
+    # 10. Audio strategy depends on quality:
+    #
+    #   rich → clips ALREADY have native audio from Kling 2.6 Pro.
+    #          Skip post-hoc overlay; the diegetic SFX would clash
+    #          with our static music bed. The endcard mp4 is still
+    #          silent though, so we accept that asymmetry for now
+    #          (most ads close on a beat anyway).
+    #
+    #   fast → clips are silent; run the multi-layer overlay
+    #          (music bed + optional voice) like before.
+    audio_overlay_applied = False
+    if not is_rich and (include_audio or include_voice or include_sfx):
+        # Stash the target_game on the variant dict so the audio layer
+        # can read Game DNA when authoring the bespoke narration script.
+        # (Variant dicts as cached on disk don't carry the target_game
+        # link, so we attach it here for the duration of this request.)
+        variant_with_dna = {**variant, "_target_game": target_game}
+        audio_overlay_applied = _try_apply_audio_layers(
+            video_path=final_path,
+            variant=variant_with_dna,
+            include_music=include_audio,
+            include_voice=include_voice,
+            include_sfx=include_sfx,
+            voice_id=voice,
+        )
+
     return VariantVideoResponse(
         video_url=f"/videos/{final_filename}",
         cached=False,
@@ -2008,7 +2256,593 @@ async def render_variant_video(
         endcard_appended=endcard is not None,
         job_ids=job_ids,
         stub=any_stub,
+        has_audio=audio_overlay_applied or _video_has_audio(final_path),
     )
+
+
+@app.get(
+    "/api/variants/render-video/status",
+    response_model=VariantVideoStatus,
+)
+def variant_video_status(
+    game_name: str = Query(...),
+    archetype_id: str = Query(...),
+    include_endcard: bool = Query(True),
+    audio_quality: Literal["fast", "rich"] = Query("fast"),
+) -> VariantVideoStatus:
+    """Cheap existence check for a previously rendered variant video.
+
+    Lets the React Insights view render the video instantly on
+    revisit without waiting on (or re-triggering) the 5-min Scenario
+    generation. Mirrors the cache-key computation of the POST endpoint
+    so the same (game, archetype, endcard mtime) combo resolves to the
+    same mp4.
+
+    Returns ``exists=False`` when no matching mp4 is on disk; the UI
+    then shows the Generate Ad CTA. ``exists=True`` carries the URL +
+    metadata so the player can mount immediately.
+    """
+    import re
+
+    try:
+        app_id = _resolve_app_id_for_game(game_name)
+    except HTTPException:
+        return VariantVideoStatus(exists=False)
+
+    cache_path = REPORTS_CACHE_DIR / f"{app_id}_e2e.json"
+    if not cache_path.exists():
+        return VariantVideoStatus(exists=False)
+    report = json.loads(cache_path.read_text())
+    target_game = report.get("target_game") or {}
+    game_slug = _slugify_game(target_game.get("name") or game_name)
+
+    safe_archetype = re.sub(r"[^a-zA-Z0-9_-]+", "-", archetype_id)[:40]
+    endcard_for_cache = (
+        _endcard_path_for(app_id) if include_endcard else None
+    )
+    endcard_tag = (
+        f"_ec{int(endcard_for_cache.stat().st_mtime)}"
+        if endcard_for_cache
+        else "_noec"
+    )
+    quality_tag = "_rich" if audio_quality == "rich" else ""
+    final_filename = (
+        f"variant_{game_slug}_{safe_archetype}{endcard_tag}{quality_tag}.mp4"
+    )
+    final_path = _VIDEOS_DIR / final_filename
+
+    if not final_path.exists() or final_path.stat().st_size == 0:
+        # Try alternate cache files when the exact (endcard mtime,
+        # quality) tuple isn't on disk: any matching prefix is good
+        # enough for the UI to surface SOMETHING the user already
+        # rendered. Order: same quality without endcard tag, then
+        # cross-quality with endcard tag, then no-tag legacy.
+        candidates = sorted(
+            _VIDEOS_DIR.glob(f"variant_{game_slug}_{safe_archetype}*.mp4"),
+            key=lambda p: p.stat().st_mtime,
+            reverse=True,
+        )
+        # Prefer matching quality_tag if the user is asking specifically
+        match: Path | None = None
+        for c in candidates:
+            if quality_tag and quality_tag in c.name:
+                match = c
+                break
+        if match is None and candidates:
+            match = candidates[0]
+        if match and match.stat().st_size > 0:
+            final_path = match
+            final_filename = match.name
+        else:
+            return VariantVideoStatus(exists=False)
+
+    return VariantVideoStatus(
+        exists=True,
+        video_url=f"/videos/{final_filename}",
+        duration_s=_estimate_video_duration(final_path),
+        has_audio=_video_has_audio(final_path),
+        endcard_appended=endcard_for_cache is not None,
+    )
+
+
+_AUDIO_LIBRARY_DIR = CACHE_DIR / "audio" / "library"
+_AUDIO_SFX_DIR = CACHE_DIR / "audio" / "sfx"
+
+# Standard SFX timing for the 18-second concat (3 clips × 5s + endcard
+# 3s). Each tuple is (filename_stem, delay_ms, volume). The user drops
+# matching mp3s into data/cache/audio/sfx/ and they ffmpeg-splice in
+# automatically. Missing files are silently skipped.
+#
+# Volumes are calibrated below the music+voice mix so SFX punctuate
+# without overpowering the narration:
+#   music bed = 0.25
+#   voice TTS = 1.00
+#   sfx       = 0.70-0.85 (varies by impact)
+_SFX_TIMELINE: list[tuple[str, int, float]] = [
+    ("whoosh_in",    0,     0.85),  # opening attention-grab
+    ("swoosh_1",     4500,  0.70),  # clip 1 → clip 2 cut
+    ("swoosh_2",     9500,  0.70),  # clip 2 → clip 3 cut
+    ("drop",         14500, 0.85),  # build before endcard
+    ("brand_chime",  15000, 0.80),  # endcard appears
+]
+
+# Map emotional_pitch → vibe filename (matches
+# scripts/generate_soundtrack.py:VIBE_MAP and the README in
+# data/cache/audio/library/).
+_PITCH_VIBE: dict[str, str] = {
+    "satisfaction": "satisfaction",
+    "fail": "rage_bait",
+    "curiosity": "curiosity",
+    "rage_bait": "rage_bait",
+    "tutorial": "tutorial",
+    "asmr": "asmr",
+    "celebrity": "celebrity",
+    "challenge": "challenge",
+    "transformation": "transformation",
+    "other": "satisfaction",
+}
+
+
+def _opus_brainrot_script(
+    *,
+    brief: dict[str, Any],
+    target_game: dict[str, Any],
+    archetype_id: str,
+) -> str | None:
+    """Ask Claude Opus to write a bespoke 12-15-second TikTok-style ad
+    voiceover script for this specific (variant × game) pair.
+
+    Why not just concatenate ``text_overlays + cta``: those are short
+    on-screen captions, not spoken narration. Reading them aloud
+    sounds like an audiobook of subtitle lines. Opus, given the same
+    inputs + the Game DNA, can produce a punchy 30-50-word script
+    with TikTok-narrator energy — direct address ("Hold UP"), all-caps
+    emphasis, mid-sentence beat drops — which is what makes a
+    VO sit right on a 15s ad.
+
+    Output is plain UTF-8 text ready for TTS (caller strips the
+    surrounding markdown if any). Cached on disk per
+    (archetype_id, target_game.app_id) so re-renders of the same
+    variant don't re-bill Anthropic.
+
+    Returns None on any failure (caller falls back to the
+    text_overlays concat path).
+    """
+    import hashlib
+    import os
+    import httpx
+
+    api_key = os.environ.get("ANTHROPIC_API_KEY")
+    if not api_key:
+        return None
+
+    game_name = target_game.get("name") or "the game"
+    palette = target_game.get("palette") or {}
+    visual_style = target_game.get("visual_style") or ""
+    ui_mood = target_game.get("ui_mood") or ""
+    audience = target_game.get("audience_proxy") or ""
+
+    title = brief.get("title") or ""
+    hook = brief.get("hook_3s") or ""
+    scene_flow = brief.get("scene_flow") or []
+    overlays = brief.get("text_overlays") or []
+    cta = brief.get("cta") or "Play now"
+
+    user_prompt = f"""Write a TikTok-style mobile-game ad voiceover for "{game_name}".
+
+The voiceover plays over a 15-second video that ends on the game's logo.
+Length: 30-50 spoken words (≈ 12-15 seconds at conversational TikTok speed).
+
+Tone: brainrot energy, direct address to the viewer, ALL-CAPS emphasis on
+the punchline word, mid-sentence beat drops, ellipses for pauses. Think
+"hold up — that ONE guy is about to take the WHOLE CITY" rather than
+descriptive narration. End with the game name + the CTA verbatim.
+
+Inputs:
+- Game: {game_name}
+- Visual style: {visual_style}
+- UI mood: {ui_mood}
+- Audience: {audience}
+- Variant title: "{title}"
+- 3-second hook: {hook}
+- Scene beats: {" / ".join(scene_flow[:3])}
+- On-screen captions (for tone reference, not to read verbatim): {", ".join([str(o) for o in overlays[:3]])}
+- CTA: {cta}
+
+Return ONLY the spoken text, no quotes, no markdown, no stage directions.
+Keep it under 50 words."""
+
+    cache_key = hashlib.sha256(
+        f"{archetype_id}|{target_game.get('app_id', '')}|{title}".encode()
+    ).hexdigest()[:16]
+    cache_path = (
+        CACHE_DIR / "audio" / "scripts" / f"{cache_key}.txt"
+    )
+    cache_path.parent.mkdir(parents=True, exist_ok=True)
+    if cache_path.exists() and cache_path.stat().st_size > 0:
+        return cache_path.read_text().strip()
+
+    try:
+        r = httpx.post(
+            "https://api.anthropic.com/v1/messages",
+            headers={
+                "x-api-key": api_key,
+                "anthropic-version": "2023-06-01",
+                "content-type": "application/json",
+            },
+            json={
+                # Match the alias used elsewhere in the codebase
+                # (app/creative/brief.py, app/analysis/game_fit.py).
+                # Anthropic resolves the alias to the latest snapshot.
+                "model": "claude-opus-4-7",
+                "max_tokens": 250,
+                "messages": [{"role": "user", "content": user_prompt}],
+            },
+            timeout=30.0,
+        )
+        r.raise_for_status()
+        body = r.json()
+        text = (body.get("content") or [{}])[0].get("text", "").strip()
+        # Strip surrounding quotes / fences if Opus added them
+        text = text.strip("\"'`").strip()
+        if text:
+            cache_path.write_text(text)
+            log.info(
+                "narration script: %d chars · variant=%s · game=%s",
+                len(text), archetype_id, game_name,
+            )
+            return text
+    except Exception as exc:
+        log.warning("Opus narration script failed: %s", exc)
+    return None
+
+
+def _build_brainrot_narration(brief: dict[str, Any]) -> str:
+    """Fallback narration builder: compose from the brief's
+    ``text_overlays`` + ``cta`` when Opus isn't available.
+
+    Mainly here so the audio pipeline keeps working without Anthropic
+    credentials. The Opus-authored script (``_opus_brainrot_script``)
+    is the preferred path — much punchier delivery, custom per variant
+    rather than a captions-read-aloud feel.
+    """
+    import re
+
+    overlays = brief.get("text_overlays") or []
+    cta = (brief.get("cta") or "Play now").strip()
+
+    def clean(line: str) -> str:
+        # Strip arrows / emojis / brackets that TTS reads literally
+        line = re.sub(r"[→←↑↓➡⬅👇👆💥🔥👀✨⚡]", "", line)
+        # Convert "→" word equivalents in case
+        line = line.replace(" -> ", " ")
+        # Collapse whitespace
+        line = re.sub(r"\s+", " ", line).strip(" .!?")
+        return line
+
+    parts = [clean(line) for line in overlays[:3] if line and line.strip()]
+    parts = [p for p in parts if p]
+    if not parts:
+        # Fallback to the hook if no usable overlays
+        hook = (brief.get("hook_3s") or "").strip()
+        if hook:
+            parts.append(clean(hook[:120]))
+    parts.append(clean(cta))
+    return ". ".join(parts) + "."
+
+
+def _generate_tts_openai(
+    text: str,
+    voice: str,
+    out_path: Path,
+    *,
+    speed: float = 1.15,
+) -> bool:
+    """Generate a TTS mp3 via OpenAI's tts-1 model.
+
+    Voice ids: alloy / echo / fable / onyx / nova / shimmer.
+    ``speed`` 1.10-1.25 gives a brainrot-energy delivery without
+    distorting the voice. Cached on disk by (text, voice, speed)
+    hash so re-rendering the same variant doesn't re-bill OpenAI.
+    """
+    import hashlib
+    import os
+    import httpx
+
+    api_key = os.environ.get("OPENAI_API_KEY")
+    if not api_key:
+        log.info("OpenAI key missing — skipping voice generation")
+        return False
+
+    cache_key = hashlib.sha256(
+        f"{voice}|{speed}|{text}".encode()
+    ).hexdigest()[:16]
+    cache_path = (
+        CACHE_DIR / "audio" / "tts" / f"{voice}_{cache_key}.mp3"
+    )
+    cache_path.parent.mkdir(parents=True, exist_ok=True)
+    if cache_path.exists() and cache_path.stat().st_size > 0:
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        out_path.write_bytes(cache_path.read_bytes())
+        return True
+
+    try:
+        r = httpx.post(
+            "https://api.openai.com/v1/audio/speech",
+            headers={"Authorization": f"Bearer {api_key}"},
+            json={
+                "model": "tts-1",
+                "voice": voice,
+                "input": text[:4000],  # OpenAI's TTS hard cap
+                "speed": max(0.5, min(2.0, speed)),
+            },
+            timeout=60.0,
+        )
+        r.raise_for_status()
+        cache_path.write_bytes(r.content)
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        out_path.write_bytes(r.content)
+        log.info(
+            "TTS: %d chars · voice=%s · speed=%.2f → %.1f KB",
+            len(text), voice, speed, len(r.content) / 1024,
+        )
+        return True
+    except Exception as exc:
+        log.warning("TTS: OpenAI call failed: %s", exc)
+        return False
+
+
+def _resolve_sfx_layers(video_duration: float) -> list[tuple[Path, int, float]]:
+    """Return the list of SFX mp3s to splice onto the final mix.
+
+    Each entry is (mp3_path, delay_ms, volume). Files that aren't on
+    disk are silently skipped — the user controls which sfx are
+    enabled simply by dropping/removing mp3s in data/cache/audio/sfx/.
+    SFX whose delay falls beyond the video's duration are also pruned.
+    """
+    out: list[tuple[Path, int, float]] = []
+    if not _AUDIO_SFX_DIR.exists():
+        return out
+    duration_ms = int(video_duration * 1000)
+    for stem, delay_ms, volume in _SFX_TIMELINE:
+        if delay_ms >= duration_ms:
+            continue
+        candidate = _AUDIO_SFX_DIR / f"{stem}.mp3"
+        if candidate.exists() and candidate.stat().st_size > 0:
+            out.append((candidate, delay_ms, volume))
+    return out
+
+
+def _try_apply_audio_layers(
+    *,
+    video_path: Path,
+    variant: dict[str, Any],
+    include_music: bool,
+    include_voice: bool,
+    include_sfx: bool = True,
+    voice_id: str = "alloy",
+) -> bool:
+    """Multi-layer audio overlay: music bed + voiceover + game SFX
+    mixed onto the silent variant mp4.
+
+    Tier strategy:
+      • music alone             → stock-music overlay (loop to length).
+      • voice alone             → TTS narration over silent video.
+      • music + voice           → music ducks to 25%, voice rides on top.
+      • + sfx (when on disk)    → up to 5 mobile-game SFX (whoosh,
+        swoosh ×2, drop, brand chime) spliced at fixed beats matching
+        the 5-second clip boundaries. Volumes calibrated to punctuate
+        without burying the narration.
+      • none of the above       → no-op.
+
+    The original silent mp4 is backed up as ``.silent.mp4`` so the
+    user can re-roll the audio mix without re-running Scenario.
+
+    Returns True iff an audio track ended up on the final mp4.
+    """
+    import subprocess
+
+    if not include_music and not include_voice and not include_sfx:
+        return False
+
+    duration = _estimate_video_duration(video_path)
+    if duration <= 0:
+        log.warning("audio: ffprobe failed on %s", video_path)
+        return False
+
+    # Backup silent video first
+    silent_backup = video_path.with_suffix(".silent.mp4")
+    if not silent_backup.exists():
+        try:
+            silent_backup.write_bytes(video_path.read_bytes())
+        except OSError:
+            pass
+    src_video = silent_backup if silent_backup.exists() else video_path
+
+    # ─── Resolve music track ────────────────────────────────────
+    music_path: Path | None = None
+    if include_music:
+        pitch = (
+            ((variant.get("brief") or {}).get("emotional_pitch"))
+            or (
+                (variant.get("centroid_hook") or {}).get("emotional_pitch")
+                if "centroid_hook" in variant
+                else None
+            )
+            or "satisfaction"
+        )
+        vibe = _PITCH_VIBE.get(pitch, _PITCH_VIBE["other"])
+        candidate = _AUDIO_LIBRARY_DIR / f"{vibe}.mp3"
+        if not candidate.exists():
+            candidate = _AUDIO_LIBRARY_DIR / "default.mp3"
+        if candidate.exists():
+            music_path = candidate
+            log.info("audio: music bed = %s (vibe=%s)", music_path.name, vibe)
+        else:
+            log.info(
+                "audio: no music library track on disk — proceeding voice-only"
+            )
+
+    # ─── Resolve voice track ────────────────────────────────────
+    voice_path: Path | None = None
+    if include_voice:
+        brief = variant.get("brief") or {}
+        # Prefer Opus-authored bespoke script (custom per variant),
+        # fall back to text_overlays concat when Anthropic isn't
+        # reachable.
+        target_game = variant.get("_target_game") or {}
+        archetype_id_for_voice = brief.get("archetype_id") or ""
+        narration = _opus_brainrot_script(
+            brief=brief,
+            target_game=target_game,
+            archetype_id=archetype_id_for_voice,
+        ) or _build_brainrot_narration(brief)
+        if narration.strip(". "):
+            voice_path = video_path.with_suffix(".voice.mp3")
+            ok = _generate_tts_openai(narration, voice_id, voice_path)
+            if not ok:
+                voice_path = None
+            else:
+                log.info(
+                    "audio: voiceover (%d chars · voice=%s) generated",
+                    len(narration), voice_id,
+                )
+
+    # ─── Resolve SFX layers ─────────────────────────────────────
+    sfx_layers: list[tuple[Path, int, float]] = (
+        _resolve_sfx_layers(duration) if include_sfx else []
+    )
+
+    if music_path is None and voice_path is None and not sfx_layers:
+        return False
+
+    # ─── ffmpeg mix ─────────────────────────────────────────────
+    out = video_path.with_suffix(".audio.mp4")
+    inputs: list[str] = ["-i", str(src_video)]
+    # Track which input slot maps to which audio role; build the
+    # filter_complex below by walking this list.
+    audio_inputs: list[tuple[int, str, dict]] = []  # (idx, role, meta)
+    next_idx = 1
+
+    if music_path is not None:
+        inputs += ["-stream_loop", "-1", "-i", str(music_path)]
+        audio_inputs.append((next_idx, "music", {}))
+        next_idx += 1
+    if voice_path is not None:
+        inputs += ["-i", str(voice_path)]
+        audio_inputs.append((next_idx, "voice", {}))
+        next_idx += 1
+    for sfx_path, delay_ms, sfx_volume in sfx_layers:
+        inputs += ["-i", str(sfx_path)]
+        audio_inputs.append(
+            (next_idx, "sfx", {"delay_ms": delay_ms, "volume": sfx_volume})
+        )
+        next_idx += 1
+
+    # Build filter_complex. CRUCIAL: pad every audio source with
+    # silence (apad) and then trim to video duration. Without this
+    # ffmpeg shortens the output to the briefest input, which is how
+    # we previously truncated 18s videos to 3s. Each role uses a
+    # tailored chain:
+    #   music → low volume, looped to length
+    #   voice → full volume, padded to length
+    #   sfx   → adelay to its timestamp, volume calibrated, padded
+    chains: list[str] = []
+    mix_labels: list[str] = []
+    for idx, role, meta in audio_inputs:
+        label = f"a{idx}"
+        if role == "music":
+            chains.append(
+                f"[{idx}:a]volume=0.25,apad=whole_dur={duration:.3f},"
+                f"atrim=0:{duration:.3f},asetpts=N/SR/TB[{label}]"
+            )
+        elif role == "voice":
+            chains.append(
+                f"[{idx}:a]volume=1.0,apad=whole_dur={duration:.3f},"
+                f"atrim=0:{duration:.3f},asetpts=N/SR/TB[{label}]"
+            )
+        elif role == "sfx":
+            delay_ms = meta["delay_ms"]
+            volume = meta["volume"]
+            # adelay shifts the sfx to its timestamp; apad then
+            # extends silence to the full video length so amix doesn't
+            # drop early.
+            chains.append(
+                f"[{idx}:a]volume={volume},adelay={delay_ms}|{delay_ms},"
+                f"apad=whole_dur={duration:.3f},"
+                f"atrim=0:{duration:.3f},asetpts=N/SR/TB[{label}]"
+            )
+        else:
+            continue
+        mix_labels.append(f"[{label}]")
+
+    if not mix_labels:
+        return False
+
+    if len(mix_labels) == 1:
+        # Single source: rename the chain output to [a] for the -map.
+        # Easier: append a noop concat to relabel.
+        filter_str = chains[0].replace(f"[a{audio_inputs[0][0]}]", "[a]")
+    else:
+        filter_str = (
+            ";".join(chains)
+            + f";{''.join(mix_labels)}amix=inputs={len(mix_labels)}:"
+            f"duration=first:dropout_transition=0[a]"
+        )
+
+    # NOTE: NO ``-shortest`` flag — that's what was making ffmpeg cut
+    # the output to the voice length. The ``-t`` cap below + the
+    # apad-then-atrim chain in the filter ensure correct duration.
+    cmd = [
+        "ffmpeg", "-y",
+        *inputs,
+        "-filter_complex", filter_str,
+        "-map", "0:v:0", "-map", "[a]",
+        "-c:v", "copy",
+        "-c:a", "aac", "-b:a", "192k",
+        "-t", f"{duration:.3f}",
+        "-movflags", "+faststart",
+        str(out),
+    ]
+    proc = subprocess.run(cmd, capture_output=True, text=True)
+    if proc.returncode != 0:
+        log.warning(
+            "audio: ffmpeg mix failed (%s)",
+            proc.stderr.strip()[-300:],
+        )
+        return False
+
+    try:
+        out.replace(video_path)
+    except OSError as e:
+        log.warning("audio: rename failed: %s", e)
+        return False
+
+    layers = ", ".join(role for _, role, _ in audio_inputs)
+    log.info("audio: mixed [%s] onto %s", layers, video_path.name)
+    return True
+
+
+def _video_has_audio(path: Path) -> bool:
+    """Return True iff the mp4 contains an audio stream. Used by the
+    Status endpoint and the render response so the UI can show an
+    accurate "audio?" chip."""
+    import subprocess
+
+    try:
+        result = subprocess.run(
+            [
+                "ffprobe", "-v", "error",
+                "-select_streams", "a",
+                "-show_entries", "stream=codec_type",
+                "-of", "default=noprint_wrappers=1:nokey=1",
+                str(path),
+            ],
+            capture_output=True, text=True, timeout=10,
+        )
+        return "audio" in result.stdout
+    except subprocess.SubprocessError:
+        return False
 
 
 def _resolve_app_id_for_game(game_name: str) -> str:

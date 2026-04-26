@@ -345,6 +345,50 @@ export interface VariantVideoResponse {
   job_ids: string[];
   /** True when one or more clips fell back to a Picsum placeholder. */
   stub: boolean;
+  has_audio?: boolean;
+}
+
+export interface VariantVideoStatus {
+  exists: boolean;
+  video_url?: string | null;
+  duration_s?: number;
+  has_audio?: boolean;
+  endcard_appended?: boolean;
+}
+
+/**
+ * Cheap existence check that runs whenever the Insights detail view
+ * mounts. If the user previously generated a video for this variant
+ * (in any session), ``exists: true`` lets the UI render the cached
+ * mp4 instantly without re-triggering the 5-min Scenario job.
+ *
+ * Pass ``audioQuality`` to bias the lookup toward fast vs rich
+ * outputs — fast and rich variants are cached as separate files on
+ * disk so the user can A/B them without overwriting either.
+ */
+export function useVariantVideoStatus(
+  gameName: string | undefined,
+  archetypeId: string | undefined,
+  audioQuality: "fast" | "rich" = "fast",
+) {
+  return useQuery<VariantVideoStatus>({
+    queryKey: ["variant-video-status", gameName, archetypeId, audioQuality],
+    queryFn: async () => {
+      if (!gameName || !archetypeId) return { exists: false };
+      const url = new URL(
+        "/api/variants/render-video/status",
+        API_BASE,
+      );
+      url.searchParams.set("game_name", gameName);
+      url.searchParams.set("archetype_id", archetypeId);
+      url.searchParams.set("audio_quality", audioQuality);
+      const res = await fetch(url.toString());
+      if (!res.ok) return { exists: false };
+      return res.json() as Promise<VariantVideoStatus>;
+    },
+    enabled: Boolean(gameName && archetypeId),
+    staleTime: 30 * 1000,
+  });
 }
 
 /**
@@ -354,6 +398,13 @@ export interface VariantVideoResponse {
  *
  * Cache strategy: the BACKEND caches by archetype_id, so re-clicking
  * the same variant returns the same mp4 in <100ms.
+ *
+ * Audio knobs:
+ *   - includeAudio (default true): overlay a music bed.
+ *   - includeVoice (default false): generate a brainrot voiceover via
+ *     OpenAI TTS from the brief's text_overlays + cta and mix it on
+ *     top of the music. The bed automatically ducks to ~25% volume
+ *     so the voice cuts through.
  */
 export function useRenderVariantVideo() {
   return useMutation({
@@ -362,6 +413,15 @@ export function useRenderVariantVideo() {
       gameName: string;
       archetypeId: string;
       includeEndcard?: boolean;
+      includeAudio?: boolean;
+      includeVoice?: boolean;
+      includeSfx?: boolean;
+      voice?: string;
+      audioQuality?: "fast" | "rich";
+      /** Free-text refinement appended to every per-clip prompt
+       *  (e.g. "more energetic music", "voice should sound surprised").
+       *  Hashed into the cache key so distinct refinements coexist. */
+      correction?: string;
     }): Promise<VariantVideoResponse> => {
       const url = new URL("/api/variants/render-video", API_BASE);
       url.searchParams.set("game_name", vars.gameName);
@@ -370,6 +430,27 @@ export function useRenderVariantVideo() {
         "include_endcard",
         vars.includeEndcard === false ? "false" : "true",
       );
+      url.searchParams.set(
+        "include_audio",
+        vars.includeAudio === false ? "false" : "true",
+      );
+      url.searchParams.set(
+        "include_voice",
+        vars.includeVoice === true ? "true" : "false",
+      );
+      url.searchParams.set(
+        "include_sfx",
+        vars.includeSfx === false ? "false" : "true",
+      );
+      if (vars.voice) {
+        url.searchParams.set("voice", vars.voice);
+      }
+      if (vars.audioQuality) {
+        url.searchParams.set("audio_quality", vars.audioQuality);
+      }
+      if (vars.correction && vars.correction.trim()) {
+        url.searchParams.set("correction", vars.correction.trim());
+      }
       const res = await fetch(url.toString(), { method: "POST" });
       if (!res.ok) {
         const detail = await res.text();
