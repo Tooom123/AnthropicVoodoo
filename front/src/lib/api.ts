@@ -392,6 +392,13 @@ export function useVariantVideoStatus(
  *
  * Cache strategy: the BACKEND caches by archetype_id, so re-clicking
  * the same variant returns the same mp4 in <100ms.
+ *
+ * Audio knobs:
+ *   - includeAudio (default true): overlay a music bed.
+ *   - includeVoice (default false): generate a brainrot voiceover via
+ *     OpenAI TTS from the brief's text_overlays + cta and mix it on
+ *     top of the music. The bed automatically ducks to ~25% volume
+ *     so the voice cuts through.
  */
 export function useRenderVariantVideo() {
   return useMutation({
@@ -400,6 +407,9 @@ export function useRenderVariantVideo() {
       gameName: string;
       archetypeId: string;
       includeEndcard?: boolean;
+      includeAudio?: boolean;
+      includeVoice?: boolean;
+      voice?: string;
     }): Promise<VariantVideoResponse> => {
       const url = new URL("/api/variants/render-video", API_BASE);
       url.searchParams.set("game_name", vars.gameName);
@@ -408,6 +418,17 @@ export function useRenderVariantVideo() {
         "include_endcard",
         vars.includeEndcard === false ? "false" : "true",
       );
+      url.searchParams.set(
+        "include_audio",
+        vars.includeAudio === false ? "false" : "true",
+      );
+      url.searchParams.set(
+        "include_voice",
+        vars.includeVoice === true ? "true" : "false",
+      );
+      if (vars.voice) {
+        url.searchParams.set("voice", vars.voice);
+      }
       const res = await fetch(url.toString(), { method: "POST" });
       if (!res.ok) {
         const detail = await res.text();

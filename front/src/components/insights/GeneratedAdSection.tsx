@@ -28,6 +28,8 @@ import {
   Download,
   Film,
   Loader2,
+  Mic,
+  Music,
   Sparkles,
   Video,
 } from "lucide-react";
@@ -66,6 +68,11 @@ export function GeneratedAdSection({
   );
   const selected =
     sorted.find((v) => v.brief.archetype_id === selectedId) ?? sorted[0];
+
+  // Audio knobs — sticky local state so the user's choice persists
+  // across variant switches within the same Insights session.
+  const [includeMusic, setIncludeMusic] = useState(true);
+  const [includeVoice, setIncludeVoice] = useState(true);
 
   const render = useRenderVariantVideo();
 
@@ -117,6 +124,9 @@ export function GeneratedAdSection({
       gameName,
       archetypeId: selected!.brief.archetype_id,
       includeEndcard: true,
+      includeAudio: includeMusic,
+      includeVoice,
+      voice: "alloy",
     });
   }
 
@@ -139,10 +149,30 @@ export function GeneratedAdSection({
       </header>
 
       <Card className="border-border bg-card overflow-hidden">
-        {/* Variant chooser strip */}
+        {/* Variant chooser strip + audio toggles */}
         <div className="border-b border-border bg-muted/20 p-3">
-          <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
-            Pick the variant to render
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
+              Pick the variant to render
+            </div>
+            <div className="flex items-center gap-1.5">
+              <AudioToggle
+                label="Music bed"
+                icon={<Music className="h-3 w-3" />}
+                active={includeMusic}
+                onClick={() => setIncludeMusic((v) => !v)}
+                disabled={render.isPending}
+                tooltip="Stock track from data/cache/audio/library/<vibe>.mp3 matched to the variant's emotional pitch"
+              />
+              <AudioToggle
+                label="Brainrot voice"
+                icon={<Mic className="h-3 w-3" />}
+                active={includeVoice}
+                onClick={() => setIncludeVoice((v) => !v)}
+                disabled={render.isPending}
+                tooltip="OpenAI TTS reads the brief's text_overlays + cta. Music auto-ducks to 25% volume."
+              />
+            </div>
           </div>
           <div className="mt-2 flex flex-wrap gap-2">
             {sorted.map((v) => {
@@ -384,5 +414,43 @@ function Chip({
     >
       {children}
     </span>
+  );
+}
+
+function AudioToggle({
+  label,
+  icon,
+  active,
+  onClick,
+  disabled,
+  tooltip,
+}: {
+  label: string;
+  icon: React.ReactNode;
+  active: boolean;
+  onClick: () => void;
+  disabled?: boolean;
+  tooltip?: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      title={tooltip}
+      className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-medium transition-all ${
+        active
+          ? "border-primary/40 bg-primary/10 text-primary ring-1 ring-primary/20"
+          : "border-border bg-card text-muted-foreground hover:text-foreground"
+      } ${disabled ? "cursor-not-allowed opacity-50" : "cursor-pointer"}`}
+    >
+      <span className={active ? "text-primary" : ""}>{icon}</span>
+      {label}
+      <span
+        className={`h-1.5 w-1.5 rounded-full ${
+          active ? "bg-primary" : "bg-muted-foreground/40"
+        }`}
+      />
+    </button>
   );
 }

@@ -1837,6 +1837,20 @@ async def render_variant_video(
         True,
         description="Overlay an emotional-pitch-matched soundtrack from data/cache/audio/library/",
     ),
+    include_voice: bool = Query(
+        False,
+        description=(
+            "Generate a brainrot voiceover (OpenAI TTS) from the brief's "
+            "text_overlays + cta and mix it on top of the music bed."
+        ),
+    ),
+    voice: str = Query(
+        "alloy",
+        description=(
+            "OpenAI TTS voice id. Recommended for brainrot energy: "
+            "'alloy' (neutral/punchy), 'nova' (young female), 'echo' (smoky)."
+        ),
+    ),
     model: str | None = Query(
         None,
         description="Override the Scenario video model (defaults to env or Kling i2v)",
@@ -2065,18 +2079,26 @@ async def render_variant_video(
             detail="ffmpeg concat failed — check server logs",
         )
 
-    # 10. Optional audio overlay — picks a stock track from
-    #     data/cache/audio/library/<vibe>.mp3 based on the variant's
-    #     emotional pitch and ffmpeg-overlays it on the silent concat.
-    #     Runs synchronously after concat; the AI-generated providers
-    #     (ElevenLabs, Suno) are intentionally NOT wired here to keep
-    #     the request bounded — use scripts/generate_soundtrack.py
-    #     after the fact for those.
+    # 10. Optional audio overlay — up to two layers mixed together:
+    #
+    #   • Music bed (`include_audio=True`): picks
+    #     ``data/cache/audio/library/<vibe>.mp3`` matching the variant's
+    #     emotional pitch.
+    #   • Brainrot voiceover (`include_voice=True`): builds a punchy
+    #     narration from the brief's text_overlays + cta and runs it
+    #     through OpenAI TTS, then mixes it on top of the bed at full
+    #     volume (the bed ducks to ~25% so the voice cuts through).
+    #
+    #  Both ffmpeg passes run synchronously here — they're cheap (a
+    #  few seconds each on a 18s mp4) so we keep the API call bounded.
     audio_overlay_applied = False
-    if include_audio:
-        audio_overlay_applied = _try_apply_stock_soundtrack(
+    if include_audio or include_voice:
+        audio_overlay_applied = _try_apply_audio_layers(
             video_path=final_path,
             variant=variant,
+            include_music=include_audio,
+            include_voice=include_voice,
+            voice_id=voice,
         )
 
     return VariantVideoResponse(
@@ -2177,69 +2199,221 @@ _PITCH_VIBE: dict[str, str] = {
 }
 
 
-def _try_apply_stock_soundtrack(
+def _build_brainrot_narration(brief: dict[str, Any]) -> str:
+    """Compose a punchy TikTok-style narration script from the brief.
+
+    The brief's ``text_overlays`` are already short, high-energy lines
+    (3-7 words: "Can 1 person take the whole city?", "Tap to swarm",
+    "210… 480… 900?!"). Concatenating up to 3 of them with the CTA
+    gives a 6-12 second voiceover that fits a 15-18s ad neatly.
+
+    Cleans symbols/arrows that confuse TTS, normalises ellipses for
+    natural pause delivery.
+    """
+    import re
+
+    overlays = brief.get("text_overlays") or []
+    cta = (brief.get("cta") or "Play now").strip()
+
+    def clean(line: str) -> str:
+        # Strip arrows / emojis / brackets that TTS reads literally
+        line = re.sub(r"[→←↑↓➡⬅👇👆💥🔥👀✨⚡]", "", line)
+        # Convert "→" word equivalents in case
+        line = line.replace(" -> ", " ")
+        # Collapse whitespace
+        line = re.sub(r"\s+", " ", line).strip(" .!?")
+        return line
+
+    parts = [clean(line) for line in overlays[:3] if line and line.strip()]
+    parts = [p for p in parts if p]
+    if not parts:
+        # Fallback to the hook if no usable overlays
+        hook = (brief.get("hook_3s") or "").strip()
+        if hook:
+            parts.append(clean(hook[:120]))
+    parts.append(clean(cta))
+    return ". ".join(parts) + "."
+
+
+def _generate_tts_openai(
+    text: str,
+    voice: str,
+    out_path: Path,
+    *,
+    speed: float = 1.15,
+) -> bool:
+    """Generate a TTS mp3 via OpenAI's tts-1 model.
+
+    Voice ids: alloy / echo / fable / onyx / nova / shimmer.
+    ``speed`` 1.10-1.25 gives a brainrot-energy delivery without
+    distorting the voice. Cached on disk by (text, voice, speed)
+    hash so re-rendering the same variant doesn't re-bill OpenAI.
+    """
+    import hashlib
+    import os
+    import httpx
+
+    api_key = os.environ.get("OPENAI_API_KEY")
+    if not api_key:
+        log.info("OpenAI key missing — skipping voice generation")
+        return False
+
+    cache_key = hashlib.sha256(
+        f"{voice}|{speed}|{text}".encode()
+    ).hexdigest()[:16]
+    cache_path = (
+        CACHE_DIR / "audio" / "tts" / f"{voice}_{cache_key}.mp3"
+    )
+    cache_path.parent.mkdir(parents=True, exist_ok=True)
+    if cache_path.exists() and cache_path.stat().st_size > 0:
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        out_path.write_bytes(cache_path.read_bytes())
+        return True
+
+    try:
+        r = httpx.post(
+            "https://api.openai.com/v1/audio/speech",
+            headers={"Authorization": f"Bearer {api_key}"},
+            json={
+                "model": "tts-1",
+                "voice": voice,
+                "input": text[:4000],  # OpenAI's TTS hard cap
+                "speed": max(0.5, min(2.0, speed)),
+            },
+            timeout=60.0,
+        )
+        r.raise_for_status()
+        cache_path.write_bytes(r.content)
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        out_path.write_bytes(r.content)
+        log.info(
+            "TTS: %d chars · voice=%s · speed=%.2f → %.1f KB",
+            len(text), voice, speed, len(r.content) / 1024,
+        )
+        return True
+    except Exception as exc:
+        log.warning("TTS: OpenAI call failed: %s", exc)
+        return False
+
+
+def _try_apply_audio_layers(
     *,
     video_path: Path,
     variant: dict[str, Any],
+    include_music: bool,
+    include_voice: bool,
+    voice_id: str = "alloy",
 ) -> bool:
-    """Best-effort overlay of a stock track from
-    ``data/cache/audio/library/<vibe>.mp3`` onto ``video_path``.
+    """Multi-layer audio overlay: music bed (low volume) + voiceover
+    (full volume) mixed onto the silent variant mp4.
 
-    Picks the track by mapping the variant's emotional pitch to a
-    vibe key (or falls back to ``default.mp3``). When no library file
-    is on disk, silently no-ops — the video stays silent and the
-    response carries ``has_audio=false``. The original silent mp4 is
-    saved as ``.silent.mp4`` first so the soundtrack overlay step can
-    be re-rolled later via ``scripts/generate_soundtrack.py`` without
-    regenerating the underlying clips.
+    Tier strategy:
+      • music ON, voice OFF  → simple stock-music overlay (was the
+        previous behaviour).
+      • music OFF, voice ON  → voice-only over silent video.
+      • both ON              → music ducked to ~25% volume + voice on
+        top so the narration always cuts through.
+      • neither              → no-op.
 
-    Returns ``True`` iff an overlay actually landed on disk.
+    The original silent mp4 is backed up as ``.silent.mp4`` so the
+    user can re-roll the audio mix without re-running Scenario.
+
+    Returns True iff an audio track ended up on the final mp4.
     """
     import subprocess
 
-    pitch = (
-        ((variant.get("brief") or {}).get("emotional_pitch"))
-        or "satisfaction"
-    )
-    # The brief's emotional_pitch is sometimes nested under archetype
-    # rather than directly on the brief — be permissive.
-    if "centroid_hook" in variant:
-        pitch = (
-            (variant.get("centroid_hook") or {}).get("emotional_pitch") or pitch
-        )
-
-    vibe = _PITCH_VIBE.get(pitch, _PITCH_VIBE["other"])
-    candidate = _AUDIO_LIBRARY_DIR / f"{vibe}.mp3"
-    if not candidate.exists():
-        candidate = _AUDIO_LIBRARY_DIR / "default.mp3"
-    if not candidate.exists():
-        log.info(
-            "soundtrack: no library track for vibe=%s — keeping video silent",
-            vibe,
-        )
+    if not include_music and not include_voice:
         return False
 
-    # Backup the silent video so generate_soundtrack.py can swap the
-    # audio later without re-running the Scenario calls.
+    duration = _estimate_video_duration(video_path)
+    if duration <= 0:
+        log.warning("audio: ffprobe failed on %s", video_path)
+        return False
+
+    # Backup silent video first
     silent_backup = video_path.with_suffix(".silent.mp4")
     if not silent_backup.exists():
         try:
             silent_backup.write_bytes(video_path.read_bytes())
         except OSError:
             pass
+    src_video = silent_backup if silent_backup.exists() else video_path
 
-    duration = _estimate_video_duration(video_path)
-    if duration <= 0:
-        log.warning("soundtrack: ffprobe failed on %s", video_path)
+    # ─── Resolve music track ────────────────────────────────────
+    music_path: Path | None = None
+    if include_music:
+        pitch = (
+            ((variant.get("brief") or {}).get("emotional_pitch"))
+            or (
+                (variant.get("centroid_hook") or {}).get("emotional_pitch")
+                if "centroid_hook" in variant
+                else None
+            )
+            or "satisfaction"
+        )
+        vibe = _PITCH_VIBE.get(pitch, _PITCH_VIBE["other"])
+        candidate = _AUDIO_LIBRARY_DIR / f"{vibe}.mp3"
+        if not candidate.exists():
+            candidate = _AUDIO_LIBRARY_DIR / "default.mp3"
+        if candidate.exists():
+            music_path = candidate
+            log.info("audio: music bed = %s (vibe=%s)", music_path.name, vibe)
+        else:
+            log.info(
+                "audio: no music library track on disk — proceeding voice-only"
+            )
+
+    # ─── Resolve voice track ────────────────────────────────────
+    voice_path: Path | None = None
+    if include_voice:
+        brief = variant.get("brief") or {}
+        narration = _build_brainrot_narration(brief)
+        if narration.strip(". "):
+            voice_path = video_path.with_suffix(".voice.mp3")
+            ok = _generate_tts_openai(narration, voice_id, voice_path)
+            if not ok:
+                voice_path = None
+            else:
+                log.info(
+                    "audio: voiceover (%d chars · voice=%s) generated",
+                    len(narration), voice_id,
+                )
+
+    if music_path is None and voice_path is None:
         return False
 
+    # ─── ffmpeg mix ─────────────────────────────────────────────
     out = video_path.with_suffix(".audio.mp4")
+    inputs: list[str] = ["-i", str(src_video)]
+    audio_inputs: list[tuple[int, str]] = []  # (input_index, role)
+    next_idx = 1
+    if music_path is not None:
+        inputs += ["-stream_loop", "-1", "-i", str(music_path)]
+        audio_inputs.append((next_idx, "music"))
+        next_idx += 1
+    if voice_path is not None:
+        inputs += ["-i", str(voice_path)]
+        audio_inputs.append((next_idx, "voice"))
+        next_idx += 1
+
+    # Build filter_complex. If music + voice → amix at custom volumes.
+    if len(audio_inputs) == 1:
+        only_idx, only_role = audio_inputs[0]
+        # Single layer: just trim/loop to video duration
+        filter_str = f"[{only_idx}:a]volume={'0.55' if only_role == 'music' else '1.0'},atrim=0:{duration:.3f},asetpts=N/SR/TB[a]"
+    else:
+        # Music ducks to 25% so voice (full volume) sits on top
+        filter_str = (
+            f"[1:a]volume=0.25,atrim=0:{duration:.3f},asetpts=N/SR/TB[m];"
+            f"[2:a]volume=1.0[v];"
+            f"[m][v]amix=inputs=2:duration=longest:dropout_transition=0[a]"
+        )
+
     cmd = [
         "ffmpeg", "-y",
-        "-i", str(silent_backup if silent_backup.exists() else video_path),
-        "-stream_loop", "-1",
-        "-i", str(candidate),
-        "-map", "0:v:0", "-map", "1:a:0",
+        *inputs,
+        "-filter_complex", filter_str,
+        "-map", "0:v:0", "-map", "[a]",
         "-c:v", "copy",
         "-c:a", "aac", "-b:a", "192k",
         "-t", f"{duration:.3f}",
@@ -2250,22 +2424,19 @@ def _try_apply_stock_soundtrack(
     proc = subprocess.run(cmd, capture_output=True, text=True)
     if proc.returncode != 0:
         log.warning(
-            "soundtrack: ffmpeg overlay failed (%s)",
-            proc.stderr.strip()[-200:],
+            "audio: ffmpeg mix failed (%s)",
+            proc.stderr.strip()[-300:],
         )
         return False
 
-    # Replace the silent video with the audio version.
     try:
         out.replace(video_path)
     except OSError as e:
-        log.warning("soundtrack: rename failed: %s", e)
+        log.warning("audio: rename failed: %s", e)
         return False
 
-    log.info(
-        "soundtrack: applied %s (vibe=%s, pitch=%s) → %s",
-        candidate.name, vibe, pitch, video_path.name,
-    )
+    layers = ", ".join(role for _, role in audio_inputs)
+    log.info("audio: mixed [%s] onto %s", layers, video_path.name)
     return True
 
 
