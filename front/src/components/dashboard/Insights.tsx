@@ -41,6 +41,7 @@ import { BriefsGrid } from "@/components/insights/BriefsGrid";
 import { GameDnaCard } from "@/components/insights/GameDnaCard";
 import { GameFitGrid } from "@/components/insights/GameFitGrid";
 import { LaunchAnalysisModal } from "@/components/insights/LaunchAnalysisModal";
+import { LiveAnalysisView } from "@/components/insights/LiveAnalysisView";
 import { PitchStoryBlock } from "@/components/insights/PitchStoryBlock";
 import { RunAnalysisDialog } from "@/components/insights/RunAnalysisDialog";
 import {
@@ -132,6 +133,32 @@ export function Insights({ autoLaunch = false }: InsightsProps = {}) {
     </>
   );
 
+  // Live partial-report path. Active when:
+  //   1. there is a current run in PipelineRunsContext
+  //   2. its phase is still "running" (or just-erroring), so the cached
+  //      report doesn't exist yet
+  //   3. the user is asking for that run's game (or no game — they
+  //      clicked the running row from the list)
+  // We bypass the normal /api/report path entirely and render sections
+  // from the SSE step buffer instead.
+  const trimmedGameForLive = gameName.trim();
+  const isLiveForCurrent =
+    run &&
+    run.phase === "running" &&
+    (trimmedGameForLive === "" ||
+      trimmedGameForLive.toLowerCase() === run.gameName.toLowerCase() ||
+      (run.doneEvent &&
+        trimmedGameForLive.toLowerCase() ===
+          run.doneEvent.name.toLowerCase()));
+  if (isLiveForCurrent && run) {
+    return (
+      <>
+        <LiveAnalysisView run={run} onBackToList={() => setGameName("")} />
+        {modals}
+      </>
+    );
+  }
+
   if (isLoading) {
     return (
       <>
@@ -199,13 +226,17 @@ export function Insights({ autoLaunch = false }: InsightsProps = {}) {
                   <ActiveRunRow
                     run={run}
                     onOpen={() => {
-                      // Clicking the running row reopens the live progress
-                      // dialog. When the run is done, navigate to its
-                      // report instead.
-                      if (run.phase === "running" || run.phase === "error") {
-                        openDialog();
+                      // Click the running row → switch to the live
+                      // partial report view (handled by Insights's live
+                      // branch). For done runs, jump to the cached
+                      // report. For errors, reopen the dialog so the
+                      // user can read the error + retry.
+                      if (run.phase === "running") {
+                        setGameName(run.gameName);
                       } else if (run.phase === "done" && run.doneEvent) {
                         setGameName(run.doneEvent.name);
+                      } else if (run.phase === "error") {
+                        openDialog();
                       }
                     }}
                     onDismiss={dismissCompleted}

@@ -90,6 +90,14 @@ export interface ActiveRun {
   errorMsg: string | null;
   startedAt: number;
   finishedAt: number | null;
+  /**
+   * Per-step ``data`` payloads received from the SSE stream — keyed by
+   * ``step_id`` (e.g. ``game_dna``, ``archetypes``, ``briefs``,
+   * ``variants``). Lets the live partial report view render real
+   * sections progressively as the pipeline emits them, mirroring the
+   * old Streamlit "sections appear as they finish" experience.
+   */
+  stepData: Record<string, unknown>;
 }
 
 interface PipelineRunsContextValue {
@@ -167,6 +175,7 @@ export function PipelineRunsProvider({
         errorMsg: null,
         startedAt: Date.now(),
         finishedAt: null,
+        stepData: {},
       });
 
       const url = new URL("/api/report/run/stream", API_BASE);
@@ -212,6 +221,10 @@ export function PipelineRunsProvider({
           const summary = event.summary as
             | Record<string, unknown>
             | undefined;
+          // Backend ships the rich per-step payload under ``data`` (see
+          // api/main.py:_full_step_payload). null when there's nothing
+          // useful to render for the step.
+          const data = event.data as unknown;
           setRun((prev) => {
             if (!prev || prev.id !== id) return prev;
             const steps = { ...prev.steps };
@@ -220,7 +233,11 @@ export function PipelineRunsProvider({
             if (nextStep && steps[nextStep.step_id]?.status === "pending") {
               steps[nextStep.step_id] = { status: "running" };
             }
-            return { ...prev, steps };
+            const stepData = { ...prev.stepData };
+            if (data !== undefined && data !== null) {
+              stepData[step_id] = data;
+            }
+            return { ...prev, steps, stepData };
           });
           return;
         }
@@ -337,6 +354,38 @@ export function usePipelineRuns(): PipelineRunsContextValue {
     );
   }
   return ctx;
+}
+
+/**
+ * Assemble a partial ``HookLensReport``-shaped object from the per-step
+ * payloads accumulated during a run. Every field is optional — the
+ * caller (LiveAnalysisView) renders each section only when its data is
+ * present, so the page progressively populates as the pipeline streams.
+ *
+ * Mapping (pipeline step_id → report field):
+ *   game_dna       → target_game
+ *   archetypes     → top_archetypes
+ *   fit_scores     → game_fit_scores
+ *   variants       → final_variants
+ *   report         → all of the above + market_context + meta
+ *
+ * The ``report`` step lands last and overrides everything with the
+ * canonical, fully-populated HookLensReport.
+ */
+export function buildPartialReport(
+  stepData: Record<string, unknown>,
+): Record<string, unknown> {
+  // The final 'report' step ships the full payload — short-circuit.
+  const finalReport = stepData["report"];
+  if (finalReport && typeof finalReport === "object") {
+    return finalReport as Record<string, unknown>;
+  }
+  const out: Record<string, unknown> = {};
+  if (stepData["game_dna"]) out.target_game = stepData["game_dna"];
+  if (stepData["archetypes"]) out.top_archetypes = stepData["archetypes"];
+  if (stepData["fit_scores"]) out.game_fit_scores = stepData["fit_scores"];
+  if (stepData["variants"]) out.final_variants = stepData["variants"];
+  return out;
 }
 
 /**

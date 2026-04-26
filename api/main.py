@@ -987,6 +987,42 @@ def get_report(
 PIPELINE_TOTAL_STEPS = 10
 
 
+def _full_step_payload(step_id: str, payload: Any) -> Any:
+    """Produce a richer JSON-safe snapshot of a step's output for SSE
+    clients that want to render partial sections of the report as the
+    pipeline streams.
+
+    Unlike :func:`_summarize_step_payload` (chips-only), this returns
+    the actual data the frontend needs to populate components like
+    ``GameDnaCard`` / ``ArchetypesTable`` / ``BriefsGrid`` — each one
+    capped at top-K to keep per-event size under ~50 KB.
+
+    Returns ``None`` when there's nothing useful to ship for this step.
+    """
+    if payload is None:
+        return None
+    try:
+        # Pydantic v2 models — use .model_dump() with mode="json" so dates
+        # / enums / nested models all serialize cleanly.
+        if hasattr(payload, "model_dump"):
+            return payload.model_dump(mode="json")
+        if isinstance(payload, list):
+            out = []
+            # Cap at 20 to bound bandwidth; archetypes/briefs/variants are
+            # capped well below this in the pipeline anyway.
+            for item in payload[:20]:
+                if hasattr(item, "model_dump"):
+                    out.append(item.model_dump(mode="json"))
+                elif isinstance(item, dict):
+                    out.append(item)
+            return out
+        if isinstance(payload, dict):
+            return payload
+    except Exception:
+        log.exception("full payload dump failed for step %s", step_id)
+    return None
+
+
 def _summarize_step_payload(step_id: str, payload: Any) -> dict[str, Any]:
     """Produce a small JSON-safe summary of a step's output for SSE clients.
 
@@ -1089,6 +1125,10 @@ async def run_report_stream(
             "total": PIPELINE_TOTAL_STEPS,
             "duration_s": round(duration_s, 3),
             "summary": _summarize_step_payload(step_id, payload),
+            # Richer payload for the live partial report view — only
+            # shipped for steps where the frontend has a component
+            # ready to render the data progressively.
+            "data": _full_step_payload(step_id, payload),
         }
         loop.call_soon_threadsafe(queue.put_nowait, event)
 
