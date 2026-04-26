@@ -129,19 +129,23 @@ TARGET GAME DNA:
 
 Generate ONE {_ACTIVE_TREND} video ad concept for {dna.name}.
 
-CRITICAL — scenario_prompt construction rules for Veo3:
-1. Base it STRICTLY on {dna.name}'s actual core mechanic: "{dna.core_loop}"
-2. Escalate the mechanic to apocalyptic extremes in 8 seconds
-3. Camera: first-person POV or extreme close-up right behind the action
-4. EMBED the brainrot narration as spoken dialogue using this exact format:
-   A voice screams: "NOOOOO [reaction to mechanic]!! OH MY GOD [escalation]!! [peak chaos line]!! THIS IS INSANE AHHH"
-   — the voice lines MUST reference what is visually happening in the game
-5. Include explicit SFX cues: satisfying pops, crunches, whooshes tied to the mechanic
-6. End with score counter exploding / UI going crazy on screen
-7. Format: 9:16 vertical, 8 seconds, mobile game UI overlay, {dna.visual_style} style
+CRITICAL — scenario_prompt construction rules for Grok Imagine Video (image-to-video):
+The video will START from a real in-game screenshot of {dna.name} as its first frame.
+The prompt must therefore CONTINUE from the exact visual the screenshot shows.
 
-The scenario_prompt is a SINGLE dense paragraph sent directly to Veo3.
-It must read like a vivid movie scene description WITH the dialogue embedded.
+1. Open with: "Starting from the exact gameplay visuals of {dna.name} ({dna.visual_style} style),"
+2. Base it STRICTLY on the core mechanic: "{dna.core_loop}" — describe what happens NEXT after the screenshot
+3. Escalate the mechanic to apocalyptic extremes within 8 seconds
+4. Camera: stay in the same angle as the real gameplay screenshot, then push into first-person POV
+5. EMBED brainrot narration as spoken dialogue:
+   A voice screams: "NOOOOO [reaction to what's happening]!! OH MY GOD [escalation]!! THIS IS INSANE AHHH"
+   — the voice lines MUST match the visual action beat by beat
+6. Include SFX cues tied to the mechanic (pops, crunches, whooshes, score-tick sounds)
+7. End: score counter explodes, UI flashes, chaos peaks
+8. Format: 9:16 vertical, 8 seconds, mobile game UI visible, {dna.visual_style} art style
+
+The scenario_prompt is ONE dense paragraph sent directly to Grok.
+It must read like a vivid movie scene continuation WITH dialogue embedded.
 
 narration_script: same lines as embedded in scenario_prompt, formatted as a standalone script.
 
@@ -206,13 +210,44 @@ def _stub_video_url(prompt: str) -> str:
     return f"https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4"
 
 
-def generate_scenario_video(concept: VideoAdConcept, *, project_id: str | None = None) -> VideoAdResult:
+def _upload_screenshot(path: Path, auth: str, label: str) -> str | None:
+    """Upload a local screenshot to Scenario, return assetId (cached)."""
+    import hashlib  # noqa: PLC0415
+    sha = hashlib.sha256(path.read_bytes()).hexdigest()[:16]
+    cache_path = CACHE_DIR_VIDEO / f"asset_{sha}.txt"
+    if cache_path.exists():
+        return cache_path.read_text().strip()
+    payload = {
+        "image": base64.b64encode(path.read_bytes()).decode(),
+        "name": label,
+    }
+    headers = {"Authorization": auth, "Content-Type": "application/json"}
+    r = httpx.post(f"{SCENARIO_BASE}/assets", headers=headers, json=payload, timeout=60.0)
+    r.raise_for_status()
+    body = r.json()
+    asset_id = (body.get("asset") or {}).get("id") or body.get("id") or body.get("assetId")
+    if asset_id:
+        cache_path.write_text(asset_id)
+    return asset_id
+
+
+def generate_scenario_video(
+    concept: VideoAdConcept,
+    *,
+    project_id: str | None = None,
+    screenshot_path: Path | None = None,
+) -> VideoAdResult:
     """Submit concept.scenario_prompt to Scenario video API and poll for result.
 
-    Disk-cached by prompt hash so re-runs skip the API call.
-    Falls back gracefully when SCENARIO_API_KEY/SECRET are missing.
+    When screenshot_path is provided, uploads it as the first frame (image-to-video).
+    Disk-cached by prompt + screenshot hash. Falls back gracefully on missing creds.
     """
-    cache_key = {"prompt": concept.scenario_prompt, "model": VIDEO_MODEL_ID}
+    screenshot_hash = ""
+    if screenshot_path and screenshot_path.exists():
+        import hashlib  # noqa: PLC0415
+        screenshot_hash = hashlib.sha256(screenshot_path.read_bytes()).hexdigest()[:8]
+
+    cache_key = {"prompt": concept.scenario_prompt, "model": VIDEO_MODEL_ID, "ss": screenshot_hash}
     cache_path = CACHE_DIR_VIDEO / f"video__{hash_key(cache_key)}.json"
     CACHE_DIR_VIDEO.mkdir(parents=True, exist_ok=True)
 
@@ -245,6 +280,13 @@ def generate_scenario_video(concept: VideoAdConcept, *, project_id: str | None =
         "resolution": "720p",
         "numOutputs": 1,
     }
+
+    # Use gameplay screenshot as first frame if available
+    if screenshot_path and screenshot_path.exists():
+        asset_id = _upload_screenshot(screenshot_path, auth, f"gameplay_{screenshot_path.parent.name}")
+        if asset_id:
+            payload["image"] = asset_id
+            log.info("Using gameplay screenshot as first frame (assetId=%s)", asset_id)
 
     log.info("Scenario video CACHE MISS · POST %s", url)
     r = httpx.post(url, headers=headers, json=payload, timeout=60.0)
@@ -293,8 +335,23 @@ def generate_scenario_video(concept: VideoAdConcept, *, project_id: str | None =
 # Combined helper — concept + video in one call
 # ---------------------------------------------------------------------------
 
+SCREENSHOT_CACHE_DIR = CACHE_DIR / "screenshots"
+
+
+def _find_screenshot(app_id: str) -> Path | None:
+    """Return the first cached gameplay screenshot for this app, if any."""
+    d = SCREENSHOT_CACHE_DIR / app_id
+    for name in ("00.png", "01.png", "02.png"):
+        p = d / name
+        if p.exists():
+            return p
+    return None
+
 
 def generate_video_brief(dna: GameDNA) -> VideoAdResult:
     """Full pipeline: concept generation → Scenario video. Both steps cached."""
     concept = generate_video_concept(dna)
-    return generate_scenario_video(concept)
+    screenshot = _find_screenshot(dna.app_id)
+    if screenshot:
+        log.info("First-frame screenshot: %s", screenshot)
+    return generate_scenario_video(concept, screenshot_path=screenshot)
