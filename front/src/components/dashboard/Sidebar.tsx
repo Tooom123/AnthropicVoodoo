@@ -70,21 +70,34 @@ export function Sidebar({ activePath, collapsed, onToggle }: SidebarProps) {
         collapsed ? "w-14" : "w-60"
       )}
     >
-      {/* Logo + collapse toggle */}
+      {/* Logo + collapse toggle. Logo is a link to the home/landing
+          page so users can always click "out" of any nested view. */}
       <div className="flex h-14 items-center border-b border-sidebar-border px-3 gap-2">
-        <div
-          className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-white font-black"
-          style={{ background: "#0f172a", fontSize: "1.1rem", lineHeight: 1 }}
-          aria-label="Voodoo"
+        <Link
+          to="/"
+          onClick={() => setGameName("")}
+          className="flex items-center gap-2 flex-1 min-w-0 rounded-md transition-opacity hover:opacity-80"
+          aria-label="VoodRadar — back to home"
+          title="Back to home"
         >
-          V
-        </div>
-        {!collapsed && (
-          <div className="flex flex-col leading-tight flex-1 min-w-0">
-            <span className="text-sm font-bold tracking-tight text-sidebar-foreground">VoodRadar</span>
-            <span className="text-[10px] text-sidebar-foreground/50">by Voodoo</span>
+          <div
+            className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-white font-black"
+            style={{ background: "#0f172a", fontSize: "1.1rem", lineHeight: 1 }}
+            aria-hidden
+          >
+            V
           </div>
-        )}
+          {!collapsed && (
+            <div className="flex flex-col leading-tight min-w-0">
+              <span className="text-sm font-bold tracking-tight text-sidebar-foreground">
+                VoodRadar
+              </span>
+              <span className="text-[10px] text-sidebar-foreground/50">
+                by Voodoo
+              </span>
+            </div>
+          )}
+        </Link>
         <button
           onClick={onToggle}
           className="ml-auto shrink-0 p-1 rounded-md text-sidebar-foreground/40 hover:text-sidebar-foreground hover:bg-sidebar-accent transition-colors"
