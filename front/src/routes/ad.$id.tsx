@@ -30,11 +30,13 @@ import {
   Layers,
   Loader2,
   AlertTriangle,
+  Sparkles,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { TopNav } from "@/components/dashboard/TopNav";
 import { NetworkBadge } from "@/components/dashboard/NetworkBadge";
+import { useCreativeDeconstruction } from "@/lib/api";
 import type { Network } from "@/data/sample";
 
 const API_BASE =
@@ -163,7 +165,7 @@ function AdDetailPage() {
               have been fetched from SensorTower at least once are available
               here.
             </p>
-            <Link to="/" className="mt-4 inline-block">
+            <Link to="/ads" className="mt-4 inline-block">
               <Button variant="outline" size="sm">
                 Go to Ad Library
               </Button>
@@ -174,6 +176,7 @@ function AdDetailPage() {
         {ad && (
           <>
             <Hero ad={ad} />
+            <DeconstructionSection creativeId={ad.creative_id} />
             <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-3">
               <RunHistoryCard ad={ad} />
               <CreativeMetaCard ad={ad} />
@@ -543,6 +546,205 @@ function SiblingsSection({ ad }: { ad: CreativeDetail }) {
           </Link>
         ))}
       </div>
+    </section>
+  );
+}
+
+function Field({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div>
+      <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
+        {label}
+      </div>
+      <div className="mt-1 text-sm leading-relaxed text-foreground/90">
+        {children}
+      </div>
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ DECONSTRUCTION */
+
+const PITCH_PALETTE: Record<string, string> = {
+  satisfaction: "border-emerald-500/40 bg-emerald-500/10 text-emerald-300",
+  fail: "border-rose-500/40 bg-rose-500/10 text-rose-300",
+  curiosity: "border-violet-500/40 bg-violet-500/10 text-violet-300",
+  rage_bait: "border-orange-500/40 bg-orange-500/10 text-orange-300",
+  tutorial: "border-sky-500/40 bg-sky-500/10 text-sky-300",
+  asmr: "border-pink-500/40 bg-pink-500/10 text-pink-300",
+  celebrity: "border-amber-500/40 bg-amber-500/10 text-amber-300",
+  challenge: "border-red-500/40 bg-red-500/10 text-red-300",
+  transformation: "border-fuchsia-500/40 bg-fuchsia-500/10 text-fuchsia-300",
+  other: "border-border bg-card text-muted-foreground",
+};
+
+/**
+ * "AI analysis" section — when this creative has a cached Gemini
+ * deconstruction, surface it as a structured dossier (hook, scene
+ * flow, on-screen text, palette, audience). Renders nothing when
+ * the creative hasn't been analysed yet, so the rest of the page
+ * is unaffected.
+ */
+function DeconstructionSection({ creativeId }: { creativeId: string }) {
+  const { data: decon, isLoading } = useCreativeDeconstruction(creativeId);
+
+  if (isLoading) {
+    return (
+      <section className="mt-6">
+        <Card className="border-dashed border-border bg-card/40 p-5">
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            Loading AI analysis…
+          </div>
+        </Card>
+      </section>
+    );
+  }
+  if (!decon) return null;
+
+  const pitchClass =
+    decon.hook_emotional_pitch
+      ? PITCH_PALETTE[decon.hook_emotional_pitch] ?? PITCH_PALETTE.other
+      : PITCH_PALETTE.other;
+
+  return (
+    <section className="mt-6">
+      <Card className="border-border bg-card p-5">
+        <header className="flex flex-wrap items-baseline justify-between gap-3">
+          <div>
+            <div className="flex items-center gap-2 text-[11px] uppercase tracking-wider text-muted-foreground">
+              <Sparkles className="h-3.5 w-3.5 text-primary" />
+              AI deconstruction
+            </div>
+            <h3 className="mt-0.5 text-base font-semibold">
+              What Gemini sees in this ad
+            </h3>
+          </div>
+          {decon.hook_emotional_pitch && (
+            <span
+              className={`inline-flex items-center rounded-md border px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider ${pitchClass}`}
+            >
+              {decon.hook_emotional_pitch.replace("_", " ")}
+            </span>
+          )}
+        </header>
+
+        <div className="mt-5 grid grid-cols-1 gap-5 lg:grid-cols-2">
+          {/* Hook column */}
+          <div className="space-y-3">
+            {decon.hook_summary && (
+              <div className="rounded-md border border-primary/30 bg-primary/5 p-3">
+                <div className="text-[10px] uppercase tracking-wider text-primary">
+                  Hook · 0–3s
+                </div>
+                <p className="mt-1 text-sm leading-relaxed">
+                  {decon.hook_summary}
+                </p>
+              </div>
+            )}
+            {decon.hook_visual_action && (
+              <Field label="Visual action">{decon.hook_visual_action}</Field>
+            )}
+            {decon.hook_text_overlay && (
+              <Field label="Text overlay">"{decon.hook_text_overlay}"</Field>
+            )}
+            {decon.hook_voiceover_transcript && (
+              <Field label="Voiceover">
+                <span className="italic">
+                  "{decon.hook_voiceover_transcript}"
+                </span>
+              </Field>
+            )}
+            {decon.audience_proxy && (
+              <Field label="Audience proxy">{decon.audience_proxy}</Field>
+            )}
+            {decon.visual_style && (
+              <Field label="Visual style">{decon.visual_style}</Field>
+            )}
+          </div>
+
+          {/* Story arc column */}
+          <div className="space-y-3">
+            {decon.scene_flow.length > 0 && (
+              <div>
+                <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                  Scene flow
+                </div>
+                <ol className="mt-1 list-decimal space-y-1.5 pl-5 text-xs leading-relaxed text-foreground/85">
+                  {decon.scene_flow.map((line, i) => (
+                    <li key={i}>{line}</li>
+                  ))}
+                </ol>
+              </div>
+            )}
+            {decon.on_screen_text.length > 0 && (
+              <div>
+                <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                  On-screen text (chronological)
+                </div>
+                <div className="mt-1 flex flex-wrap gap-1.5">
+                  {decon.on_screen_text.map((t, i) => (
+                    <span
+                      key={`${t}-${i}`}
+                      className="rounded-md border border-border bg-background/60 px-2 py-0.5 text-[11px]"
+                    >
+                      {t}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+            {decon.cta_text && (
+              <Field label="Call to action">
+                <span className="inline-block rounded bg-violet-500/15 px-2 py-1 text-xs font-medium text-violet-300">
+                  {decon.cta_text}
+                </span>
+                {decon.cta_timing_seconds != null && (
+                  <span className="ml-2 text-[10px] text-muted-foreground">
+                    appears at ~{decon.cta_timing_seconds.toFixed(1)}s
+                  </span>
+                )}
+              </Field>
+            )}
+            {decon.palette_hex.length > 0 && (
+              <div>
+                <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                  Dominant palette
+                </div>
+                <div className="mt-1.5 flex items-center gap-2">
+                  {decon.palette_hex.map((hex) => (
+                    <div
+                      key={hex}
+                      className="flex flex-col items-center gap-1"
+                    >
+                      <span
+                        className="h-7 w-7 rounded-md border border-border shadow-inner"
+                        style={{ background: hex }}
+                        title={hex}
+                      />
+                      <span className="font-mono text-[9px] text-muted-foreground">
+                        {hex}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {decon.deconstruction_model && (
+          <div className="mt-4 text-[10px] text-muted-foreground/70">
+            Analysed with {decon.deconstruction_model}
+          </div>
+        )}
+      </Card>
     </section>
   );
 }

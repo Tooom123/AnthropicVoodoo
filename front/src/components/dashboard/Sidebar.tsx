@@ -6,6 +6,7 @@ import {
   Sparkles,
   Compass,
   Gamepad2,
+  Newspaper,
   PanelLeftClose,
   PanelLeftOpen,
 } from "lucide-react";
@@ -33,20 +34,21 @@ const SECTIONS: Section[] = [
     label: "Portfolio",
     items: [
       { label: "My Games", to: "/voodoo", icon: Gamepad2 },
-      { label: "Insights", to: "/insights", icon: Sparkles },
+      { label: "Ad Library", to: "/ads", icon: LayoutGrid },
     ],
   },
   {
     label: "Intelligence",
     items: [
-      { label: "Ad Library", to: "/ads", icon: LayoutGrid },
-      { label: "Competitive Scope", to: "/competitive", icon: Target },
+      { label: "Weekly Brief", to: "/weekly", icon: Newspaper },
+      { label: "Insights", to: "/insights", icon: Sparkles },
+      { label: "Performance Signals", to: "/performance", icon: Activity },
     ],
   },
   {
-    label: "Market",
+    label: "Market study",
     items: [
-      { label: "Performance Signals", to: "/performance", icon: Activity },
+      { label: "Competitive Scope", to: "/competitive", icon: Target },
       { label: "Global Market Map", to: "/geo", icon: Compass },
     ],
   },

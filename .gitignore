@@ -40,6 +40,11 @@ data/cache/*
 !data/cache/reports/**
 !data/cache/game_dna/
 !data/cache/game_dna/**
+# Knowledge base: ~500 Gemini Pro Vision deconstructions (~2 MB,
+# ~$2-3 of API calls + 30 min wall-clock). Ships with the repo so any
+# clone can demo /weekly + /ad/$id with the full hook dossier.
+!data/cache/deconstruct/
+!data/cache/deconstruct/**
 !data/cache/game_fit/
 !data/cache/game_fit/**
 !data/cache/briefs/

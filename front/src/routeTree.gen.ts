@@ -9,6 +9,7 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as WeeklyRouteImport } from './routes/weekly'
 import { Route as VoodooRouteImport } from './routes/voodoo'
 import { Route as PerformanceRouteImport } from './routes/performance'
 import { Route as InsightsRouteImport } from './routes/insights'
@@ -18,6 +19,11 @@ import { Route as AdsRouteImport } from './routes/ads'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AdIdRouteImport } from './routes/ad.$id'
 
+const WeeklyRoute = WeeklyRouteImport.update({
+  id: '/weekly',
+  path: '/weekly',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const VoodooRoute = VoodooRouteImport.update({
   id: '/voodoo',
   path: '/voodoo',
@@ -67,6 +73,7 @@ export interface FileRoutesByFullPath {
   '/insights': typeof InsightsRoute
   '/performance': typeof PerformanceRoute
   '/voodoo': typeof VoodooRoute
+  '/weekly': typeof WeeklyRoute
   '/ad/$id': typeof AdIdRoute
 }
 export interface FileRoutesByTo {
@@ -77,6 +84,7 @@ export interface FileRoutesByTo {
   '/insights': typeof InsightsRoute
   '/performance': typeof PerformanceRoute
   '/voodoo': typeof VoodooRoute
+  '/weekly': typeof WeeklyRoute
   '/ad/$id': typeof AdIdRoute
 }
 export interface FileRoutesById {
@@ -88,6 +96,7 @@ export interface FileRoutesById {
   '/insights': typeof InsightsRoute
   '/performance': typeof PerformanceRoute
   '/voodoo': typeof VoodooRoute
+  '/weekly': typeof WeeklyRoute
   '/ad/$id': typeof AdIdRoute
 }
 export interface FileRouteTypes {
@@ -100,6 +109,7 @@ export interface FileRouteTypes {
     | '/insights'
     | '/performance'
     | '/voodoo'
+    | '/weekly'
     | '/ad/$id'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -110,6 +120,7 @@ export interface FileRouteTypes {
     | '/insights'
     | '/performance'
     | '/voodoo'
+    | '/weekly'
     | '/ad/$id'
   id:
     | '__root__'
@@ -120,6 +131,7 @@ export interface FileRouteTypes {
     | '/insights'
     | '/performance'
     | '/voodoo'
+    | '/weekly'
     | '/ad/$id'
   fileRoutesById: FileRoutesById
 }
@@ -131,11 +143,19 @@ export interface RootRouteChildren {
   InsightsRoute: typeof InsightsRoute
   PerformanceRoute: typeof PerformanceRoute
   VoodooRoute: typeof VoodooRoute
+  WeeklyRoute: typeof WeeklyRoute
   AdIdRoute: typeof AdIdRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/weekly': {
+      id: '/weekly'
+      path: '/weekly'
+      fullPath: '/weekly'
+      preLoaderRoute: typeof WeeklyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/voodoo': {
       id: '/voodoo'
       path: '/voodoo'
@@ -203,6 +223,7 @@ const rootRouteChildren: RootRouteChildren = {
   InsightsRoute: InsightsRoute,
   PerformanceRoute: PerformanceRoute,
   VoodooRoute: VoodooRoute,
+  WeeklyRoute: WeeklyRoute,
   AdIdRoute: AdIdRoute,
 }
 export const routeTree = rootRouteImport

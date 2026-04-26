@@ -348,6 +348,99 @@ export interface VariantVideoResponse {
   has_audio?: boolean;
 }
 
+// ---------------------------------------------------------------------------
+// Per-creative Gemini deconstruction — populated by the pipeline + the
+// background scan_top_competitors job. Powers the /ad/$id "AI analysis"
+// section that turns the page from a metadata viewer into a creative
+// dossier.
+// ---------------------------------------------------------------------------
+
+export interface CreativeDeconstruction {
+  creative_id: string;
+  hook_summary: string | null;
+  hook_visual_action: string | null;
+  hook_text_overlay: string | null;
+  hook_voiceover_transcript: string | null;
+  hook_emotional_pitch:
+    | "satisfaction"
+    | "fail"
+    | "curiosity"
+    | "rage_bait"
+    | "tutorial"
+    | "asmr"
+    | "celebrity"
+    | "challenge"
+    | "transformation"
+    | "other"
+    | null;
+  scene_flow: string[];
+  on_screen_text: string[];
+  cta_text: string | null;
+  cta_timing_seconds: number | null;
+  palette_hex: string[];
+  visual_style: string | null;
+  audience_proxy: string | null;
+  deconstruction_model: string | null;
+}
+
+// Weekly Report — aggregated knowledge-base view, powers the /weekly route.
+
+export interface WeeklyEntry {
+  creative_id: string;
+  advertiser_name: string | null;
+  icon_url: string | null;
+  network: string | null;
+  ad_type: string | null;
+  thumb_url: string | null;
+  creative_url: string | null;
+  first_seen_at: string | null;
+  days_active: number | null;
+  hook_summary: string | null;
+  hook_emotional_pitch: string | null;
+  visual_style: string | null;
+  palette_hex: string[];
+  cta_text: string | null;
+  deconstructed_at: string | null;
+  new_this_week: boolean;
+}
+
+export interface WeeklyReport {
+  generated_at: string;
+  knowledge_base_size: number;
+  new_this_week: number;
+  by_pitch: Record<string, number>;
+  top_picks: WeeklyEntry[];
+}
+
+export function useWeeklyReport(days = 7, limit = 60) {
+  return useQuery<WeeklyReport>({
+    queryKey: ["weekly-report", days, limit],
+    queryFn: () =>
+      apiFetch<WeeklyReport>("/api/weekly-report", { days, limit }),
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+export function useCreativeDeconstruction(creativeId: string | undefined) {
+  return useQuery<CreativeDeconstruction | null>({
+    queryKey: ["creativeDeconstruction", creativeId],
+    queryFn: async () => {
+      if (!creativeId) return null;
+      const url = new URL(
+        `/api/creatives/${encodeURIComponent(creativeId)}/deconstruction`,
+        API_BASE,
+      );
+      const res = await fetch(url.toString());
+      if (res.status === 404) return null;
+      if (!res.ok) throw new Error(`API → ${res.status}`);
+      return res.json() as Promise<CreativeDeconstruction>;
+    },
+    enabled: Boolean(creativeId),
+    staleTime: 10 * 60 * 1000,
+    retry: false,
+  });
+}
+
 export interface VariantVideoStatus {
   exists: boolean;
   video_url?: string | null;

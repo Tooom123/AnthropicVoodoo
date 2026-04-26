@@ -91,6 +91,12 @@ class CompetitorGame(BaseModel):
     # fetch network ranks via /api/advertisers/{app_id}/ranks. Optional so the
     # current sample.ts CompetitorGame stays compatible.
     app_id: str | None = None
+    iconUrl: str | None = None
+    """App icon URL (from SensorTower app_info.icon_url). Lets the
+    Competitive Scope page render real game thumbnails next to each
+    row instead of just the name."""
+    publisher: str | None = None
+    """Publisher name when present in the SensorTower row."""
 
 
 # ---------------------------------------------------------------------------
@@ -307,6 +313,19 @@ def _advertiser_to_competitor(adv: dict, rank: int) -> CompetitorGame:
                 or sub_genre
             )
 
+    # Icon + publisher come from app_info when present (top_advertisers
+    # endpoint embeds it for unified_app rows). Fallback to None — the
+    # frontend renders a colour swatch when icon_url is missing.
+    info = adv.get("app_info") or {}
+    icon_url = (
+        adv.get("icon_url")
+        or info.get("icon_url")
+    )
+    publisher = (
+        adv.get("publisher_name")
+        or info.get("publisher_name")
+    )
+
     return CompetitorGame(
         game=adv.get("name") or adv.get("app_name") or "Unknown",
         subGenre=sub_genre,
@@ -315,6 +334,8 @@ def _advertiser_to_competitor(adv: dict, rank: int) -> CompetitorGame:
         spendTier=tier,
         status="Active",
         app_id=str(raw_app_id) if raw_app_id else None,
+        iconUrl=str(icon_url) if icon_url else None,
+        publisher=str(publisher) if publisher else None,
     )
 
 
@@ -1371,6 +1392,246 @@ def _scan_all_creatives() -> list[dict[str, Any]]:
         for au in data.get("ad_units") or []:
             out.append(au)
     return out
+
+
+_DECONSTRUCT_CACHE_DIR = CACHE_DIR / "deconstruct"
+
+
+class DeconstructionView(BaseModel):
+    """A trimmed shape of ``DeconstructedCreative`` for the /ad/$id page —
+    same fields as on disk, just typed for the React UI without dragging
+    the full ``RawCreative`` payload along.
+    """
+
+    creative_id: str
+    hook_summary: str | None = None
+    hook_visual_action: str | None = None
+    hook_text_overlay: str | None = None
+    hook_voiceover_transcript: str | None = None
+    hook_emotional_pitch: str | None = None
+    scene_flow: list[str] = []
+    on_screen_text: list[str] = []
+    cta_text: str | None = None
+    cta_timing_seconds: float | None = None
+    palette_hex: list[str] = []
+    visual_style: str | None = None
+    audience_proxy: str | None = None
+    deconstruction_model: str | None = None
+
+
+# ---------------------------------------------------------------------------
+# Weekly Report — surfaces the freshest, highest-signal creatives the
+# knowledge base has analysed in the last 7 days, grouped by emotional
+# pitch + sorted by recency. Powers the /weekly route.
+# ---------------------------------------------------------------------------
+
+
+class WeeklyEntry(BaseModel):
+    creative_id: str
+    advertiser_name: str | None
+    icon_url: str | None
+    network: str | None
+    ad_type: str | None
+    thumb_url: str | None
+    creative_url: str | None
+    first_seen_at: str | None
+    days_active: int | None
+    hook_summary: str | None
+    hook_emotional_pitch: str | None
+    visual_style: str | None
+    palette_hex: list[str] = []
+    cta_text: str | None
+    deconstructed_at: str | None  # ISO from file mtime
+    new_this_week: bool = False
+
+
+class WeeklyReport(BaseModel):
+    generated_at: str
+    knowledge_base_size: int
+    """Total deconstructions on disk."""
+    new_this_week: int
+    """How many were added in the last 7 days."""
+    by_pitch: dict[str, int]
+    """Distribution: ``{emotional_pitch: count}`` across the whole base."""
+    top_picks: list[WeeklyEntry]
+    """Sorted list of the most-recent + highest-signal entries (cap 30)."""
+
+
+@app.get("/api/weekly-report", response_model=WeeklyReport)
+def get_weekly_report(
+    days: int = Query(
+        7,
+        ge=1,
+        le=60,
+        description="Window in days for the 'new this week' count",
+    ),
+    limit: int = Query(
+        30, ge=1, le=200, description="Cap on top_picks rows"
+    ),
+) -> WeeklyReport:
+    """Aggregate the per-creative deconstruction cache into a weekly
+    market brief. Each entry is enriched with the creative's
+    SensorTower metadata (icon, advertiser, dates) by joining
+    against the cached creatives_top_*.json files.
+    """
+    decon_dir = CACHE_DIR / "deconstruct"
+    if not decon_dir.exists():
+        return WeeklyReport(
+            generated_at=datetime.now(timezone.utc).isoformat(),
+            knowledge_base_size=0,
+            new_this_week=0,
+            by_pitch={},
+            top_picks=[],
+        )
+
+    # Build a creative_id → ad_unit + app_info index from cached
+    # SensorTower data so we can hydrate each deconstruction with its
+    # advertiser name, icon, dates, etc.
+    st_index: dict[str, dict[str, Any]] = {}
+    st_cache = CACHE_DIR / "sensortower"
+    if st_cache.exists():
+        for p in st_cache.glob("creatives_top_*.json"):
+            try:
+                data = json.loads(p.read_text())
+            except (OSError, json.JSONDecodeError):
+                continue
+            for unit in data.get("ad_units") or []:
+                cid = str(unit.get("id") or "")
+                if cid and cid not in st_index:
+                    st_index[cid] = unit
+
+    cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+    by_pitch: dict[str, int] = {}
+    entries: list[WeeklyEntry] = []
+    for path in decon_dir.glob("*.json"):
+        try:
+            decon = json.loads(path.read_text())
+        except (OSError, json.JSONDecodeError):
+            continue
+
+        creative_id = decon.get("raw", {}).get("creative_id") or path.stem
+        hook = decon.get("hook") or {}
+        pitch = hook.get("emotional_pitch") or "other"
+        by_pitch[pitch] = by_pitch.get(pitch, 0) + 1
+
+        mtime = datetime.fromtimestamp(path.stat().st_mtime, tz=timezone.utc)
+        is_new = mtime >= cutoff
+
+        # Hydrate from SensorTower cache when present
+        unit = st_index.get(creative_id) or {}
+        info = unit.get("app_info") or {}
+        media = (unit.get("creatives") or [{}])[0]
+
+        first_seen = unit.get("first_seen_at") or decon.get("raw", {}).get(
+            "first_seen_at"
+        )
+        last_seen = unit.get("last_seen_at") or decon.get("raw", {}).get(
+            "last_seen_at"
+        )
+        days_active: int | None = None
+        try:
+            if first_seen and last_seen:
+                days_active = max(
+                    0,
+                    (
+                        datetime.fromisoformat(last_seen)
+                        - datetime.fromisoformat(first_seen)
+                    ).days,
+                )
+        except (TypeError, ValueError):
+            days_active = None
+
+        entries.append(
+            WeeklyEntry(
+                creative_id=creative_id,
+                advertiser_name=info.get("name")
+                or info.get("humanized_name")
+                or decon.get("raw", {}).get("advertiser_name"),
+                icon_url=info.get("icon_url"),
+                network=unit.get("network")
+                or decon.get("raw", {}).get("network"),
+                ad_type=unit.get("ad_type") or decon.get("raw", {}).get("ad_type"),
+                thumb_url=media.get("thumb_url"),
+                creative_url=media.get("creative_url"),
+                first_seen_at=str(first_seen) if first_seen else None,
+                days_active=days_active,
+                hook_summary=hook.get("summary"),
+                hook_emotional_pitch=pitch,
+                visual_style=decon.get("visual_style"),
+                palette_hex=list(decon.get("palette_hex") or []),
+                cta_text=decon.get("cta_text"),
+                deconstructed_at=mtime.isoformat(),
+                new_this_week=is_new,
+            )
+        )
+
+    # Sort: new-this-week first, then by deconstructed_at desc, then by
+    # days_active desc (longer-running winners surface).
+    entries.sort(
+        key=lambda e: (
+            0 if e.new_this_week else 1,
+            -(
+                datetime.fromisoformat(e.deconstructed_at).timestamp()
+                if e.deconstructed_at
+                else 0
+            ),
+            -(e.days_active or 0),
+        )
+    )
+
+    return WeeklyReport(
+        generated_at=datetime.now(timezone.utc).isoformat(),
+        knowledge_base_size=len(entries),
+        new_this_week=sum(1 for e in entries if e.new_this_week),
+        by_pitch=by_pitch,
+        top_picks=entries[:limit],
+    )
+
+
+@app.get(
+    "/api/creatives/{creative_id}/deconstruction",
+    response_model=DeconstructionView,
+)
+def get_creative_deconstruction(creative_id: str) -> DeconstructionView:
+    """Return the cached Gemini deconstruction for a creative.
+
+    Reads from data/cache/deconstruct/{creative_id}.json — populated by
+    the pipeline (``app/analysis/deconstruct.py``) on every Gemini call,
+    or pre-warmed by ``scripts/scan_top_competitors.py``. Returns 404
+    when the creative hasn't been deconstructed yet so the frontend can
+    show a "Run analysis" CTA.
+    """
+    path = _DECONSTRUCT_CACHE_DIR / f"{creative_id}.json"
+    if not path.exists() or path.stat().st_size == 0:
+        raise HTTPException(
+            status_code=404,
+            detail=f"No deconstruction cached for creative {creative_id!r}",
+        )
+    try:
+        d = json.loads(path.read_text())
+    except (OSError, json.JSONDecodeError):
+        raise HTTPException(
+            status_code=500,
+            detail=f"Corrupted deconstruction cache for {creative_id!r}",
+        )
+
+    hook = d.get("hook") or {}
+    return DeconstructionView(
+        creative_id=creative_id,
+        hook_summary=hook.get("summary"),
+        hook_visual_action=hook.get("visual_action"),
+        hook_text_overlay=hook.get("text_overlay"),
+        hook_voiceover_transcript=hook.get("voiceover_transcript"),
+        hook_emotional_pitch=hook.get("emotional_pitch"),
+        scene_flow=list(d.get("scene_flow") or []),
+        on_screen_text=list(d.get("on_screen_text") or []),
+        cta_text=d.get("cta_text"),
+        cta_timing_seconds=d.get("cta_timing_seconds"),
+        palette_hex=list(d.get("palette_hex") or []),
+        visual_style=d.get("visual_style"),
+        audience_proxy=d.get("audience_proxy"),
+        deconstruction_model=d.get("deconstruction_model"),
+    )
 
 
 @app.get("/api/creatives/{creative_id}", response_model=CreativeDetail)
