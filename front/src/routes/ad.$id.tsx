@@ -203,18 +203,27 @@ function Hero({ ad }: { ad: CreativeDetail }) {
             maxHeight: isVertical ? 480 : undefined,
           }}
         >
-          {ad.media.preview_url ? (
+          {/* SensorTower URL conventions (verified empirically against
+              the live S3 bucket on 2026-04-26):
+                - creative_url → real mp4 (Content-Type: video/mp4)
+                - preview_url  → JPEG thumbnail (Content-Type: image/jpeg)
+                - thumb_url    → JPEG thumbnail (smaller)
+              The previous code passed preview_url to <video src> which
+              only loaded the JPEG and never played anything. For
+              video ads, use creative_url; for images/playables, fall
+              back through preview_url then thumb_url as static <img>. */}
+          {ad.ad_type.startsWith("video") && ad.media.creative_url ? (
             <video
-              src={ad.media.preview_url}
-              poster={ad.media.thumb_url ?? undefined}
+              src={ad.media.creative_url}
+              poster={ad.media.thumb_url ?? ad.media.preview_url ?? undefined}
               controls
               loop
               playsInline
               className="h-full w-full object-cover"
             />
-          ) : ad.media.thumb_url ? (
+          ) : ad.media.preview_url || ad.media.thumb_url ? (
             <img
-              src={ad.media.thumb_url}
+              src={(ad.media.preview_url || ad.media.thumb_url) as string}
               alt={ad.media.title ?? ad.creative_id}
               className="h-full w-full object-cover"
             />
