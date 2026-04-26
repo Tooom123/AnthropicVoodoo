@@ -757,13 +757,29 @@ function CreativeDetail({ creative, categoryAvg, proxyScore }: { creative: Creat
       </SheetHeader>
 
       <div className="mt-4 flex-1 space-y-5 overflow-auto pr-1">
-        <div className="relative aspect-video w-full overflow-hidden rounded-md bg-gradient-to-br from-muted to-muted/40">
-          <div className="absolute inset-0 grid place-items-center">
-            <div className="grid h-14 w-14 place-items-center rounded-full bg-background/40 backdrop-blur-sm">
-              <Play className="h-6 w-6 fill-foreground text-foreground" />
+        {/* Media — video player if available, else thumbnail, else placeholder */}
+        <div className="relative w-full overflow-hidden rounded-md bg-muted" style={{ aspectRatio: creative.creativeUrl ? "9/16" : "16/9", maxHeight: "50vh" }}>
+          {creative.creativeUrl ? (
+            <video
+              key={creative.creativeUrl}
+              src={creative.creativeUrl}
+              controls
+              autoPlay
+              playsInline
+              className="h-full w-full object-contain"
+            />
+          ) : creative.thumbUrl ? (
+            <img
+              src={creative.thumbUrl}
+              alt={creative.game}
+              className="h-full w-full object-cover"
+            />
+          ) : (
+            <div className="grid h-full w-full place-items-center text-muted-foreground/40">
+              <Play className="h-8 w-8" />
             </div>
-          </div>
-          <span className="absolute right-2 top-2 rounded-md bg-background/70 px-1.5 py-0.5 text-[10px] font-medium backdrop-blur-sm">
+          )}
+          <span className="absolute right-2 top-2 rounded-md bg-black/50 px-1.5 py-0.5 text-[10px] font-medium text-white backdrop-blur-sm">
             {creative.format}
           </span>
         </div>
@@ -785,9 +801,9 @@ function CreativeDetail({ creative, categoryAvg, proxyScore }: { creative: Creat
             </span>
           </DetailRow>
           <DetailRow label="Run duration">{creative.runDays} days</DetailRow>
-          <DetailRow label="Share of Voice">{proxyScore(creative)}/100</DetailRow>
+          <DetailRow label="Perf. score">{proxyScore(creative)}/100</DetailRow>
           <DetailRow label="Publisher">{creative.publisherName ?? "—"}</DetailRow>
-          <DetailRow label="SoV score">{proxyScore(creative)}/100</DetailRow>
+          <DetailRow label="Game">{creative.game}</DetailRow>
         </div>
 
         <div>
