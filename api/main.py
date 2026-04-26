@@ -254,6 +254,23 @@ def _raw_to_creative(rc, *, app_info_index: dict[str, dict[str, Any]] | None = N
 
 
 def _advertiser_to_competitor(adv: dict, rank: int) -> CompetitorGame:
+    """Map a SensorTower top-advertiser row to the frontend's CompetitorGame.
+
+    Note on field provenance:
+      - ``game``, ``app_id``, ``sov`` (Share of Voice) come straight from
+        SensorTower's ``top_advertisers`` endpoint.
+      - ``appStoreRank`` is intentionally just ``rank`` (1-N) — i.e. the
+        rank within the SoV-sorted list of top advertisers in this
+        category. The frontend column is labelled "SoV rank" to make
+        this honest.
+      - ``monthlySpend`` is a SYNTHETIC ESTIMATE derived from SoV
+        (``sov × $8M``). SensorTower exposes paid UA *download* counts
+        but not USD spend, so this is a heuristic; the frontend tooltip
+        flags it as estimated.
+      - ``subGenre`` is best-effort from the SensorTower row's
+        ``categories`` field when present, falling back to "Mobile game".
+        Previously hardcoded "Puzzle" for everyone.
+    """
     sov: float = adv.get("sov") or adv.get("share") or 0.0
     monthly_spend = max(50_000, int(sov * 8_000_000))
     if sov > 0.08:
@@ -268,9 +285,30 @@ def _advertiser_to_competitor(adv: dict, rank: int) -> CompetitorGame:
         or adv.get("unified_app_id")
         or adv.get("entity_id")
     )
+
+    # Best-effort sub-genre extraction. SensorTower wraps categories in a
+    # few different shapes depending on endpoint; try the most common ones
+    # before falling back to a generic label.
+    sub_genre = "Mobile game"
+    cats = (
+        adv.get("categories")
+        or adv.get("category_names")
+        or (adv.get("app_info") or {}).get("categories")
+    )
+    if isinstance(cats, list) and cats:
+        first = cats[0]
+        if isinstance(first, str):
+            sub_genre = first
+        elif isinstance(first, dict):
+            sub_genre = (
+                first.get("name")
+                or first.get("category_name")
+                or sub_genre
+            )
+
     return CompetitorGame(
         game=adv.get("name") or adv.get("app_name") or "Unknown",
-        subGenre="Puzzle",
+        subGenre=sub_genre,
         appStoreRank=rank,
         monthlySpend=monthly_spend,
         spendTier=tier,

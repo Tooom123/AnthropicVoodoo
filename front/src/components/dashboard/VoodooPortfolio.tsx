@@ -64,10 +64,15 @@ function networkColor(network: string): string {
 }
 
 export function VoodooPortfolio() {
-  const { setGameName } = useGame();
-  const { data, isLoading, error } = useVoodooPortfolio(30);
+  const { gameName, setGameName } = useGame();
+  const { data, isLoading, error } = useVoodooPortfolio(50);
 
   const [configOpen, setConfigOpen] = useState(false);
+  // Game name to seed the LaunchAnalysisModal with — set the moment the
+  // user clicks "Run analysis" on a card, so the modal's autocomplete is
+  // already filled when it pops open. Distinct from the global gameName
+  // in GameContext (which can be stale from a previous Insights load).
+  const [pendingGameName, setPendingGameName] = useState<string>("");
   const { startRun, openDialog, run } = usePipelineRuns();
 
   // Auto-navigate to the Insights page when a run completes from this view.
@@ -83,6 +88,7 @@ export function VoodooPortfolio() {
 
   function handleAnalyze(name: string) {
     setGameName(name);
+    setPendingGameName(name);
     setConfigOpen(true);
   }
 
@@ -244,7 +250,7 @@ export function VoodooPortfolio() {
       <LaunchAnalysisModal
         open={configOpen}
         onOpenChange={setConfigOpen}
-        initialGameName={run?.gameName ?? ""}
+        initialGameName={pendingGameName || gameName || ""}
         onLaunch={handleLaunch}
       />
       <RunAnalysisDialog />

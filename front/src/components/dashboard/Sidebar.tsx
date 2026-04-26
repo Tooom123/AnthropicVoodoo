@@ -7,7 +7,6 @@ import {
   Activity,
   Target,
   Sparkles,
-  Map,
   Radar,
   Compass,
   Gamepad2,
@@ -26,36 +25,38 @@ interface Section {
 }
 
 /**
- * Sidebar nav. Trimmed to only routes that actually have a page mounted.
+ * Sidebar nav — two sections aligned with the product's mental model:
  *
- * Order within Market Intelligence is intentional for the demo:
- * 1. Ad Library — what the PM sees first ("show me what's running today")
- * 2. HookLens Insights — the hero product surface (analyses + briefs)
- * 3. Competitive Scope — top advertisers contextualizing the analysis
- * 4. Performance Signals — single-creative deep dive
+ *   ▸ HookLens — the core product surface (what the PM does day-to-day):
+ *     Ad Library · App Portfolio · HookLens Insights ⭐
  *
- * Game Mapping covers Voodoo's own portfolio + the worldwide market map.
+ *   ▸ Market Mapping — supporting context views (where do creatives live,
+ *     who's competing, where's spend going): Competitive Scope ·
+ *     Performance Signals · Global Market Map
+ *
+ * "App Portfolio" was previously labelled "Voodoo Portfolio" — but
+ * once we generalise, any publisher could plug their app catalog in.
  *
  * Old placeholder items (Trend Detection, Creative Clusters, Audience
  * Overlap, Brief Generator, Asset Studio, Recommendations) all pointed
- * to non-existent routes and have been removed to keep the demo clean.
+ * to non-existent routes and have been removed.
  */
 const SECTIONS: Section[] = [
   {
-    label: "Market Intelligence",
-    icon: Radar,
+    label: "HookLens",
+    icon: Sparkles,
     items: [
       { label: "Ad Library", to: "/", icon: LayoutGrid },
+      { label: "App Portfolio", to: "/voodoo", icon: Gamepad2 },
       { label: "HookLens Insights", to: "/insights", icon: Sparkles },
-      { label: "Competitive Scope", to: "/competitive", icon: Target },
-      { label: "Performance Signals", to: "/performance", icon: Activity },
     ],
   },
   {
-    label: "Game Mapping",
-    icon: Map,
+    label: "Market Mapping",
+    icon: Radar,
     items: [
-      { label: "Voodoo Portfolio", to: "/voodoo", icon: Gamepad2 },
+      { label: "Competitive Scope", to: "/competitive", icon: Target },
+      { label: "Performance Signals", to: "/performance", icon: Activity },
       { label: "Global Market Map", to: "/geo", icon: Compass },
     ],
   },
@@ -64,7 +65,8 @@ const SECTIONS: Section[] = [
 export function Sidebar({ activePath }: { activePath: string }) {
   const initialOpen: Record<string, boolean> = {};
   SECTIONS.forEach((s) => {
-    initialOpen[s.label] = s.items.some((i) => i.to === activePath) || s.label === "Market Intelligence";
+    // Open both sections by default — only 6 items total, no need to collapse.
+    initialOpen[s.label] = true;
   });
   const [open, setOpen] = useState<Record<string, boolean>>(initialOpen);
 
