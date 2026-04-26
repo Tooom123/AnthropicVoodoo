@@ -13,8 +13,16 @@
  * Empty state: when no cached report exists, point user to:
  *   `uv run python -m scripts.precache "<game_name>"`
  */
-import { useState } from "react";
-import { Clock, DollarSign, Sigma, Sparkles, RefreshCw } from "lucide-react";
+import { useEffect, useState } from "react";
+import {
+  Clock,
+  DollarSign,
+  Sigma,
+  Sparkles,
+  RefreshCw,
+  History,
+  ChevronRight,
+} from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
@@ -41,7 +49,16 @@ import {
   formatGenerated,
 } from "@/components/insights/utils";
 
-export function Insights() {
+interface InsightsProps {
+  /**
+   * When true (set by the route from ``?launch=1``), the page auto-opens
+   * the LaunchAnalysisModal on first mount. Used by the navbar's "Launch
+   * new analysis" CTA so the user lands here with the modal already up.
+   */
+  autoLaunch?: boolean;
+}
+
+export function Insights({ autoLaunch = false }: InsightsProps = {}) {
   const { gameName, setGameName } = useGame();
   const { data: report, isLoading, error } = useReport(gameName);
   const { data: reportList = [] } = useReportList();
@@ -57,6 +74,11 @@ export function Insights() {
     gameName: string;
     config: PipelineRunConfig;
   } | null>(null);
+
+  // Navbar "Launch new analysis" → /insights?launch=1 → auto-open modal.
+  useEffect(() => {
+    if (autoLaunch) setConfigOpen(true);
+  }, [autoLaunch]);
 
   const trimmedGame = gameName.trim();
 
@@ -139,25 +161,61 @@ export function Insights() {
   if (!report) {
     return (
       <>
-        <Card className="border-border bg-card p-8">
-          <h3 className="text-lg font-semibold">
-            No cached HookLens report for &ldquo;{gameName || "—"}&rdquo;
-          </h3>
-          <p className="mt-2 text-sm text-muted-foreground">
-            The full pipeline (Game DNA → archetypes → game-fit → briefs →
-            Scenario) takes ~3–5 min and ~$0.05–1 in API calls. Default scan
-            is worldwide × all networks for the broadest signal.
-          </p>
-          <div className="mt-4 flex flex-wrap items-center gap-3">
-            <Button onClick={() => setConfigOpen(true)} size="lg">
-              <Sparkles className="mr-1.5 h-4 w-4" />
-              Launch new analysis
-            </Button>
-            <span className="text-xs text-muted-foreground">
-              pick a Voodoo title or any mobile game · streams progress live
-            </span>
-          </div>
-          <details className="mt-5 text-xs text-muted-foreground">
+        <div className="space-y-6">
+          {/* Top CTA card */}
+          <Card className="border-border bg-card p-6">
+            <div className="flex flex-wrap items-start justify-between gap-4">
+              <div>
+                <h3 className="text-lg font-semibold">
+                  {gameName
+                    ? `No cached HookLens report for "${gameName}"`
+                    : "Run a HookLens analysis"}
+                </h3>
+                <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
+                  The full pipeline — Game DNA · market archetypes · game-fit ·
+                  Opus-authored briefs · Scenario visuals — takes ~3–5 min and
+                  ~$0.05–1 in API calls. Default scan is worldwide × all
+                  networks for the broadest signal.
+                </p>
+              </div>
+              <Button onClick={() => setConfigOpen(true)} size="lg">
+                <Sparkles className="mr-1.5 h-4 w-4" />
+                Launch new analysis
+              </Button>
+            </div>
+          </Card>
+
+          {/* Recent analyses — the actionable history. Each card loads the
+              cached report instantly when clicked. Sorted most-recent first
+              by the backend (/api/reports). */}
+          {reportList.length > 0 ? (
+            <div>
+              <header className="mb-3 flex items-center gap-2">
+                <History className="h-3.5 w-3.5 text-muted-foreground" />
+                <span className="text-[11px] uppercase tracking-wider text-muted-foreground">
+                  Recent analyses · {reportList.length}
+                </span>
+              </header>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                {reportList.map((r) => (
+                  <RecentAnalysisCard
+                    key={r.app_id}
+                    entry={r}
+                    onPick={() => setGameName(r.name)}
+                  />
+                ))}
+              </div>
+            </div>
+          ) : (
+            <Card className="border-border bg-card p-6">
+              <p className="text-sm text-muted-foreground">
+                No cached analyses yet. Click "Launch new analysis" above to
+                run the first one.
+              </p>
+            </Card>
+          )}
+
+          <details className="text-xs text-muted-foreground">
             <summary className="cursor-pointer select-none hover:text-foreground">
               Or pre-cache from CLI
             </summary>
@@ -166,32 +224,7 @@ export function Insights() {
               {JSON.stringify(gameName || "Mob Control")}
             </pre>
           </details>
-          {reportList.length > 0 && (
-            <div className="mt-6">
-              <p className="text-sm font-medium text-foreground">
-                Or pick from {reportList.length} previously analyzed game
-                {reportList.length === 1 ? "" : "s"}:
-              </p>
-              <ul className="mt-2 space-y-1 text-sm">
-                {reportList.map((r) => (
-                  <li key={r.app_id}>
-                    <button
-                      type="button"
-                      onClick={() => setGameName(r.name)}
-                      className="text-left text-muted-foreground transition-colors hover:text-primary"
-                    >
-                      •{" "}
-                      <span className="font-medium text-foreground">
-                        {r.name}
-                      </span>{" "}
-                      ({r.num_archetypes} archetypes · {r.num_variants} variants)
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-        </Card>
+        </div>
         {modals}
       </>
     );
@@ -270,4 +303,95 @@ export function Insights() {
       {modals}
     </div>
   );
+}
+
+interface RecentAnalysisCardProps {
+  entry: {
+    app_id: string;
+    name: string;
+    num_archetypes: number;
+    num_variants: number;
+    total_cost_usd: number;
+    duration_seconds: number;
+    generated_at: string | null;
+  };
+  onPick: () => void;
+}
+
+/**
+ * One row in the "Recent analyses" grid on the Insights landing.
+ *
+ * Surfaces the metadata a PM cares about when triaging which past
+ * report to revisit: name + when it was generated + how rich it is
+ * (archetypes / variants count) + how much it cost. Clicking the
+ * whole card loads the report into the Insights view.
+ */
+function RecentAnalysisCard({ entry, onPick }: RecentAnalysisCardProps) {
+  const generated = entry.generated_at
+    ? new Date(entry.generated_at).toLocaleString(undefined, {
+        month: "short",
+        day: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      })
+    : "—";
+  const ageMs = entry.generated_at
+    ? Date.now() - new Date(entry.generated_at).getTime()
+    : null;
+  const ageLabel = formatRelativeAge(ageMs);
+
+  return (
+    <button
+      type="button"
+      onClick={onPick}
+      className="group flex flex-col gap-3 rounded-lg border border-border bg-card p-4 text-left transition-all hover:border-primary/50 hover:shadow-md hover:shadow-primary/5"
+    >
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0 flex-1">
+          <div className="truncate text-sm font-semibold leading-tight">
+            {entry.name}
+          </div>
+          <div className="mt-0.5 truncate text-[11px] text-muted-foreground">
+            {generated}
+            {ageLabel && (
+              <span className="ml-1 text-muted-foreground/70">· {ageLabel}</span>
+            )}
+          </div>
+        </div>
+        <ChevronRight className="h-4 w-4 flex-shrink-0 text-muted-foreground/50 transition-colors group-hover:text-primary" />
+      </div>
+      <div className="flex flex-wrap gap-1.5 text-[10px]">
+        <span className="rounded bg-muted/60 px-1.5 py-0.5 font-medium text-muted-foreground">
+          {entry.num_archetypes} archetypes
+        </span>
+        <span className="rounded bg-muted/60 px-1.5 py-0.5 font-medium text-muted-foreground">
+          {entry.num_variants} variants
+        </span>
+        {entry.total_cost_usd > 0 && (
+          <span className="rounded bg-muted/60 px-1.5 py-0.5 font-medium text-muted-foreground">
+            ${entry.total_cost_usd.toFixed(2)}
+          </span>
+        )}
+        {entry.duration_seconds > 0 && (
+          <span className="rounded bg-muted/60 px-1.5 py-0.5 font-medium text-muted-foreground">
+            {Math.round(entry.duration_seconds / 60)}m {Math.round(entry.duration_seconds % 60)}s
+          </span>
+        )}
+      </div>
+    </button>
+  );
+}
+
+function formatRelativeAge(ms: number | null): string {
+  if (ms == null) return "";
+  const sec = Math.floor(ms / 1000);
+  if (sec < 60) return "just now";
+  const min = Math.floor(sec / 60);
+  if (min < 60) return `${min} min ago`;
+  const hr = Math.floor(min / 60);
+  if (hr < 24) return `${hr}h ago`;
+  const d = Math.floor(hr / 24);
+  if (d < 7) return `${d}d ago`;
+  const w = Math.floor(d / 7);
+  return `${w}w ago`;
 }
