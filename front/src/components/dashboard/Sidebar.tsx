@@ -6,18 +6,11 @@ import {
   LayoutGrid,
   Activity,
   Target,
-  Eye,
   Sparkles,
   Map,
-  Wand2,
-  Brain,
-  TrendingUp,
-  Layers,
   Radar,
-  GitCompare,
-  PieChart,
-  Lightbulb,
   Compass,
+  Gamepad2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -32,45 +25,38 @@ interface Section {
   items: SubItem[];
 }
 
+/**
+ * Sidebar nav. Trimmed to only routes that actually have a page mounted.
+ *
+ * Order within Market Intelligence is intentional for the demo:
+ * 1. Ad Library — what the PM sees first ("show me what's running today")
+ * 2. HookLens Insights — the hero product surface (analyses + briefs)
+ * 3. Competitive Scope — top advertisers contextualizing the analysis
+ * 4. Performance Signals — single-creative deep dive
+ *
+ * Game Mapping covers Voodoo's own portfolio + the worldwide market map.
+ *
+ * Old placeholder items (Trend Detection, Creative Clusters, Audience
+ * Overlap, Brief Generator, Asset Studio, Recommendations) all pointed
+ * to non-existent routes and have been removed to keep the demo clean.
+ */
 const SECTIONS: Section[] = [
   {
     label: "Market Intelligence",
     icon: Radar,
     items: [
       { label: "Ad Library", to: "/", icon: LayoutGrid },
-      { label: "Performance Signals", to: "/performance", icon: Activity },
+      { label: "HookLens Insights", to: "/insights", icon: Sparkles },
       { label: "Competitive Scope", to: "/competitive", icon: Target },
-    ],
-  },
-  {
-    label: "Pattern Recognition",
-    icon: Eye,
-    items: [
-      { label: "Trend Detection", to: "/patterns/trends", icon: TrendingUp },
-      { label: "Creative Clusters", to: "/patterns/clusters", icon: Layers },
+      { label: "Performance Signals", to: "/performance", icon: Activity },
     ],
   },
   {
     label: "Game Mapping",
     icon: Map,
     items: [
-      { label: "Genre Map", to: "/mapping/genre", icon: Compass },
-      { label: "Audience Overlap", to: "/mapping/overlap", icon: GitCompare },
-    ],
-  },
-  {
-    label: "Creative Output",
-    icon: Wand2,
-    items: [
-      { label: "Brief Generator", to: "/creative/brief", icon: Sparkles },
-      { label: "Asset Studio", to: "/creative/studio", icon: PieChart },
-    ],
-  },
-  {
-    label: "Insight Layer",
-    icon: Brain,
-    items: [
-      { label: "Recommendations", to: "/insights/recommendations", icon: Lightbulb },
+      { label: "Voodoo Portfolio", to: "/voodoo", icon: Gamepad2 },
+      { label: "Global Market Map", to: "/geo", icon: Compass },
     ],
   },
 ];
@@ -84,12 +70,22 @@ export function Sidebar({ activePath }: { activePath: string }) {
 
   return (
     <aside className="w-64 shrink-0 border-r border-sidebar-border bg-sidebar text-sidebar-foreground">
-      <div className="flex h-14 items-center gap-2 border-b border-sidebar-border px-4">
-        <div className="grid h-7 w-7 place-items-center rounded-md bg-primary text-primary-foreground text-xs font-bold">
-          AI
+      <div className="flex h-14 items-center gap-2.5 border-b border-sidebar-border px-4">
+        {/*
+          Voodoo brand mark: matches voodoo.io's white-V-on-black logo in
+          LIGHT mode, and inverts to black-V-on-white in DARK mode so the
+          glyph stays visible on either background. font-black + Inter is
+          the closest free match to the Voodoo wordmark's heavy stencil.
+        */}
+        <div
+          className="grid h-8 w-8 place-items-center rounded-md bg-black text-white font-black dark:bg-white dark:text-black"
+          style={{ fontFamily: "Inter, system-ui, sans-serif", fontSize: "1.25rem", lineHeight: 1 }}
+          aria-label="Voodoo"
+        >
+          V
         </div>
         <div className="flex flex-col leading-tight">
-          <span className="text-sm font-semibold">AdIntel Gaming</span>
+          <span className="text-sm font-semibold tracking-tight">Voodoo</span>
           <span className="text-[10px] text-muted-foreground">Ad Intelligence</span>
         </div>
       </div>

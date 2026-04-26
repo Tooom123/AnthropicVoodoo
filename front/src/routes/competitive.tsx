@@ -5,7 +5,7 @@ import { CompetitiveScope } from "@/components/dashboard/CompetitiveScope";
 export const Route = createFileRoute("/competitive")({
   head: () => ({
     meta: [
-      { title: "Competitive Scope — AdIntel Gaming" },
+      { title: "Competitive Scope — Voodoo" },
       { name: "description", content: "Tracked competitor games with rank, spend tier, and status." },
     ],
   }),

@@ -40,20 +40,17 @@ import {
 } from "@/components/ui/table";
 import {
   abbrevNumber,
-  creatives,
   FORMAT_HEX,
   FORMATS,
   NETWORK_HEX,
   type Creative,
   type Format,
 } from "@/data/sample";
+import { useCreatives } from "@/lib/api";
+import { useGame } from "@/lib/game-context";
 import { NetworkBadge } from "./NetworkBadge";
 
 // ---------- helpers ----------
-
-const CATEGORY_AVG = Math.round(
-  creatives.reduce((s, c) => s + c.score, 0) / creatives.length,
-);
 
 // fake "7-day avg" trend per creative for the trend column
 function trendVsRecent(c: Creative): number {
@@ -147,13 +144,25 @@ type SortKey =
   | "score";
 
 export function PerformanceSignals() {
+  const { gameName } = useGame();
+  const { data: creatives = [], isLoading } = useCreatives({ game_name: gameName || undefined });
   const [highlight, setHighlight] = useState<string | null>(null);
   const [selected, setSelected] = useState<Creative | null>(null);
   const [sortKey, setSortKey] = useState<SortKey>("score");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
 
+  const categoryAvg = useMemo(
+    () =>
+      creatives.length
+        ? Math.round(creatives.reduce((s: number, c: Creative) => s + c.score, 0) / creatives.length)
+        : 0,
+    [creatives],
+  );
+
   // ----- derived stats (Section A) -----
   const stats = useMemo(() => {
+    if (!creatives.length) return { avgRun: 0, topNet: "", topNetScore: 0, bestFmt: "", longRunners: 0 };
+
     const avgRun = Math.round(
       creatives.reduce((s, c) => s + c.runDays, 0) / creatives.length,
     );
@@ -197,7 +206,7 @@ export function PerformanceSignals() {
     const longRunners = creatives.filter((c) => c.runDays >= 30).length;
 
     return { avgRun, topNet, topNetScore, bestFmt, longRunners };
-  }, []);
+  }, [creatives]);
 
   // ----- left chart: top 8 by score -----
   const top8 = useMemo(
@@ -238,7 +247,15 @@ export function PerformanceSignals() {
           return (a.score - b.score) * dir;
       }
     });
-  }, [sortKey, sortDir]);
+  }, [creatives, sortKey, sortDir]);
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center p-10 text-sm text-muted-foreground">
+        Loading performance signals…
+      </div>
+    );
+  }
 
   function toggleSort(key: SortKey) {
     if (sortKey === key) {
@@ -628,7 +645,7 @@ export function PerformanceSignals() {
           side="right"
           className="w-full sm:max-w-[420px] bg-sidebar border-l border-sidebar-border"
         >
-          {selected && <CreativeDetail creative={selected} />}
+          {selected && <CreativeDetail creative={selected} categoryAvg={categoryAvg} />}
         </SheetContent>
       </Sheet>
     </div>
@@ -670,10 +687,10 @@ function SortableHead({
   );
 }
 
-function CreativeDetail({ creative }: { creative: Creative }) {
+function CreativeDetail({ creative, categoryAvg }: { creative: Creative; categoryAvg: number }) {
   const data = [
     { name: "This creative", value: creative.score, fill: NETWORK_HEX[creative.network] },
-    { name: "Category avg", value: CATEGORY_AVG, fill: "oklch(0.5 0.02 260)" },
+    { name: "Category avg", value: categoryAvg, fill: "oklch(0.5 0.02 260)" },
   ];
 
   return (

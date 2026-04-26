@@ -1,0 +1,39 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg: #ffffff;
+  --dot: #d1d5db;
+  --surface: #ffffff;
+  --border: #e5e7eb;
+  --text-primary: #111827;
+  --text-secondary: #6b7280;
+  --accent: #4f46e5;
+  --accent-light: #eef2ff;
+  --chart-retention: #6366f1;
+  --chart-monetization: #f59e0b;
+  --chart-coreloop: #10b981;
+  --chart-marketfit: #ef4444;
+  --chart-score: #8b5cf6;
+  --publish: #10b981;
+  --iterate: #f59e0b;
+  --kill: #ef4444;
+}
+
+body {
+  background-color: #ffffff;
+  background-image: radial-gradient(circle, #d1d5db 1px, transparent 1px);
+  background-size: 24px 24px;
+  color: #111827;
+  font-family: 'DM Sans', sans-serif;
+  min-height: 100vh;
+}
+
+#root {
+  min-height: 100vh;
+}
+
+input[type='range'] {
+  accent-color: #4f46e5;
+}

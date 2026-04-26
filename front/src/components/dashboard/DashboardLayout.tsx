@@ -1,15 +1,16 @@
 import { Sidebar } from "./Sidebar";
 import { TopNav } from "./TopNav";
 import { useLocation } from "@tanstack/react-router";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Link } from "@tanstack/react-router";
 
-const TABS = [
-  { label: "Ad Library", to: "/" },
-  { label: "Performance Signals", to: "/performance" },
-  { label: "Competitive Scope", to: "/competitive" },
-];
-
+/**
+ * App shell — sidebar + topnav + page header + content.
+ *
+ * The previous version also rendered a horizontal tab bar with the
+ * Market Intelligence pages (Ad Library / HookLens Insights /
+ * Competitive Scope / Performance Signals / Global Market Map). It was
+ * a 1:1 duplicate of the sidebar entries, so it's been removed — the
+ * sidebar is the single source of truth for top-level navigation.
+ */
 export function DashboardLayout({
   title,
   children,
@@ -19,7 +20,6 @@ export function DashboardLayout({
 }) {
   const location = useLocation();
   const path = location.pathname;
-  const showTabs = TABS.some((t) => t.to === path);
 
   return (
     <div className="flex min-h-screen bg-background text-foreground">
@@ -31,19 +31,10 @@ export function DashboardLayout({
             <p className="text-xs uppercase tracking-wider text-muted-foreground">
               Market Intelligence
             </p>
-            <h2 className="mt-0.5 text-2xl font-semibold tracking-tight">{title}</h2>
+            <h2 className="mt-0.5 text-2xl font-semibold tracking-tight">
+              {title}
+            </h2>
           </div>
-          {showTabs && (
-            <Tabs value={path} className="mb-6">
-              <TabsList className="bg-card border border-border">
-                {TABS.map((t) => (
-                  <TabsTrigger key={t.to} value={t.to} asChild>
-                    <Link to={t.to}>{t.label}</Link>
-                  </TabsTrigger>
-                ))}
-              </TabsList>
-            </Tabs>
-          )}
           {children}
         </main>
       </div>
