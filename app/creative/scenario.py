@@ -267,10 +267,12 @@ def call_scenario_video(
     label: str = "video",
     timeout_s: float = 720.0,  # video gen is slow (1-5 min typical)
     aspect_ratio: str | None = "9:16",
+    tail_image_path: Path | None = None,
+    generate_audio: bool = False,
 ) -> tuple[str, dict]:
     """Generate a video via Scenario's custom endpoint for video models.
 
-    Supports two shapes today:
+    Supports three shapes today:
 
     - **Sequence-to-video** (e.g. ``model_scenario-image-seq-to-video``):
       pass 2-5 keyframe images as ``image_paths`` (uploaded as Scenario
@@ -278,13 +280,23 @@ def call_scenario_video(
     - **Image-to-video** (e.g. ``model_kling-v2-6-i2v-pro``,
       ``model_kling-o1-i2v``): pass a single image_path. Prompt is
       typically required for these.
+    - **First+last frame i2v** (Kling O1 / Kling 2.6 Pro): same as
+      single-image i2v plus ``tail_image_path`` to anchor the last
+      frame. The model interpolates between the two — perfect for
+      morphing the variant's final gameplay frame into the game's
+      pre-rendered endcard frame so the concat'd ad has a seamless
+      handoff into the endcard mp4 instead of a cut.
+
+    ``generate_audio=True`` requests native synchronized audio from
+    models that support it (Kling 2.6 Pro, Veo 3). Quietly ignored by
+    silent models (Kling O1).
 
     Returns ``(video_url, metadata_dict)``. The video URL points at a
     Scenario CDN-hosted mp4 with a signed expiration ~6 months out.
 
     On timeout, falls back to a Picsum stub so the caller doesn't crash.
     Cached on disk under ``data/cache/scenario/`` keyed by
-    (model_id, image hashes, prompt).
+    (model_id, image hashes, prompt, tail_image_hash, audio_flag).
     """
     if not image_paths:
         raise ValueError("call_scenario_video requires at least one image_path")
@@ -292,12 +304,19 @@ def call_scenario_video(
     image_hashes = [
         hashlib.sha256(p.read_bytes()).hexdigest()[:16] for p in image_paths
     ]
+    tail_hash = (
+        hashlib.sha256(tail_image_path.read_bytes()).hexdigest()[:16]
+        if tail_image_path is not None
+        else None
+    )
     cache_key = {
         "p": prompt or "",
         "m": model_id,
         "endpoint": "video",
         "frames": image_hashes,
         "ar": aspect_ratio or "",
+        "tail": tail_hash or "",
+        "audio": bool(generate_audio),
     }
     cache_path = DEFAULT_CACHE_DIR / f"{label}__{hash_key(cache_key)}.json"
     if cache_path.exists():
@@ -323,11 +342,24 @@ def call_scenario_video(
     for i, p in enumerate(image_paths):
         asset_ids.append(upload_asset(p, name=f"vidframe_{label}_{i}"))
 
+    # Optional tail image (first+last frame mode for Kling). Uploaded
+    # as a separate asset so the model gets the full path to it.
+    tail_asset_id: str | None = None
+    if tail_image_path is not None:
+        tail_asset_id = upload_asset(
+            tail_image_path, name=f"vidtail_{label}"
+        )
+
     # Payload shape (probed against Scenario's actual API on 2026-04-26):
     #   - sequence/keyframe models accept ``images: [assetId, ...]``
     #     (validated empirically: ``imageIds``, ``imageAssetIds``,
     #     ``frames``, ``keyframes`` all return 400 "Input images is required")
     #   - single-image i2v (kling/veo/luma/sora/grok) accept ``image: assetId``
+    #   - Kling O1 / Kling 2.6 Pro accept ``lastFrameImage: assetId`` for
+    #     first+last frame interpolation (verified against the live
+    #     /models/<id> input schema on 2026-04-26).
+    #   - Veo 3 / Kling 2.6 Pro accept ``generateAudio: true`` for native
+    #     synchronized audio generation.
     #   - ``aspectRatio: "9:16"`` is the accepted name on this tenant for
     #     forcing mobile-vertical output (Sora 2 / Veo 3.1 / Grok / Seedance
     #     default to landscape 16:9; Kling is already 9:16 and ignores).
@@ -336,10 +368,14 @@ def call_scenario_video(
         payload["images"] = asset_ids
     else:
         payload["image"] = asset_ids[0]
+    if tail_asset_id:
+        payload["lastFrameImage"] = tail_asset_id
     if prompt:
         payload["prompt"] = prompt
     if aspect_ratio:
         payload["aspectRatio"] = aspect_ratio
+    if generate_audio:
+        payload["generateAudio"] = True
 
     headers = {"Content-Type": "application/json", "Authorization": auth}
     log.info(
@@ -396,6 +432,8 @@ def call_scenario_video(
                 "prompt": prompt,
                 "mode": "video",
                 "input_frames": len(image_paths),
+                "tail_image": tail_asset_id is not None,
+                "audio": bool(generate_audio),
             }
             DEFAULT_CACHE_DIR.mkdir(parents=True, exist_ok=True)
             cache_path.write_text(json.dumps(result, indent=2))

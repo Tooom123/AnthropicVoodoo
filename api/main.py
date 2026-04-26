@@ -1891,9 +1891,18 @@ async def render_variant_video(
         else:
             per_frame_prompts.append(hook_3s[:500] or "5-second cinematic gameplay clip")
 
-    # 4. Final output path — keyed by archetype_id to make caching trivial
+    # 4. Final output path — keyed by (archetype_id + endcard mtime) so
+    #    a freshly-rendered endcard invalidates the cached final mp4.
     safe_archetype = re.sub(r"[^a-zA-Z0-9_-]+", "-", archetype_id)[:40]
-    final_filename = f"variant_{game_slug}_{safe_archetype}.mp4"
+    endcard_for_cache = (
+        _endcard_path_for(app_id) if include_endcard else None
+    )
+    endcard_tag = (
+        f"_ec{int(endcard_for_cache.stat().st_mtime)}"
+        if endcard_for_cache
+        else "_noec"
+    )
+    final_filename = f"variant_{game_slug}_{safe_archetype}{endcard_tag}.mp4"
     final_path = _VIDEOS_DIR / final_filename
     if final_path.exists() and final_path.stat().st_size > 0:
         return VariantVideoResponse(
@@ -1901,7 +1910,7 @@ async def render_variant_video(
             cached=True,
             duration_s=_estimate_video_duration(final_path),
             clips=len(frame_urls),
-            endcard_appended=_endcard_path_for(app_id) is not None and include_endcard,
+            endcard_appended=endcard_for_cache is not None,
             job_ids=[],
             stub=False,
         )
@@ -1922,14 +1931,34 @@ async def render_variant_video(
                 ) from exc
         local_frames.append(dest)
 
-    # 6. Fire N parallel Scenario img2video calls
+    # 6. Fire N parallel Scenario img2video calls.
+    #
+    # Special handling for the LAST clip when an endcard PNG is on
+    # disk: pass it as ``tail_image`` (Kling O1 / Kling 2.6 Pro's
+    # ``lastFrameImage`` parameter). The model interpolates between
+    # the variant's storyboard frame and the endcard so the concat
+    # handoff is a smooth morph rather than a hard cut. Costs the
+    # same (single Scenario call, just with one extra asset upload).
     from app.creative.scenario import call_scenario_video
 
     chosen_model = model or _VARIANT_VIDEO_MODEL
+    endcard_png = (
+        _ENDCARDS_DIR / f"{app_id}.png"
+        if include_endcard and app_id
+        else None
+    )
+    if endcard_png is not None and not endcard_png.exists():
+        endcard_png = None
+
     loop = asyncio.get_running_loop()
     sem = asyncio.Semaphore(3)  # never more than 3 in flight per request
 
-    async def _gen_clip(idx: int, frame: Path, prompt: str) -> tuple[int, str, dict]:
+    async def _gen_clip(
+        idx: int,
+        frame: Path,
+        prompt: str,
+        tail: Path | None,
+    ) -> tuple[int, str, dict]:
         async with sem:
             return await loop.run_in_executor(
                 None,
@@ -1940,21 +1969,34 @@ async def render_variant_video(
                         image_paths=[frame],
                         prompt=prompt,
                         label=f"variant_{game_slug}_{safe_archetype}_clip{idx}",
+                        tail_image_path=tail,
                     ),
                 ),
             )
 
+    last_idx = len(local_frames) - 1
     log.info(
-        "render_variant_video: %s · archetype=%s · %d clips × %s",
+        "render_variant_video: %s · archetype=%s · %d clips × %s · "
+        "tail_image_on_clip%d=%s",
         game_name,
         archetype_id,
         len(local_frames),
         chosen_model,
+        last_idx,
+        bool(endcard_png),
     )
     try:
         results = await asyncio.gather(
             *[
-                _gen_clip(i, frame, per_frame_prompts[i])
+                _gen_clip(
+                    i,
+                    frame,
+                    per_frame_prompts[i],
+                    # Only the LAST clip gets the endcard tail — clips
+                    # 1 and 2 stay free-running so they can develop the
+                    # narrative without being constrained.
+                    endcard_png if i == last_idx else None,
+                )
                 for i, frame in enumerate(local_frames)
             ]
         )

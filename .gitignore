@@ -36,6 +36,13 @@ data/cache/*
 # the end of /api/variants/render-video outputs.
 !data/cache/endcards/
 !data/cache/endcards/**
+# Audio library — tracked-by-default for the soundtrack overlay. The
+# README explains which mp3s to drop in. Generated/AI tracks live in
+# data/cache/audio/generated/ and stay ignored.
+!data/cache/audio/
+!data/cache/audio/library/
+!data/cache/audio/library/**
+data/cache/audio/generated/
 # PM-uploaded screenshots/mockups for the prototype mode
 data/uploads/
 # Notebook stray cache (shouldn't happen anymore — modules now resolve to repo root)
