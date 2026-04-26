@@ -12,6 +12,7 @@ import {
   Gamepad2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useGame } from "@/lib/game-context";
 
 interface SubItem {
   label: string;
@@ -43,12 +44,12 @@ interface Section {
  */
 const SECTIONS: Section[] = [
   {
-    label: "HookLens",
+    label: "Workspace",
     icon: Sparkles,
     items: [
       { label: "Ad Library", to: "/", icon: LayoutGrid },
       { label: "App Portfolio", to: "/voodoo", icon: Gamepad2 },
-      { label: "HookLens Insights", to: "/insights", icon: Sparkles },
+      { label: "Insights", to: "/insights", icon: Sparkles },
     ],
   },
   {
@@ -63,6 +64,7 @@ const SECTIONS: Section[] = [
 ];
 
 export function Sidebar({ activePath }: { activePath: string }) {
+  const { setGameName } = useGame();
   const initialOpen: Record<string, boolean> = {};
   SECTIONS.forEach((s) => {
     // Open both sections by default — only 6 items total, no need to collapse.
@@ -112,10 +114,19 @@ export function Sidebar({ activePath }: { activePath: string }) {
                   {section.items.map((item) => {
                     const Icon = item.icon;
                     const isActive = item.to === activePath;
+                    // The Insights item is special: clicking it should
+                    // always land on the LIST view, not the detail view of
+                    // whatever game happened to be cached in GameContext.
+                    // We clear gameName on click — the Insights component
+                    // shows the list whenever no game is selected.
+                    const isInsightsTab = item.to === "/insights";
                     return (
                       <li key={item.label}>
                         <Link
                           to={item.to}
+                          onClick={() => {
+                            if (isInsightsTab) setGameName("");
+                          }}
                           className={cn(
                             "flex items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors",
                             isActive

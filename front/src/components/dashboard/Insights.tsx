@@ -15,6 +15,9 @@
  */
 import { useEffect, useRef, useState } from "react";
 import {
+  AlertCircle,
+  ArrowLeft,
+  CheckCircle2,
   Clock,
   DollarSign,
   Sigma,
@@ -22,6 +25,8 @@ import {
   RefreshCw,
   History,
   ChevronRight,
+  Loader2,
+  X,
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -37,10 +42,12 @@ import { GameDnaCard } from "@/components/insights/GameDnaCard";
 import { GameFitGrid } from "@/components/insights/GameFitGrid";
 import { LaunchAnalysisModal } from "@/components/insights/LaunchAnalysisModal";
 import { PitchStoryBlock } from "@/components/insights/PitchStoryBlock";
-import { ReportPicker } from "@/components/insights/ReportPicker";
 import { RunAnalysisDialog } from "@/components/insights/RunAnalysisDialog";
-import type { PipelineRunConfig } from "@/lib/pipeline-runs-context";
-import { usePipelineRuns } from "@/lib/pipeline-runs-context";
+import {
+  STEP_ORDER as STEP_ORDER_LABELS,
+  type PipelineRunConfig,
+  usePipelineRuns,
+} from "@/lib/pipeline-runs-context";
 import { VariantsGallery } from "@/components/insights/VariantsGallery";
 import { VideoAdCard } from "@/components/insights/VideoAdCard";
 import {
@@ -70,7 +77,7 @@ export function Insights({ autoLaunch = false }: InsightsProps = {}) {
   // Configure flow stays local; the run itself lives in the global
   // PipelineRunsContext so it survives navigation / closed dialogs.
   const [configOpen, setConfigOpen] = useState(false);
-  const { startRun, openDialog, run } = usePipelineRuns();
+  const { startRun, openDialog, run, dismissCompleted } = usePipelineRuns();
 
   // Navbar "Launch new analysis" → /insights?launch=1 → auto-open modal.
   useEffect(() => {
@@ -129,7 +136,7 @@ export function Insights({ autoLaunch = false }: InsightsProps = {}) {
     return (
       <>
         <div className="flex items-center justify-center py-20">
-          <p className="text-muted-foreground">Loading HookLens report…</p>
+          <p className="text-muted-foreground">Loading analysis…</p>
         </div>
         {modals}
       </>
@@ -167,6 +174,11 @@ export function Insights({ autoLaunch = false }: InsightsProps = {}) {
                   <History className="h-3.5 w-3.5 text-muted-foreground" />
                   <span className="text-[11px] uppercase tracking-wider text-muted-foreground">
                     Recent analyses · {reportList.length}
+                    {run && (run.phase === "running" || run.phase === "done") && (
+                      <span className="ml-1 text-foreground/70">
+                        + 1 active
+                      </span>
+                    )}
                   </span>
                 </div>
                 {gameName && (
@@ -180,6 +192,25 @@ export function Insights({ autoLaunch = false }: InsightsProps = {}) {
                 )}
               </header>
               <div className="space-y-1.5">
+                {/* Active run row — only renders when there's a live or
+                    just-completed run. Sits above the cached list so the
+                    PM always sees their in-flight work first. */}
+                {run && (
+                  <ActiveRunRow
+                    run={run}
+                    onOpen={() => {
+                      // Clicking the running row reopens the live progress
+                      // dialog. When the run is done, navigate to its
+                      // report instead.
+                      if (run.phase === "running" || run.phase === "error") {
+                        openDialog();
+                      } else if (run.phase === "done" && run.doneEvent) {
+                        setGameName(run.doneEvent.name);
+                      }
+                    }}
+                    onDismiss={dismissCompleted}
+                  />
+                )}
                 {reportList.map((r) => (
                   <RecentAnalysisRow
                     key={r.app_id}
@@ -253,12 +284,13 @@ export function Insights({ autoLaunch = false }: InsightsProps = {}) {
         </div>
         <div className="flex items-center gap-2">
           <Button
+            variant="outline"
             size="sm"
-            onClick={() => setConfigOpen(true)}
-            title="Launch a new pipeline run with custom params"
+            onClick={() => setGameName("")}
+            title="Back to the list of all cached analyses"
           >
-            <Sparkles className="mr-1.5 h-3.5 w-3.5" />
-            Launch new analysis
+            <ArrowLeft className="mr-1.5 h-3.5 w-3.5" />
+            All analyses
           </Button>
           <Button
             variant="outline"
@@ -269,11 +301,6 @@ export function Insights({ autoLaunch = false }: InsightsProps = {}) {
             <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
             Re-run
           </Button>
-          <ReportPicker
-            reports={reportList}
-            currentName={report.target_game.name}
-            onPick={setGameName}
-          />
         </div>
       </div>
 
@@ -400,6 +427,141 @@ function RecentAnalysisRow({ entry, onPick }: RecentAnalysisRowProps) {
 
       <ChevronRight className="h-4 w-4 flex-shrink-0 text-muted-foreground/50 transition-colors group-hover:text-primary" />
     </button>
+  );
+}
+
+interface ActiveRunRowProps {
+  run: NonNullable<ReturnType<typeof usePipelineRuns>["run"]>;
+  onOpen: () => void;
+  onDismiss: () => void;
+}
+
+/**
+ * One wide row representing the current/just-finished pipeline run.
+ *
+ * Mirrors the layout of RecentAnalysisRow but with a live progress
+ * indicator and tier-coloured status badge instead of static stat chips.
+ * The X button on the right dismisses the row once the run is finished
+ * (does nothing while running — to cancel use the dialog's Cancel button).
+ */
+function ActiveRunRow({ run, onOpen, onDismiss }: ActiveRunRowProps) {
+  const { steps, phase, gameName, doneEvent } = run;
+  const completed = STEP_ORDER_LABELS.filter(
+    (s) => steps[s.step_id]?.status === "done",
+  ).length;
+  const total = STEP_ORDER_LABELS.length;
+  const pct = Math.round((completed / total) * 100);
+  const currentStep = STEP_ORDER_LABELS.find(
+    (s) => steps[s.step_id]?.status === "running",
+  );
+
+  // Visuals per phase
+  const tone =
+    phase === "running"
+      ? {
+          ring: "ring-primary/30 border-primary/40 bg-primary/5",
+          icon: <Loader2 className="h-4 w-4 animate-spin text-primary" />,
+          status: "Running",
+          statusCls: "text-primary",
+        }
+      : phase === "done"
+        ? {
+            ring: "ring-emerald-500/30 border-emerald-500/40 bg-emerald-500/5",
+            icon: <CheckCircle2 className="h-4 w-4 text-emerald-400" />,
+            status: "Completed",
+            statusCls: "text-emerald-300",
+          }
+        : {
+            ring: "ring-destructive/30 border-destructive/40 bg-destructive/5",
+            icon: <AlertCircle className="h-4 w-4 text-destructive" />,
+            status: "Failed",
+            statusCls: "text-destructive",
+          };
+
+  const displayName = doneEvent?.name ?? gameName;
+
+  return (
+    <div
+      className={`group flex w-full items-center gap-4 rounded-md border px-4 py-3 ring-1 ${tone.ring}`}
+    >
+      {/* Status icon */}
+      <div className="grid h-10 w-10 flex-shrink-0 place-items-center rounded-md bg-card/80 ring-1 ring-border">
+        {tone.icon}
+      </div>
+
+      {/* Name + phase label */}
+      <button
+        type="button"
+        onClick={onOpen}
+        className="min-w-0 flex-1 text-left"
+      >
+        <div className="flex items-center gap-2">
+          <span className="truncate text-sm font-semibold leading-tight">
+            {displayName}
+          </span>
+          <span
+            className={`rounded-full bg-card px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider ring-1 ring-current/30 ${tone.statusCls}`}
+          >
+            {tone.status}
+          </span>
+        </div>
+        <div className="mt-0.5 truncate text-[11px] text-muted-foreground">
+          {phase === "running" && (
+            <>
+              <span className="tabular-nums">
+                Step {Math.min(completed + 1, total)} / {total}
+              </span>
+              {currentStep && (
+                <span className="ml-1.5">· {currentStep.label}…</span>
+              )}
+            </>
+          )}
+          {phase === "done" && doneEvent && (
+            <>
+              <span className="tabular-nums">
+                {Math.round(doneEvent.duration_s)}s
+              </span>{" "}
+              ·{" "}
+              <span className="tabular-nums">
+                ${doneEvent.cost_usd.toFixed(3)}
+              </span>{" "}
+              · click to view report →
+            </>
+          )}
+          {phase === "error" && (
+            <span className="text-destructive/80">
+              {run.errorMsg ?? "Pipeline failed"} · click to retry
+            </span>
+          )}
+        </div>
+
+        {/* Live progress bar (only when running) */}
+        {phase === "running" && (
+          <div className="mt-1 h-0.5 w-full overflow-hidden rounded-full bg-muted/60">
+            <div
+              className="h-full bg-primary transition-all duration-500"
+              style={{ width: `${pct}%` }}
+            />
+          </div>
+        )}
+      </button>
+
+      {/* Dismiss / progress percentage */}
+      {phase === "running" ? (
+        <span className="flex-shrink-0 text-xs tabular-nums text-muted-foreground">
+          {pct}%
+        </span>
+      ) : (
+        <button
+          type="button"
+          onClick={onDismiss}
+          aria-label="Dismiss"
+          className="grid h-7 w-7 flex-shrink-0 place-items-center rounded text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+        >
+          <X className="h-3.5 w-3.5" />
+        </button>
+      )}
+    </div>
   );
 }
 

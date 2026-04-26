@@ -32,7 +32,7 @@ export function ReportPicker({ reports, currentName, onPick }: ReportPickerProps
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="min-w-[280px]">
         <DropdownMenuLabel className="text-xs">
-          Pre-cached HookLens reports
+          Cached analyses
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
         {reports.map((r) => (

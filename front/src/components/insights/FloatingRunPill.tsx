@@ -112,7 +112,7 @@ export function FloatingRunPill() {
             </div>
             <div className="truncate text-[10px] text-emerald-300/80">
               <Sparkles className="-mt-0.5 mr-0.5 inline h-2.5 w-2.5" />
-              View HookLens analysis →
+              View analysis →
             </div>
           </div>
         </button>

@@ -18,7 +18,7 @@ export const Route = createFileRoute("/insights")({
 function InsightsPage() {
   const { launch } = Route.useSearch();
   return (
-    <DashboardLayout title="HookLens Insights">
+    <DashboardLayout title="Insights">
       <Insights autoLaunch={launch === "1"} />
     </DashboardLayout>
   );
