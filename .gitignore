@@ -117,3 +117,9 @@ voodooio_logo.*
 # previews from the UI). Real outputs live under data/cache/videos/.
 /variant_*.mp4
 /demo_*.mp4
+# Pitch decks and Office lock files at repo root — kept on disk for
+# the user but never tracked (the pptx is a working file, the ~$
+# prefix is PowerPoint's open-file lock).
+*.pptx
+*.pptx.bak
+~$*
