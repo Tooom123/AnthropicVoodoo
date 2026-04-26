@@ -159,58 +159,53 @@ export function Insights({ autoLaunch = false }: InsightsProps = {}) {
   }
 
   if (!report) {
+    // Empty state — no game selected. The "Launch new analysis" CTA lives
+    // in the navbar (always visible), so the page itself is now just the
+    // Recent analyses list. Sorted most-recent first by /api/reports.
     return (
       <>
-        <div className="space-y-6">
-          {/* Top CTA card */}
-          <Card className="border-border bg-card p-6">
-            <div className="flex flex-wrap items-start justify-between gap-4">
-              <div>
-                <h3 className="text-lg font-semibold">
-                  {gameName
-                    ? `No cached HookLens report for "${gameName}"`
-                    : "Run a HookLens analysis"}
-                </h3>
-                <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-                  The full pipeline — Game DNA · market archetypes · game-fit ·
-                  Opus-authored briefs · Scenario visuals — takes ~3–5 min and
-                  ~$0.05–1 in API calls. Default scan is worldwide × all
-                  networks for the broadest signal.
-                </p>
-              </div>
-              <Button onClick={() => setConfigOpen(true)} size="lg">
-                <Sparkles className="mr-1.5 h-4 w-4" />
-                Launch new analysis
-              </Button>
-            </div>
-          </Card>
-
-          {/* Recent analyses — the actionable history. Each card loads the
-              cached report instantly when clicked. Sorted most-recent first
-              by the backend (/api/reports). */}
+        <div className="space-y-4">
           {reportList.length > 0 ? (
-            <div>
-              <header className="mb-3 flex items-center gap-2">
-                <History className="h-3.5 w-3.5 text-muted-foreground" />
-                <span className="text-[11px] uppercase tracking-wider text-muted-foreground">
-                  Recent analyses · {reportList.length}
-                </span>
+            <>
+              <header className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2">
+                  <History className="h-3.5 w-3.5 text-muted-foreground" />
+                  <span className="text-[11px] uppercase tracking-wider text-muted-foreground">
+                    Recent analyses · {reportList.length}
+                  </span>
+                </div>
+                {gameName && (
+                  <span className="text-xs text-muted-foreground">
+                    No cached report for{" "}
+                    <span className="text-foreground">"{gameName}"</span> — pick
+                    one below or click{" "}
+                    <span className="text-primary">Launch new analysis</span>{" "}
+                    in the top right.
+                  </span>
+                )}
               </header>
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              <div className="space-y-1.5">
                 {reportList.map((r) => (
-                  <RecentAnalysisCard
+                  <RecentAnalysisRow
                     key={r.app_id}
                     entry={r}
                     onPick={() => setGameName(r.name)}
                   />
                 ))}
               </div>
-            </div>
+            </>
           ) : (
-            <Card className="border-border bg-card p-6">
-              <p className="text-sm text-muted-foreground">
-                No cached analyses yet. Click "Launch new analysis" above to
-                run the first one.
+            <Card className="border-border bg-card p-8 text-center">
+              <Sparkles className="mx-auto h-6 w-6 text-muted-foreground/50" />
+              <h3 className="mt-3 text-base font-semibold">
+                No cached analyses yet
+              </h3>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Click{" "}
+                <span className="font-medium text-foreground">
+                  Launch new analysis
+                </span>{" "}
+                in the top-right navbar to run the first pipeline.
               </p>
             </Card>
           )}
@@ -305,7 +300,7 @@ export function Insights({ autoLaunch = false }: InsightsProps = {}) {
   );
 }
 
-interface RecentAnalysisCardProps {
+interface RecentAnalysisRowProps {
   entry: {
     app_id: string;
     name: string;
@@ -314,19 +309,21 @@ interface RecentAnalysisCardProps {
     total_cost_usd: number;
     duration_seconds: number;
     generated_at: string | null;
+    icon_url?: string | null;
+    publisher?: string | null;
   };
   onPick: () => void;
 }
 
 /**
- * One row in the "Recent analyses" grid on the Insights landing.
+ * One wide row in the "Recent analyses" list on the Insights landing.
  *
- * Surfaces the metadata a PM cares about when triaging which past
- * report to revisit: name + when it was generated + how rich it is
- * (archetypes / variants count) + how much it cost. Clicking the
- * whole card loads the report into the Insights view.
+ * Layout (left → right): app icon · game name + publisher · generated
+ * date + relative age · archetypes/variants/cost/runtime chips · chevron.
+ * Clicking anywhere loads the cached report into the Insights view.
  */
-function RecentAnalysisCard({ entry, onPick }: RecentAnalysisCardProps) {
+function RecentAnalysisRow({ entry, onPick }: RecentAnalysisRowProps) {
+  const [iconErr, setIconErr] = useState(false);
   const generated = entry.generated_at
     ? new Date(entry.generated_at).toLocaleString(undefined, {
         month: "short",
@@ -339,28 +336,53 @@ function RecentAnalysisCard({ entry, onPick }: RecentAnalysisCardProps) {
     ? Date.now() - new Date(entry.generated_at).getTime()
     : null;
   const ageLabel = formatRelativeAge(ageMs);
+  const showIcon = entry.icon_url && !iconErr;
 
   return (
     <button
       type="button"
       onClick={onPick}
-      className="group flex flex-col gap-3 rounded-lg border border-border bg-card p-4 text-left transition-all hover:border-primary/50 hover:shadow-md hover:shadow-primary/5"
+      className="group flex w-full items-center gap-4 rounded-md border border-border bg-card px-4 py-3 text-left transition-all hover:border-primary/50 hover:bg-card/80"
     >
-      <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0 flex-1">
-          <div className="truncate text-sm font-semibold leading-tight">
-            {entry.name}
+      {/* Icon */}
+      <div className="h-10 w-10 flex-shrink-0 overflow-hidden rounded-md bg-muted ring-1 ring-border">
+        {showIcon ? (
+          <img
+            src={entry.icon_url ?? undefined}
+            alt={entry.name}
+            loading="lazy"
+            onError={() => setIconErr(true)}
+            className="h-full w-full object-cover"
+          />
+        ) : (
+          <div className="grid h-full w-full place-items-center text-muted-foreground/40">
+            <Sparkles className="h-4 w-4" />
           </div>
-          <div className="mt-0.5 truncate text-[11px] text-muted-foreground">
-            {generated}
-            {ageLabel && (
-              <span className="ml-1 text-muted-foreground/70">· {ageLabel}</span>
-            )}
-          </div>
-        </div>
-        <ChevronRight className="h-4 w-4 flex-shrink-0 text-muted-foreground/50 transition-colors group-hover:text-primary" />
+        )}
       </div>
-      <div className="flex flex-wrap gap-1.5 text-[10px]">
+
+      {/* Name + publisher */}
+      <div className="min-w-0 flex-shrink-0 sm:w-56">
+        <div className="truncate text-sm font-semibold leading-tight">
+          {entry.name}
+        </div>
+        {entry.publisher && (
+          <div className="truncate text-[11px] text-muted-foreground">
+            by {entry.publisher}
+          </div>
+        )}
+      </div>
+
+      {/* Generated date */}
+      <div className="hidden min-w-0 flex-shrink-0 text-[11px] text-muted-foreground md:block md:w-48">
+        <div className="truncate tabular-nums">{generated}</div>
+        {ageLabel && (
+          <div className="truncate text-muted-foreground/70">{ageLabel}</div>
+        )}
+      </div>
+
+      {/* Stats chips */}
+      <div className="flex flex-1 flex-wrap items-center justify-end gap-1.5 text-[10px]">
         <span className="rounded bg-muted/60 px-1.5 py-0.5 font-medium text-muted-foreground">
           {entry.num_archetypes} archetypes
         </span>
@@ -374,10 +396,13 @@ function RecentAnalysisCard({ entry, onPick }: RecentAnalysisCardProps) {
         )}
         {entry.duration_seconds > 0 && (
           <span className="rounded bg-muted/60 px-1.5 py-0.5 font-medium text-muted-foreground">
-            {Math.round(entry.duration_seconds / 60)}m {Math.round(entry.duration_seconds % 60)}s
+            {Math.round(entry.duration_seconds / 60)}m{" "}
+            {Math.round(entry.duration_seconds % 60)}s
           </span>
         )}
       </div>
+
+      <ChevronRight className="h-4 w-4 flex-shrink-0 text-muted-foreground/50 transition-colors group-hover:text-primary" />
     </button>
   );
 }

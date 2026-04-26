@@ -488,27 +488,77 @@ class ReportSummary(BaseModel):
     duration_seconds: float
 
 
+def _build_app_id_to_icon_index() -> dict[str, tuple[str, str | None]]:
+    """Build an ``app_id → (icon_url, publisher_name)`` index by scanning
+    the cached SensorTower app metadata JSONs (``meta_<app_id>_<...>.json``)
+    plus the Voodoo catalog. Used by ``/api/reports`` to enrich the
+    "Recent analyses" cards with real game icons.
+
+    Cheap (a few dozen file reads, no API calls).
+    """
+    index: dict[str, tuple[str, str | None]] = {}
+
+    # 1. Voodoo catalog (509 apps, fast)
+    try:
+        catalog_path = CACHE_DIR / "voodoo" / "catalog.json"
+        if catalog_path.exists():
+            for entry in json.loads(catalog_path.read_text()):
+                app_id = str(entry.get("app_id") or "")
+                icon = entry.get("icon_url")
+                pub = entry.get("publisher_name")
+                if app_id and icon:
+                    index[app_id] = (str(icon), pub)
+    except Exception:
+        log.exception("Failed to read Voodoo catalog for icon index")
+
+    # 2. SensorTower meta cache files — covers any non-Voodoo app the
+    #    pipeline has touched (e.g. Block Blast!, etc.).
+    st_cache = CACHE_DIR / "sensortower"
+    if st_cache.exists():
+        for path in st_cache.glob("meta_*.json"):
+            try:
+                data = json.loads(path.read_text())
+            except (OSError, json.JSONDecodeError):
+                continue
+            for app in data.get("apps") or []:
+                app_id = str(app.get("app_id") or "")
+                icon = app.get("icon_url")
+                pub = app.get("publisher_name")
+                if app_id and icon and app_id not in index:
+                    index[app_id] = (str(icon), pub)
+    return index
+
+
 @app.get("/api/reports", response_model=list[ReportSummary])
 def list_reports() -> list[ReportSummary]:
     """List all cached HookLensReports available on disk.
 
-    Used by the frontend to populate a "previously analyzed games" picker
-    in the sidebar — instant load on click vs running the full pipeline.
+    Used by the frontend to populate the "Recent analyses" grid on the
+    Insights landing — instant load on click vs running the full pipeline.
+
+    Each row is enriched with the target game's ``icon_url`` and
+    ``publisher_name`` looked up against the Voodoo catalog + the
+    SensorTower meta cache, so the UI can show a real app icon next to
+    the name instead of a gradient placeholder.
     """
     if not REPORTS_CACHE_DIR.exists():
         return []
+
+    icon_index = _build_app_id_to_icon_index()
 
     out: list[ReportSummary] = []
     for path in sorted(REPORTS_CACHE_DIR.glob("*_e2e.json")):
         try:
             data = json.loads(path.read_text())
             tg = data.get("target_game", {})
+            app_id = tg.get("app_id", path.stem.removesuffix("_e2e"))
+            icon_url, publisher = icon_index.get(str(app_id), (None, None))
             out.append(
                 ReportSummary(
-                    app_id=tg.get("app_id", path.stem.removesuffix("_e2e")),
+                    app_id=app_id,
                     name=tg.get("name", "Unknown"),
-                    publisher=None,
-                    icon_url=None,
+                    publisher=publisher,
+                    icon_url=icon_url,
                     generated_at=data.get("generated_at"),
                     num_archetypes=len(data.get("top_archetypes", [])),
                     num_variants=len(data.get("final_variants", [])),
