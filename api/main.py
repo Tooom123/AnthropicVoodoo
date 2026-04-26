@@ -1980,6 +1980,17 @@ async def render_variant_video(
             detail="Variant has no hero/storyboard frames to videofy",
         )
 
+    # Normalize the user correction up-front so both step 3 (prompt
+    # building) and step 4 (filename hashing) can reference it.
+    import hashlib
+
+    correction_clean = (correction or "").strip()
+    correction_tag = (
+        f"_c{hashlib.sha256(correction_clean.encode()).hexdigest()[:8]}"
+        if correction_clean
+        else ""
+    )
+
     # 3. Per-frame motion prompts. Prefer the brief's own scenario_prompts
     #    (which Opus tailored per frame, including audio cues), fall back
     #    to scene_flow beats, then to the global hook.
@@ -2021,19 +2032,6 @@ async def render_variant_video(
         else "_noec"
     )
     quality_tag = "_rich" if audio_quality == "rich" else ""
-
-    # Hash the correction into the filename (and cache key) so two
-    # different corrections produce two distinct cached mp4s. The
-    # correction text itself is also forwarded to the per-frame
-    # prompts further down.
-    import hashlib
-
-    correction_clean = (correction or "").strip()
-    correction_tag = (
-        f"_c{hashlib.sha256(correction_clean.encode()).hexdigest()[:8]}"
-        if correction_clean
-        else ""
-    )
     final_filename = (
         f"variant_{game_slug}_{safe_archetype}"
         f"{endcard_tag}{quality_tag}{correction_tag}.mp4"

@@ -123,3 +123,5 @@ voodooio_logo.*
 *.pptx
 *.pptx.bak
 ~$*
+/data/*.zip
+/data/cache.zip
