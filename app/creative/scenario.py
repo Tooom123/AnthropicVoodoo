@@ -266,6 +266,7 @@ def call_scenario_video(
     prompt: str | None = None,
     label: str = "video",
     timeout_s: float = 720.0,  # video gen is slow (1-5 min typical)
+    aspect_ratio: str | None = "9:16",
 ) -> tuple[str, dict]:
     """Generate a video via Scenario's custom endpoint for video models.
 
@@ -296,6 +297,7 @@ def call_scenario_video(
         "m": model_id,
         "endpoint": "video",
         "frames": image_hashes,
+        "ar": aspect_ratio or "",
     }
     cache_path = DEFAULT_CACHE_DIR / f"{label}__{hash_key(cache_key)}.json"
     if cache_path.exists():
@@ -325,16 +327,19 @@ def call_scenario_video(
     #   - sequence/keyframe models accept ``images: [assetId, ...]``
     #     (validated empirically: ``imageIds``, ``imageAssetIds``,
     #     ``frames``, ``keyframes`` all return 400 "Input images is required")
-    #   - single-image i2v (kling/veo/luma) accept ``image: assetId``
+    #   - single-image i2v (kling/veo/luma/sora/grok) accept ``image: assetId``
+    #   - ``aspectRatio: "9:16"`` is the accepted name on this tenant for
+    #     forcing mobile-vertical output (Sora 2 / Veo 3.1 / Grok / Seedance
+    #     default to landscape 16:9; Kling is already 9:16 and ignores).
     payload: dict = {}
     if "seq" in model_id or "keyframe" in model_id or len(asset_ids) > 1:
         payload["images"] = asset_ids
-        if prompt:
-            payload["prompt"] = prompt
     else:
         payload["image"] = asset_ids[0]
-        if prompt:
-            payload["prompt"] = prompt
+    if prompt:
+        payload["prompt"] = prompt
+    if aspect_ratio:
+        payload["aspectRatio"] = aspect_ratio
 
     headers = {"Content-Type": "application/json", "Authorization": auth}
     log.info(
