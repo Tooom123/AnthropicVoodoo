@@ -892,14 +892,20 @@ def get_source_creatives(
 
     resolved_id = app_id
     if not resolved_id and game_name:
-        try:
-            from app.sources.sensortower import resolve_game
+        # Same fix as /api/report: scan cached reports by name first
+        # (handles dots / unicode / anything SensorTower chokes on)
+        # before falling back to the SensorTower resolver and finally
+        # the proto_<slug> shape.
+        resolved_id = _try_resolve_by_cached_name(game_name)
+        if not resolved_id:
+            try:
+                from app.sources.sensortower import resolve_game
 
-            meta = resolve_game(game_name)
-            resolved_id = meta.app_id
-        except Exception:
-            slug = (game_name or "").lower().replace(" ", "_").replace("-", "_")
-            resolved_id = f"proto_{slug}"
+                meta = resolve_game(game_name)
+                resolved_id = meta.app_id
+            except Exception:
+                slug = (game_name or "").lower().replace(" ", "_").replace("-", "_")
+                resolved_id = f"proto_{slug}"
 
     cache_path = REPORTS_CACHE_DIR / f"{resolved_id}_e2e.json"
     if not cache_path.exists():
@@ -928,6 +934,33 @@ def get_source_creatives(
     return out
 
 
+def _try_resolve_by_cached_name(game_name: str) -> str | None:
+    """Look for a cached HookLensReport whose ``target_game.name``
+    case-insensitively matches ``game_name``. Returns the app_id (the
+    file stem without ``_e2e``) on a hit, ``None`` otherwise.
+
+    This is the most reliable resolver for games with dots / unicode /
+    other characters that SensorTower's search endpoint mangles
+    (``aquapark.io`` was the trigger). Beats the SensorTower lookup
+    when we already analysed the game once — and we always have, as
+    that's how the report got cached in the first place.
+    """
+    if not REPORTS_CACHE_DIR.exists():
+        return None
+    needle = game_name.strip().lower()
+    if not needle:
+        return None
+    for path in REPORTS_CACHE_DIR.glob("*_e2e.json"):
+        try:
+            data = json.loads(path.read_text())
+        except (OSError, json.JSONDecodeError):
+            continue
+        cached_name = (data.get("target_game", {}).get("name") or "").lower()
+        if cached_name == needle:
+            return path.stem.removesuffix("_e2e")
+    return None
+
+
 @app.get("/api/report")
 def get_report(
     game_name: str | None = Query(None, description="Game name to resolve via SensorTower"),
@@ -950,16 +983,22 @@ def get_report(
 
     resolved_id = app_id
     if not resolved_id and game_name:
-        try:
-            from app.sources.sensortower import resolve_game
+        # Step 1: scan the reports cache for an exact name match — fast,
+        # offline, handles every game we've already analysed (including
+        # ones with dots/underscores/special chars in the name like
+        # "aquapark.io" that SensorTower's resolver chokes on).
+        resolved_id = _try_resolve_by_cached_name(game_name)
+        if not resolved_id:
+            try:
+                from app.sources.sensortower import resolve_game
 
-            meta = resolve_game(game_name)
-            resolved_id = meta.app_id
-        except Exception:
-            log.exception("resolve_game failed for %r", game_name)
-            # Fall back to slug-based lookup for prototype reports
-            slug = game_name.lower().replace(" ", "_").replace("-", "_")
-            resolved_id = f"proto_{slug}"
+                meta = resolve_game(game_name)
+                resolved_id = meta.app_id
+            except Exception:
+                log.exception("resolve_game failed for %r", game_name)
+                # Final fallback: slug-based lookup for prototype reports
+                slug = game_name.lower().replace(" ", "_").replace("-", "_")
+                resolved_id = f"proto_{slug}"
 
     cache_path = REPORTS_CACHE_DIR / f"{resolved_id}_e2e.json"
     if not cache_path.exists():
