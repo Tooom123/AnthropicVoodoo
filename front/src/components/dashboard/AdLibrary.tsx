@@ -21,7 +21,6 @@ import {
 import {
   NETWORKS,
   FORMATS,
-  abbrevNumber,
   type Creative,
   type Network,
   type Format,
@@ -73,9 +72,17 @@ function MultiSelect<T extends string>({
   );
 }
 
+const COUNTRIES = ["US", "GB", "DE", "FR", "JP", "BR", "KR"] as const;
+type Country = (typeof COUNTRIES)[number];
+
 export function AdLibrary() {
   const { gameName } = useGame();
-  const { data: creativesData = [], isLoading } = useCreatives({ game_name: gameName || undefined });
+  const [country, setCountry] = useState<Country>("US");
+  const { data: creativesData = [], isLoading } = useCreatives({
+    game_name: gameName || undefined,
+    country,
+    limit: 60,
+  });
   const [networks, setNetworks] = useState<Set<Network>>(new Set());
   const [formats, setFormats] = useState<Set<Format>>(new Set());
   const [games, setGames] = useState<Set<string>>(new Set());
@@ -101,7 +108,10 @@ export function AdLibrary() {
     );
     list = [...list].sort((a, b) => {
       if (sort === "Run duration") return b.runDays - a.runDays;
-      if (sort === "Impressions") return b.impressions - a.impressions;
+      // "Impressions" → sort by REAL SoV (the synthetic impressions field is
+      // a flat 10k for almost everything; keep the menu label for back-compat
+      // but use sov as the actual signal).
+      if (sort === "Impressions") return (b.sov ?? 0) - (a.sov ?? 0);
       return new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime();
     });
     return list;
@@ -136,6 +146,25 @@ export function AdLibrary() {
           selected={games}
           onToggle={(v) => toggle(games, v, setGames)}
         />
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="outline" size="sm" className="gap-2">
+              <span className="text-muted-foreground text-xs">Region:</span>
+              <span>{country}</span>
+              <ChevronDown className="h-3.5 w-3.5 opacity-60" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start">
+            {COUNTRIES.map((c) => (
+              <DropdownMenuItem key={c} onClick={() => setCountry(c)}>
+                <Check
+                  className={`mr-2 h-3.5 w-3.5 ${c === country ? "opacity-100" : "opacity-0"}`}
+                />
+                {c}
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
         <div className="ml-auto">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -180,14 +209,21 @@ interface CreativeCardProps {
  * inline video preview (Dialog with <video controls>) when a creativeUrl
  * is available; falls back to the ad-detail route otherwise.
  *
- * Thumbnails come from the SensorTower creative_url's sibling thumb_url
- * (S3-hosted). Loading errors degrade to a gradient placeholder + icon.
+ * Card body shows ONLY honest data:
+ * - app icon + game name + publisher_name (real, from app_info)
+ * - Run duration (real, from first/last seen dates)
+ * - Share of Voice in category × network × period (real, SensorTower)
+ *
+ * Removed: opaque creative_id (was just noise), synthetic impressions
+ * (was a flat 10k floor), synthetic score / spend tier.
  */
 function CreativeCard({ creative: c }: CreativeCardProps) {
   const [thumbErrored, setThumbErrored] = useState(false);
+  const [iconErrored, setIconErrored] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
 
   const hasThumb = Boolean(c.thumbUrl) && !thumbErrored;
+  const hasIcon = Boolean(c.appIconUrl) && !iconErrored;
   const hasVideo = Boolean(c.creativeUrl) && c.format === "Video";
 
   function handleHeroClick() {
@@ -198,14 +234,14 @@ function CreativeCard({ creative: c }: CreativeCardProps) {
 
   return (
     <>
-      <Card className="overflow-hidden border-border bg-card p-0 transition-all hover:border-primary/50 hover:shadow-lg hover:shadow-primary/5">
+      <Card className="flex flex-col overflow-hidden border-border bg-card p-0 transition-all hover:border-primary/50 hover:shadow-lg hover:shadow-primary/5">
         {/* Hero / thumbnail */}
         <button
           type="button"
           onClick={handleHeroClick}
           className="group relative block aspect-video w-full overflow-hidden bg-gradient-to-br from-muted to-muted/40"
           disabled={!hasVideo}
-          aria-label={hasVideo ? `Preview ad ${c.id}` : `Ad ${c.id}`}
+          aria-label={hasVideo ? `Preview ad for ${c.game}` : `Ad for ${c.game}`}
         >
           {hasThumb ? (
             <img
@@ -234,29 +270,66 @@ function CreativeCard({ creative: c }: CreativeCardProps) {
           </span>
         </button>
 
-        <div className="space-y-3 p-4">
-          <div className="flex items-start justify-between gap-2">
+        <div className="flex flex-1 flex-col gap-3 p-4">
+          {/* App icon + game name + publisher */}
+          <div className="flex items-start gap-2.5">
+            <div className="h-9 w-9 flex-shrink-0 overflow-hidden rounded-md bg-muted ring-1 ring-border">
+              {hasIcon ? (
+                <img
+                  src={c.appIconUrl ?? undefined}
+                  alt={c.game}
+                  loading="lazy"
+                  onError={() => setIconErrored(true)}
+                  className="h-full w-full object-cover"
+                />
+              ) : (
+                <div className="grid h-full w-full place-items-center text-muted-foreground/40">
+                  <ImageIcon className="h-3.5 w-3.5" />
+                </div>
+              )}
+            </div>
             <div className="min-w-0 flex-1">
               <div className="truncate text-sm font-semibold leading-tight">
                 {c.game}
               </div>
-              <div className="truncate text-xs text-muted-foreground">{c.id}</div>
+              {c.publisherName && (
+                <div className="truncate text-[11px] text-muted-foreground">
+                  by {c.publisherName}
+                </div>
+              )}
             </div>
             <NetworkBadge network={c.network} />
           </div>
+
+          {/* Honest stats: run duration + REAL SoV (no more synthetic
+              impressions / score / spend). */}
           <div className="grid grid-cols-2 gap-2 text-xs">
             <div className="rounded-md bg-muted/50 px-2 py-1.5">
-              <div className="text-muted-foreground">Run</div>
-              <div className="font-medium text-foreground">{c.runDays}d</div>
+              <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                Running
+              </div>
+              <div className="font-medium tabular-nums text-foreground">
+                {c.runDays}d
+              </div>
             </div>
-            <div className="rounded-md bg-muted/50 px-2 py-1.5">
-              <div className="text-muted-foreground">Impr.</div>
-              <div className="font-medium text-foreground">
-                {abbrevNumber(c.impressions)}
+            <div
+              className="rounded-md bg-muted/50 px-2 py-1.5"
+              title="Share of Voice in category × network × period (SensorTower)"
+            >
+              <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                SoV
+              </div>
+              <div className="font-medium tabular-nums text-foreground">
+                {c.sov != null && c.sov > 0
+                  ? c.sov >= 0.001
+                    ? `${(c.sov * 100).toFixed(2)}%`
+                    : "<0.1%"
+                  : "—"}
               </div>
             </div>
           </div>
-          <Button size="sm" variant="secondary" className="w-full" asChild>
+
+          <Button size="sm" variant="secondary" className="mt-auto w-full" asChild>
             <Link to="/ad/$id" params={{ id: c.id }}>
               View details
             </Link>

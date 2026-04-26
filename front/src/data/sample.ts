@@ -8,14 +8,26 @@ export interface Creative {
   network: Network;
   format: Format;
   runDays: number;
-  impressions: number; // raw
-  score: number; // 0-100
-  spendEstimate: number; // USD
+  /** @deprecated synthetic value (= max(10k, share*50M)). UI no longer renders. */
+  impressions: number;
+  /** @deprecated synthetic 0–100 tier. UI no longer renders. */
+  score: number;
+  /** @deprecated synthetic 4% of synthetic impressions. UI no longer renders. */
+  spendEstimate: number;
   startedAt: string;
   /** SensorTower S3 thumbnail (jpeg). May be null for some Static formats. */
   thumbUrl?: string | null;
   /** Original creative asset URL (mp4 for Video; image for Static). */
   creativeUrl?: string | null;
+  /**
+   * Real Share of Voice from SensorTower (0–1) within the queried
+   * category × network × period. The only honest popularity metric.
+   */
+  sov?: number | null;
+  /** Advertiser app's publisher (e.g. "Voodoo", "Playrix"). */
+  publisherName?: string | null;
+  /** Advertiser app's icon URL (App Store CDN). */
+  appIconUrl?: string | null;
 }
 
 export interface CompetitorGame {

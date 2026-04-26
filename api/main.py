@@ -53,12 +53,30 @@ class Creative(BaseModel):
     network: NetworkFE
     format: FormatFE
     runDays: int
+    """Estimated impressions — REMOVED. Was a fake = max(10k, share*50M) value;
+    the frontend hides it. Kept on the model for backwards compat with the
+    React UI's typed shapes; treat as advisory only.
+    """
     impressions: int
     score: int
     spendEstimate: int
     startedAt: str
     thumbUrl: str | None = None
     creativeUrl: str | None = None
+    # Real SensorTower fields exposed for honest display in Ad Library:
+    sov: float | None = None
+    """Share of Voice within the queried category × network × period
+    (0.0–1.0). The ONLY trustworthy "popularity" metric we have direct
+    from SensorTower; everything else (impressions, spendEstimate, score)
+    is a synthetic tier we synthesised earlier and should not be shown
+    as a numeric KPI to PMs.
+    """
+    publisherName: str | None = None
+    """The advertiser's app publisher (from SensorTower app_info.publisher_name).
+    Lets the UI show "Voodoo • aquapark.io" instead of just the game name.
+    """
+    appIconUrl: str | None = None
+    """The advertiser's app icon URL (from SensorTower app_info.icon_url)."""
 
 
 class CompetitorGame(BaseModel):
@@ -118,7 +136,39 @@ def _norm_format(ad_type: str) -> FormatFE:
 _MARKET_TOTAL_IMPRESSIONS = 50_000_000
 
 
-def _raw_to_creative(rc) -> Creative:
+def _index_sensortower_app_info() -> dict[str, dict[str, Any]]:
+    """Build a creative_id → {publisher_name, icon_url, advertiser_name}
+    index by scanning every cached SensorTower ``creatives_top_*.json``
+    on disk. Cheap (10-30 small files for the whole demo cache).
+
+    Used to enrich ``/api/creatives`` responses with real publisher /
+    icon data that ``fetch_top_creatives`` flattens away into the
+    ``RawCreative`` shape.
+    """
+    st_cache = CACHE_DIR / "sensortower"
+    out: dict[str, dict[str, Any]] = {}
+    if not st_cache.exists():
+        return out
+    for path in st_cache.glob("creatives_top_*.json"):
+        try:
+            data = json.loads(path.read_text())
+        except (OSError, json.JSONDecodeError):
+            continue
+        for au in data.get("ad_units") or []:
+            info = au.get("app_info") or {}
+            for c in au.get("creatives") or []:
+                cid = str(c.get("id") or "")
+                if not cid or cid in out:
+                    continue
+                out[cid] = {
+                    "publisher_name": info.get("publisher_name"),
+                    "icon_url": info.get("icon_url"),
+                    "advertiser_name": info.get("name"),
+                }
+    return out
+
+
+def _raw_to_creative(rc, *, app_info_index: dict[str, dict[str, Any]] | None = None) -> Creative:
     from app.models import RawCreative  # local import to avoid startup overhead
 
     assert isinstance(rc, RawCreative)
@@ -128,9 +178,13 @@ def _raw_to_creative(rc) -> Creative:
     run_days = max(0, (last - first).days)
 
     share = rc.share or 0.0
+    # Synthetic tiers (kept for back-compat; the React UI no longer renders
+    # them as KPIs because they're hardcoded floors, not real signal).
     impressions = max(10_000, int(share * _MARKET_TOTAL_IMPRESSIONS))
     score = min(100, max(1, int(share * 1_200)))
     spend = max(1_000, int(impressions * 0.04))
+
+    extra = (app_info_index or {}).get(rc.creative_id) or {}
 
     return Creative(
         id=rc.creative_id,
@@ -144,6 +198,9 @@ def _raw_to_creative(rc) -> Creative:
         startedAt=first.date().isoformat(),
         thumbUrl=str(rc.thumb_url) if rc.thumb_url else None,
         creativeUrl=str(rc.creative_url),
+        sov=share if share > 0 else None,
+        publisherName=extra.get("publisher_name"),
+        appIconUrl=extra.get("icon_url"),
     )
 
 
@@ -238,12 +295,20 @@ def get_creatives(
     country: str = Query("US"),
     period: str = Query("month"),
     period_date: str = Query(DEFAULT_DATE),
-    limit: int = Query(24, ge=1, le=80),
+    limit: int = Query(60, ge=1, le=120),
 ):
     """Return top ad creatives across all networks, shaped for the frontend.
 
     When ``game_name`` is supplied, SensorTower resolves it first and uses its
     category to scope the ad-intel query.
+
+    Each row is enriched with the advertiser's ``publisher_name`` and
+    ``icon_url`` (from the cached SensorTower app_info payload), so the
+    Ad Library UI can render the publisher/game pair instead of just an
+    opaque advertiser name. Synthetic ``impressions`` / ``score`` /
+    ``spendEstimate`` are still in the schema for back-compat but the
+    React UI no longer renders them as numbers — only ``sov`` (real Share
+    of Voice from SensorTower) is shown as a quantitative chip.
     """
     from app.sources.sensortower import fetch_top_creatives
 
@@ -263,8 +328,11 @@ def get_creatives(
                 period_date=period_date,
                 max_creatives=per_network,
             )
+            # Build the enrichment index AFTER the fetches so the cache is
+            # warm. Cheap (10-30 file reads) and only done once per request.
+            app_info_index = _index_sensortower_app_info()
             for rc in raws:
-                c = _raw_to_creative(rc)
+                c = _raw_to_creative(rc, app_info_index=app_info_index)
                 results.append(c.model_copy(update={"network": fe_network}))
         except Exception:
             log.exception("fetch_top_creatives failed for network %s", st_network)
