@@ -145,12 +145,20 @@ Beat 1: "NOOOOO [specific reaction to the danger]!!"
 Beat 2: "OH MY GOD [specific reaction to the escalation]!! [mechanic-specific exclamation]!!"
 Beat 3: "THIS IS [specific superlative] I LITERALLY CANNOT STOP AHHHHH"
 
-IMAGE-TO-VIDEO NOTE: The video starts from a real {dna.name} gameplay screenshot.
-The scenario_prompt must be written to CONTINUE from that visual naturally.
-Keep the same {dna.visual_style} art style. Camera: isometric game view → push to extreme close-up during peak.
-Format: 9:16 vertical, 8 seconds, game UI overlay visible, SFX cues embedded.
+FINAL FRAME (mandatory, last 1 second):
+The game UI fades slightly. Bold text appears centered on screen: "{dna.name}"
+Below it, smaller: "Play now" — clean, no animation, just the title on top of the gameplay.
 
-Write scenario_prompt as ONE dense vivid paragraph with the voice lines embedded as dialogue.
+IMAGE-TO-VIDEO NOTE: The video starts from a real {dna.name} gameplay screenshot.
+Write the scenario_prompt to CONTINUE from that exact visual — same {dna.visual_style} art,
+same isometric camera angle, same UI elements visible in the screenshot_signals above.
+Do NOT invent new visual elements not present in the actual game.
+Do NOT use vague filler words (stunning, breathtaking, amazing, epic, incredible).
+Be hyper-specific: name exact UI elements, exact colors ({dna.palette.primary_hex}), exact actions.
+Camera: stays at game's natural isometric angle, cuts to extreme close-up only at Beat 3.
+Format: 9:16 vertical, 8 seconds total, game UI overlay always visible, SFX cues embedded.
+
+Write scenario_prompt as ONE dense concrete paragraph with voice lines embedded as spoken dialogue.
 Write narration_script as the same voice lines formatted as a standalone script.
 
 Respond with ONLY a JSON object:
