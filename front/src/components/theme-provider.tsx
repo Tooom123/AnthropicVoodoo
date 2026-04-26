@@ -5,24 +5,19 @@ interface ThemeCtx {
   theme: Theme;
   toggle: () => void;
 }
-const ThemeContext = createContext<ThemeCtx>({ theme: "dark", toggle: () => {} });
+const ThemeContext = createContext<ThemeCtx>({ theme: "light", toggle: () => {} });
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const [theme, setTheme] = useState<Theme>("dark");
+  const [theme, setTheme] = useState<Theme>("light");
 
   useEffect(() => {
-    const stored = (typeof window !== "undefined" && localStorage.getItem("theme")) as
-      | Theme
-      | null;
-    if (stored) setTheme(stored);
+    // Always clear any previously stored dark preference so the app stays light
+    try { localStorage.removeItem("theme"); } catch {}
+    document.documentElement.classList.remove("dark");
   }, []);
 
   useEffect(() => {
-    const root = document.documentElement;
-    root.classList.toggle("dark", theme === "dark");
-    try {
-      localStorage.setItem("theme", theme);
-    } catch {}
+    document.documentElement.classList.toggle("dark", theme === "dark");
   }, [theme]);
 
   return (

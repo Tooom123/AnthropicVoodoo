@@ -23,7 +23,7 @@ export function TopNav({ sidebarOpen = true, onToggleSidebar }: TopNavProps) {
   }
 
   return (
-    <header className="flex h-14 items-center justify-between border-b border-slate-100 bg-white/80 backdrop-blur-sm px-4 gap-3">
+    <header className="flex h-14 items-center justify-between border-b border-border bg-card/80 backdrop-blur-sm px-4 gap-3">
       {/* Sidebar toggle — only shown when sidebar is collapsed */}
       {!sidebarOpen && onToggleSidebar && (
         <button

@@ -45,36 +45,36 @@
   --color-network-ironsource: var(--network-ironsource);
 }
 
-/* Light mode (kept clean & readable) */
+/* Light mode — warm off-white, cards slightly elevated from background */
 :root {
   --radius: 0.625rem;
-  --background: oklch(0.99 0 0);
-  --foreground: oklch(0.13 0.02 265);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.13 0.02 265);
+  --background: oklch(0.97 0.004 265);   /* #f3f4f8 — très léger bleuté, pas blanc pur */
+  --foreground: oklch(0.18 0.02 265);
+  --card: oklch(1 0 0);                   /* blanc pur pour les cards — contraste doux vs bg */
+  --card-foreground: oklch(0.18 0.02 265);
   --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.13 0.02 265);
-  --primary: oklch(0.58 0.22 264);
+  --popover-foreground: oklch(0.18 0.02 265);
+  --primary: oklch(0.55 0.22 264);        /* indigo un peu plus profond */
   --primary-foreground: oklch(0.99 0 0);
-  --secondary: oklch(0.96 0.008 265);
+  --secondary: oklch(0.94 0.008 265);
   --secondary-foreground: oklch(0.2 0.02 265);
-  --muted: oklch(0.96 0.005 265);
-  --muted-foreground: oklch(0.52 0.02 265);
-  --accent: oklch(0.58 0.22 264);
+  --muted: oklch(0.94 0.005 265);
+  --muted-foreground: oklch(0.5 0.02 265);
+  --accent: oklch(0.55 0.22 264);
   --accent-foreground: oklch(0.99 0 0);
   --destructive: oklch(0.6 0.22 27);
   --destructive-foreground: oklch(0.99 0 0);
-  --border: oklch(0.91 0.007 265);
-  --input: oklch(0.91 0.007 265);
-  --ring: oklch(0.58 0.22 264);
-  --sidebar: oklch(0.985 0.003 265);
-  --sidebar-foreground: oklch(0.2 0.02 265);
-  --sidebar-primary: oklch(0.58 0.22 264);
-  --sidebar-primary-foreground: oklch(0.99 0 0);
-  --sidebar-accent: oklch(0.93 0.01 265);
-  --sidebar-accent-foreground: oklch(0.2 0.02 265);
-  --sidebar-border: oklch(0.9 0.007 265);
-  --sidebar-ring: oklch(0.58 0.22 264);
+  --border: oklch(0.89 0.007 265);
+  --input: oklch(0.92 0.007 265);
+  --ring: oklch(0.55 0.22 264);
+  --sidebar: oklch(0.2 0.025 265);        /* sidebar sombre — contraste fort avec le fond clair */
+  --sidebar-foreground: oklch(0.92 0.005 250);
+  --sidebar-primary: oklch(0.68 0.17 255);
+  --sidebar-primary-foreground: oklch(0.15 0.02 270);
+  --sidebar-accent: oklch(0.28 0.025 265);
+  --sidebar-accent-foreground: oklch(0.92 0.005 250);
+  --sidebar-border: oklch(1 0 0 / 8%);
+  --sidebar-ring: oklch(0.68 0.17 255);
   --network-meta: oklch(0.6 0.2 260);
   --network-google: oklch(0.65 0.18 145);
   --network-tiktok: oklch(0.62 0.27 5);
@@ -129,8 +129,8 @@
   }
 
   body {
-    background-color: #ffffff;
-    background-image: radial-gradient(circle, oklch(0.88 0.005 265) 1.2px, transparent 1.2px);
+    background-color: oklch(0.97 0.004 265);
+    background-image: radial-gradient(circle, oklch(0.91 0.006 265) 1.2px, transparent 1.2px);
     background-size: 20px 20px;
     color: var(--color-foreground);
     font-feature-settings:

@@ -64,12 +64,12 @@ export function Sidebar({ activePath, collapsed, onToggle }: SidebarProps) {
   return (
     <aside
       className={cn(
-        "shrink-0 border-r border-slate-200 bg-white flex flex-col transition-all duration-200 ease-in-out overflow-hidden",
+        "shrink-0 border-r border-sidebar-border bg-sidebar text-sidebar-foreground flex flex-col transition-all duration-200 ease-in-out overflow-hidden",
         collapsed ? "w-14" : "w-60"
       )}
     >
       {/* Logo + collapse toggle */}
-      <div className="flex h-14 items-center border-b border-slate-100 px-3 gap-2">
+      <div className="flex h-14 items-center border-b border-sidebar-border px-3 gap-2">
         <div
           className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-white font-black"
           style={{ background: "#0f172a", fontSize: "1.1rem", lineHeight: 1 }}
@@ -79,13 +79,13 @@ export function Sidebar({ activePath, collapsed, onToggle }: SidebarProps) {
         </div>
         {!collapsed && (
           <div className="flex flex-col leading-tight flex-1 min-w-0">
-            <span className="text-sm font-bold tracking-tight text-slate-800">VoodRadar</span>
-            <span className="text-[10px] text-slate-400">by Voodoo</span>
+            <span className="text-sm font-bold tracking-tight text-sidebar-foreground">VoodRadar</span>
+            <span className="text-[10px] text-sidebar-foreground/50">by Voodoo</span>
           </div>
         )}
         <button
           onClick={onToggle}
-          className="ml-auto shrink-0 p-1 rounded-md text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"
+          className="ml-auto shrink-0 p-1 rounded-md text-sidebar-foreground/40 hover:text-sidebar-foreground hover:bg-sidebar-accent transition-colors"
           aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
         >
           {collapsed ? (
@@ -101,12 +101,12 @@ export function Sidebar({ activePath, collapsed, onToggle }: SidebarProps) {
         {SECTIONS.map((section) => (
           <div key={section.label}>
             {!collapsed && (
-              <p className="mb-1.5 px-2 text-[10px] font-semibold uppercase tracking-widest text-slate-400">
+              <p className="mb-1.5 px-2 text-[10px] font-semibold uppercase tracking-widest text-sidebar-foreground/40">
                 {section.label}
               </p>
             )}
             {collapsed && (
-              <div className="mb-1.5 mx-2 h-px bg-slate-100" />
+              <div className="mb-1.5 mx-2 h-px bg-sidebar-border" />
             )}
             <ul className="space-y-0.5">
               {section.items.map((item) => {
@@ -123,14 +123,14 @@ export function Sidebar({ activePath, collapsed, onToggle }: SidebarProps) {
                         "flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm transition-colors",
                         collapsed && "justify-center px-0",
                         isActive
-                          ? "bg-indigo-50 text-indigo-600 font-medium"
-                          : "text-slate-500 hover:bg-slate-50 hover:text-slate-700"
+                          ? "bg-sidebar-accent text-sidebar-primary font-medium"
+                          : "text-sidebar-foreground/60 hover:bg-sidebar-accent hover:text-sidebar-foreground"
                       )}
                     >
                       <Icon
                         className={cn(
                           "h-4 w-4 shrink-0",
-                          isActive ? "text-indigo-600" : "text-slate-400"
+                          isActive ? "text-sidebar-primary" : "text-sidebar-foreground/40"
                         )}
                       />
                       {!collapsed && item.label}
@@ -145,8 +145,8 @@ export function Sidebar({ activePath, collapsed, onToggle }: SidebarProps) {
 
       {/* Bottom branding */}
       {!collapsed && (
-        <div className="border-t border-slate-100 px-4 py-3">
-          <p className="text-[10px] text-slate-400">© 2026 Voodoo · VoodRadar</p>
+        <div className="border-t border-sidebar-border px-4 py-3">
+          <p className="text-[10px] text-sidebar-foreground/40">© 2026 Voodoo · VoodRadar</p>
         </div>
       )}
     </aside>
