@@ -267,15 +267,6 @@ export function Insights({ autoLaunch = false }: InsightsProps = {}) {
             </Card>
           )}
 
-          <details className="text-xs text-muted-foreground">
-            <summary className="cursor-pointer select-none hover:text-foreground">
-              Or pre-cache from CLI
-            </summary>
-            <pre className="mt-2 rounded-md bg-muted px-4 py-3">
-              uv run python -m scripts.precache{" "}
-              {JSON.stringify(gameName || "Mob Control")}
-            </pre>
-          </details>
         </div>
         {modals}
       </>
