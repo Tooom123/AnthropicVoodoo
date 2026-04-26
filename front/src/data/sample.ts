@@ -25,6 +25,8 @@ export interface CompetitorGame {
   monthlySpend: number; // USD
   spendTier: SpendTier;
   status: "Active" | "Monitoring";
+  /** SensorTower app id (unified) — present on backend-driven rows; absent in static fixtures. */
+  app_id?: string | null;
 }
 
 export const NETWORKS: Network[] = ["Meta", "Google", "TikTok", "ironSource"];

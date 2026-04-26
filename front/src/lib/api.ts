@@ -182,6 +182,12 @@ export interface VoodooPortfolioEntry {
   ads_by_network: Record<string, number>;
   ads_latest_first_seen: string | null;
   ads_sample: VoodooAdSample[];
+  /** Paid UA share (0-1) over the precache 3-month window. Null when SensorTower has no data. */
+  paid_share: number | null;
+  /** Organic UA share (0-1) over the same window. Null when no data. */
+  organic_share: number | null;
+  /** Total downloads across all sources in the precache window. */
+  total_downloads_3mo: number | null;
 }
 
 export interface VoodooPortfolioResponse {
@@ -197,5 +203,48 @@ export function useVoodooPortfolio(limit = 15) {
     queryFn: () =>
       apiFetch<VoodooPortfolioResponse>("/api/voodoo/portfolio", { limit }),
     staleTime: 5 * 60 * 1000,
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Advertiser network ranks — SensorTower /v1/{os}/ad_intel/network_analysis/rank
+// ---------------------------------------------------------------------------
+
+export interface AdvertiserNetworkRank {
+  country: string;
+  rank: number;
+  date: string;
+}
+
+export type AdvertiserRankMap = Record<string, AdvertiserNetworkRank>;
+
+/**
+ * Fetch the latest network rank per channel for an advertiser app id. Returns
+ * an empty map when SensorTower has no rank data (long-tail apps frequently
+ * fall outside the tracked networks). Suitable for small contextual chips
+ * next to each competitor on the Competitive Scope page.
+ */
+export function useAdvertiserRanks(
+  appId: string | null | undefined,
+  options: { countries?: string; networks?: string; period_date?: string } = {},
+) {
+  const { countries = "US", networks, period_date } = options;
+  return useQuery<AdvertiserRankMap>({
+    queryKey: ["advertiserRanks", appId, countries, networks, period_date],
+    queryFn: async () => {
+      if (!appId) return {};
+      const url = new URL(
+        `/api/advertisers/${encodeURIComponent(appId)}/ranks`,
+        API_BASE,
+      );
+      if (countries) url.searchParams.set("countries", countries);
+      if (networks) url.searchParams.set("networks", networks);
+      if (period_date) url.searchParams.set("period_date", period_date);
+      const res = await fetch(url.toString());
+      if (!res.ok) return {};
+      return res.json() as Promise<AdvertiserRankMap>;
+    },
+    staleTime: 10 * 60 * 1000,
+    enabled: Boolean(appId),
   });
 }

@@ -68,6 +68,10 @@ class CompetitorGame(BaseModel):
     monthlySpend: int
     spendTier: SpendTierFE
     status: Literal["Active", "Monitoring"]
+    # SensorTower app id (unified when available) — used by the frontend to
+    # fetch network ranks via /api/advertisers/{app_id}/ranks. Optional so the
+    # current sample.ts CompetitorGame stays compatible.
+    app_id: str | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -153,6 +157,11 @@ def _advertiser_to_competitor(adv: dict, rank: int) -> CompetitorGame:
     else:
         tier = "Micro"
 
+    raw_app_id = (
+        adv.get("app_id")
+        or adv.get("unified_app_id")
+        or adv.get("entity_id")
+    )
     return CompetitorGame(
         game=adv.get("name") or adv.get("app_name") or "Unknown",
         subGenre="Puzzle",
@@ -160,6 +169,7 @@ def _advertiser_to_competitor(adv: dict, rank: int) -> CompetitorGame:
         monthlySpend=monthly_spend,
         spendTier=tier,
         status="Active",
+        app_id=str(raw_app_id) if raw_app_id else None,
     )
 
 
@@ -844,6 +854,12 @@ class VoodooPortfolioEntry(BaseModel):
     ads_by_network: dict[str, int] = {}
     ads_latest_first_seen: str | None = None
     ads_sample: list[VoodooAdSample] = []
+    # UA dependency split (paid vs organic) over the precache window.
+    # All three are optional — None when SensorTower has no
+    # downloads_by_sources data for the tenant on that app.
+    paid_share: float | None = None
+    organic_share: float | None = None
+    total_downloads_3mo: int | None = None
 
 
 class VoodooPortfolioResponse(BaseModel):
@@ -915,3 +931,84 @@ def voodoo_app_creatives(
     return fetch_voodoo_app_creatives(
         app_id, country=country, limit=limit, start_date=start_date
     )
+
+
+# ---------------------------------------------------------------------------
+# Network rank — per-advertiser, per-(network, country) ad-intel rank
+# ---------------------------------------------------------------------------
+
+
+class AdvertiserNetworkRank(BaseModel):
+    """Latest network rank for an advertiser app on a single network."""
+
+    country: str
+    rank: int
+    date: str
+
+
+@app.get(
+    "/api/advertisers/{app_id}/ranks",
+    response_model=dict[str, AdvertiserNetworkRank],
+)
+def get_advertiser_ranks(
+    app_id: str,
+    countries: str = Query("US"),
+    networks: str = Query("Facebook,TikTok,Admob,Applovin"),
+    period_date: str = Query("2026-04-01"),
+) -> dict[str, AdvertiserNetworkRank]:
+    """Return the latest network ranks for an advertiser app, keyed by network.
+
+    Used by the Competitive Scope page to show contextual rank badges next to
+    each tracked competitor. Picks the most recent date per network from the
+    SensorTower ``/v1/unified/ad_intel/network_analysis/rank`` response.
+
+    Returns ``{}`` when the app has no rank data in the queried window —
+    long-tail apps regularly fall outside SensorTower's tracked networks.
+    """
+    from app.sources.sensortower import fetch_network_rank
+
+    # Use period_date as the start, today as the end, so we always pick up
+    # the latest weekly rank without paginating through months of history.
+    start = period_date
+    end = date.today().isoformat()
+    if end < start:
+        # Fallback: caller asked for a future period_date — give them the
+        # rank from the requested window only.
+        end = start
+
+    try:
+        rows = fetch_network_rank(
+            app_ids=app_id,
+            networks=networks,
+            countries=countries,
+            start_date=start,
+            end_date=end,
+            period="week",
+        )
+    except Exception:
+        log.exception("fetch_network_rank failed for %r", app_id)
+        return {}
+
+    # Pick the most recent row per network (largest date wins).
+    latest: dict[str, dict[str, Any]] = {}
+    for row in rows:
+        net = row.get("network")
+        d = row.get("date") or ""
+        rank = row.get("rank")
+        if not net or rank is None:
+            continue
+        prev = latest.get(net)
+        if prev is None or (prev.get("date") or "") < d:
+            latest[net] = row
+
+    out: dict[str, AdvertiserNetworkRank] = {}
+    for net, row in latest.items():
+        try:
+            out[net] = AdvertiserNetworkRank(
+                country=str(row.get("country") or countries.split(",")[0]),
+                rank=int(row.get("rank")),
+                date=str(row.get("date") or ""),
+            )
+        except (TypeError, ValueError):
+            continue
+    return out

@@ -235,6 +235,8 @@ function GameCard({ app, onAnalyze }: GameCardProps) {
   }, [app.ads_by_network]);
 
   const hasAds = app.ads_total > 0;
+  const hasUaSplit =
+    app.paid_share != null && app.organic_share != null;
 
   return (
     <>
@@ -327,6 +329,16 @@ function GameCard({ app, onAnalyze }: GameCardProps) {
             </p>
           )}
         </div>
+
+        {/* UA-dependency strip: paid vs organic downloads share over the last
+            3 months. Skipped quietly when SensorTower has no data. */}
+        {hasUaSplit && (
+          <UaDependencyStrip
+            paidShare={app.paid_share!}
+            organicShare={app.organic_share!}
+            totalDownloads={app.total_downloads_3mo}
+          />
+        )}
 
         <div className="mt-auto flex gap-2 border-t border-border p-3">
           <Button
@@ -506,6 +518,67 @@ function AdSampleCard({ sample }: AdSampleCardProps) {
         </DialogContent>
       </Dialog>
     </>
+  );
+}
+
+interface UaDependencyStripProps {
+  paidShare: number;
+  organicShare: number;
+  totalDownloads: number | null;
+}
+
+function UaDependencyStrip({
+  paidShare,
+  organicShare,
+  totalDownloads,
+}: UaDependencyStripProps) {
+  // Render shares as percentages clamped 0-100. Rare rounding pushes the sum
+  // marginally above 1; clip so the bar never overflows.
+  const paidPct = Math.max(0, Math.min(100, Math.round(paidShare * 100)));
+  const organicPct = Math.max(0, Math.min(100 - paidPct, Math.round(organicShare * 100)));
+  // Highlight in primary red when the game leans heavily on paid UA — those
+  // are the titles whose creative ROI matters most to Voodoo's PMs.
+  const heavy = paidPct >= 50;
+  const paidBarColor = heavy ? "bg-rose-500" : "bg-primary";
+
+  return (
+    <div className="border-t border-border bg-muted/10 px-4 py-3">
+      <div className="flex items-baseline justify-between">
+        <span className="text-[11px] uppercase tracking-wider text-muted-foreground">
+          UA dependency
+        </span>
+        <span
+          className={`text-sm font-semibold tabular-nums ${
+            heavy ? "text-rose-400" : "text-foreground"
+          }`}
+        >
+          {paidPct}%
+        </span>
+      </div>
+      <div
+        className="mt-1.5 flex h-1.5 w-full overflow-hidden rounded-full bg-muted"
+        title={`Paid ${paidPct}% · Organic ${organicPct}%`}
+      >
+        <div
+          className={`h-full ${paidBarColor}`}
+          style={{ width: `${paidPct}%` }}
+        />
+        <div
+          className="h-full bg-emerald-500/70"
+          style={{ width: `${organicPct}%` }}
+        />
+      </div>
+      <div className="mt-1 flex items-center justify-between text-[10px] text-muted-foreground">
+        <span>
+          paid {paidPct}% · organic {organicPct}%
+        </span>
+        {totalDownloads != null && totalDownloads > 0 && (
+          <span className="tabular-nums">
+            {abbrevNumber(totalDownloads)} dl · 90d
+          </span>
+        )}
+      </div>
+    </div>
   );
 }
 

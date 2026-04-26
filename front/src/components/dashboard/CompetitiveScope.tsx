@@ -18,8 +18,17 @@ import {
   YAxis,
 } from "recharts";
 import { abbrevNumber, type SpendTier } from "@/data/sample";
-import { useAdvertisers } from "@/lib/api";
+import { useAdvertisers, useAdvertiserRanks } from "@/lib/api";
 import { useGame } from "@/lib/game-context";
+
+// Short labels keep the per-row chip strip compact even with 4 networks.
+const NETWORK_SHORT: Record<string, string> = {
+  Facebook: "FB",
+  TikTok: "TT",
+  Admob: "Admob",
+  Applovin: "AppLov",
+};
+const NETWORK_ORDER = ["Facebook", "TikTok", "Admob", "Applovin"];
 
 const TIER_STYLE: Record<SpendTier, string> = {
   Top: "bg-primary/15 text-primary border-primary/30",
@@ -67,7 +76,12 @@ export function CompetitiveScope() {
           <TableBody>
             {competitors.map((c) => (
               <TableRow key={c.game}>
-                <TableCell className="font-medium">{c.game}</TableCell>
+                <TableCell className="font-medium">
+                  <div className="flex flex-col gap-1">
+                    <span>{c.game}</span>
+                    {c.app_id ? <NetworkRankChips appId={c.app_id} /> : null}
+                  </div>
+                </TableCell>
                 <TableCell className="text-muted-foreground">{c.subGenre}</TableCell>
                 <TableCell className="text-right">#{c.appStoreRank}</TableCell>
                 <TableCell className="text-right font-mono text-sm">
@@ -136,6 +150,49 @@ export function CompetitiveScope() {
           </ResponsiveContainer>
         </div>
       </Card>
+    </div>
+  );
+}
+
+interface NetworkRankChipsProps {
+  appId: string;
+}
+
+/** Small contextual chips: e.g. `FB #3 · TT #12 · Admob #127`. Shown next to
+ *  each competitor on the Competitive Scope table. Quietly empties when the
+ *  app has no rank data — long-tail Voodoo titles routinely fall outside
+ *  SensorTower's tracked rankings. */
+function NetworkRankChips({ appId }: NetworkRankChipsProps) {
+  const { data, isLoading } = useAdvertiserRanks(appId);
+
+  if (isLoading) {
+    return (
+      <span className="text-[10px] text-muted-foreground/60">ranking…</span>
+    );
+  }
+
+  const ranks = data ?? {};
+  // Stable, predictable ordering across rows so the eye can scan vertically.
+  const present = NETWORK_ORDER.filter((n) => ranks[n]?.rank != null);
+  if (present.length === 0) return null;
+
+  return (
+    <div className="flex flex-wrap items-center gap-1">
+      {present.map((net) => {
+        const r = ranks[net];
+        return (
+          <span
+            key={net}
+            title={`${net} · #${r.rank} in ${r.country}${r.date ? ` · ${r.date}` : ""}`}
+            className="inline-flex items-center gap-1 rounded-sm border border-border/60 bg-muted/40 px-1.5 py-0.5 text-[10px] font-normal text-muted-foreground"
+          >
+            <span>{NETWORK_SHORT[net] ?? net}</span>
+            <span className="font-medium tabular-nums text-foreground/80">
+              #{r.rank}
+            </span>
+          </span>
+        );
+      })}
     </div>
   );
 }

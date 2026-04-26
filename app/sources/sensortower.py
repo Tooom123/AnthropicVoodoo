@@ -145,6 +145,55 @@ def fetch_top_advertisers(
     return resp.get("apps") or resp.get("top_apps") or []
 
 
+def fetch_sov_timeseries(
+    app_ids: list[str],
+    *,
+    start_date: str,
+    end_date: str,
+    period: str = "week",
+    os: str = "unified",
+) -> list[dict]:
+    """Network-level Share-of-Voice time series for one or more advertisers.
+
+    Wraps ``GET /v1/{os}/ad_intel/network_analysis``. Returns the raw list of
+    ``{app_id, country, network, date, sov}`` rows (the API returns either a
+    bare list or an object wrapping one — we normalise to ``list``). Cached
+    on disk so re-running the analysis on the same window costs zero quota.
+
+    Returns an empty list if ``app_ids`` is empty after dropping ``"unknown"``
+    sentinels — callers should treat that as a "no SoV data, fall back to
+    proxy" signal rather than an error.
+    """
+    cleaned_ids = sorted({a for a in app_ids if a and a != "unknown"})
+    if not cleaned_ids:
+        return []
+
+    params = {
+        "app_ids": ",".join(cleaned_ids),
+        "start_date": start_date,
+        "end_date": end_date,
+        "period": period,
+    }
+    cache_key = (
+        f"sov_{os}_{period}_{start_date}_{end_date}_"
+        f"{','.join(cleaned_ids)[:80]}"
+    )
+    resp = disk_cached(
+        DEFAULT_CACHE_DIR,
+        f"network_analysis_{os}_{period}_{end_date}",
+        cache_key,
+        lambda: _get(f"/v1/{os}/ad_intel/network_analysis", params),
+    )
+
+    if isinstance(resp, list):
+        return resp
+    if isinstance(resp, dict):
+        for key in ("network_analysis", "data", "results", "items"):
+            if isinstance(resp.get(key), list):
+                return resp[key]
+    return []
+
+
 def fetch_top_creatives(
     *,
     category_id: int,
@@ -221,3 +270,157 @@ def fetch_top_creatives(
             continue
 
     return raw_creatives
+
+
+# ---------------------------------------------------------------------------
+# Downloads by sources (paid vs organic UA breakdown)
+# ---------------------------------------------------------------------------
+
+
+def fetch_downloads_by_sources(
+    *,
+    unified_app_ids: list[str] | str,
+    countries: str = "US",
+    start_date: str,
+    end_date: str,
+    date_granularity: str = "monthly",
+) -> list[dict[str, Any]]:
+    """Fetch ``/v1/unified/downloads_by_sources`` — paid vs organic UA mix.
+
+    Returns the raw ``data[]`` list — one entry per app, each with a
+    ``breakdown[]`` of per-period download counts (organic_abs, paid_abs,
+    paid_search_abs, browser_abs, …).
+
+    ``unified_app_ids`` must be SensorTower **unified** ids (the 24-char
+    hex strings, e.g. ``55c527c302ac64f9c0002b18``), not iTunes ids.
+    """
+    if isinstance(unified_app_ids, list):
+        app_ids_csv = ",".join(unified_app_ids)
+    else:
+        app_ids_csv = unified_app_ids
+
+    if not app_ids_csv:
+        return []
+
+    params: dict[str, Any] = {
+        "app_ids": app_ids_csv,
+        "countries": countries,
+        "date_granularity": date_granularity,
+        "start_date": start_date,
+        "end_date": end_date,
+    }
+    label = f"downloads_by_sources_{countries}_{date_granularity}_{start_date}_{end_date}_{len(app_ids_csv)}"
+    resp = disk_cached(
+        DEFAULT_CACHE_DIR,
+        label,
+        params,
+        lambda: _get("/v1/unified/downloads_by_sources", params),
+    )
+    if isinstance(resp, dict):
+        return resp.get("data") or []
+    if isinstance(resp, list):
+        return resp
+    return []
+
+
+# Per-row keys in /v1/unified/downloads_by_sources breakdown[].
+# These are the four top-level absolute-count buckets; ``organic_browse_abs``
+# and ``organic_search_abs`` are sub-breakdowns of ``organic_abs`` and would
+# double-count if summed in.
+_DOWNLOADS_TOP_LEVEL_KEYS: tuple[str, ...] = (
+    "organic_abs",
+    "paid_abs",
+    "paid_search_abs",
+    "browser_abs",
+)
+
+
+def aggregate_downloads_breakdown(
+    breakdown: list[dict[str, Any]],
+) -> dict[str, float | int | None]:
+    """Aggregate a ``breakdown[]`` list into paid/organic shares + total downloads.
+
+    Returns ``{paid_share, organic_share, total_downloads}``. ``*_share``
+    are floats in [0, 1] (or None when the total is zero); ``total_downloads``
+    is the integer sum of every top-level absolute bucket across periods.
+    """
+    if not breakdown:
+        return {"paid_share": None, "organic_share": None, "total_downloads": 0}
+
+    totals: dict[str, int] = {k: 0 for k in _DOWNLOADS_TOP_LEVEL_KEYS}
+    for row in breakdown:
+        for k in _DOWNLOADS_TOP_LEVEL_KEYS:
+            v = row.get(k)
+            if isinstance(v, (int, float)) and v > 0:
+                totals[k] += int(v)
+
+    grand = sum(totals.values())
+    if grand <= 0:
+        return {"paid_share": None, "organic_share": None, "total_downloads": 0}
+
+    paid = totals["paid_abs"] + totals["paid_search_abs"]
+    organic = totals["organic_abs"] + totals["browser_abs"]
+
+    return {
+        "paid_share": round(paid / grand, 4),
+        "organic_share": round(organic / grand, 4),
+        "total_downloads": grand,
+    }
+
+
+# ---------------------------------------------------------------------------
+# Network rank — per-(network, country) ad-intel rank for an app
+# ---------------------------------------------------------------------------
+
+
+def fetch_network_rank(
+    *,
+    app_ids: list[str] | str,
+    networks: str = "Facebook,TikTok,Admob,Applovin",
+    countries: str = "US",
+    start_date: str,
+    end_date: str,
+    period: str = "week",
+    os_slug: str = "unified",
+) -> list[dict[str, Any]]:
+    """Fetch ``/v1/{os}/ad_intel/network_analysis/rank`` and return the raw rows.
+
+    Each row is ``{app_id, country, network, date, rank}``. Caller is
+    responsible for picking the latest row per (network, country).
+
+    ``os_slug`` defaults to ``"unified"`` since that's the cross-platform
+    entry point and accepts unified app ids out of the box.
+    """
+    if isinstance(app_ids, list):
+        app_ids_csv = ",".join(app_ids)
+    else:
+        app_ids_csv = app_ids
+
+    if not app_ids_csv:
+        return []
+
+    params: dict[str, Any] = {
+        "app_ids": app_ids_csv,
+        "networks": networks,
+        "countries": countries,
+        "start_date": start_date,
+        "end_date": end_date,
+        "period": period,
+    }
+    label = (
+        f"network_rank_{os_slug}_{countries}_{period}_"
+        f"{start_date}_{end_date}_{len(app_ids_csv)}"
+    )
+    resp = disk_cached(
+        DEFAULT_CACHE_DIR,
+        label,
+        params,
+        lambda: _get(f"/v1/{os_slug}/ad_intel/network_analysis/rank", params),
+    )
+    if isinstance(resp, list):
+        return resp
+    if isinstance(resp, dict):
+        # Some SensorTower responses wrap the list in {"data": [...]}.
+        return resp.get("data") or resp.get("ranks") or []
+    return []
+
