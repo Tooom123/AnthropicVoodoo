@@ -30,6 +30,12 @@ dist/
 # Runtime cache (we keep the dir but ignore its contents)
 data/cache/*
 !data/cache/.gitkeep
+# Endcards are intentionally tracked: they're hand-curated brand assets
+# (one PNG + one MP4 per Voodoo game) generated via scripts.generate_endcards
+# + scripts.animate_endcards. Every deploy needs them on disk to append at
+# the end of /api/variants/render-video outputs.
+!data/cache/endcards/
+!data/cache/endcards/**
 # PM-uploaded screenshots/mockups for the prototype mode
 data/uploads/
 # Notebook stray cache (shouldn't happen anymore — modules now resolve to repo root)

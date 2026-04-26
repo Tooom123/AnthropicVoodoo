@@ -17,10 +17,16 @@ Usage::
     # composition very well — recommended for endcards)
     uv run python -m scripts.animate_endcards --all --model model_kling-o1-i2v
 
+    # Keep the full Scenario clip (skip post-trim)
+    uv run python -m scripts.animate_endcards --all --no-trim
+
 The animation prompt is intentionally minimal ("subtle camera push-in,
 text bounce, brand confetti shimmer, 3 seconds") so the base composition
-stays stable. Each clip is ~3-5 seconds — short enough to feel like a
-clean closing beat, long enough to land the CTA.
+stays stable. Scenario typically returns a 5-second clip regardless of
+the requested duration in the prompt, and the last 1-2 seconds tend to
+drift (empty placeholder CTA, frame collapse). We post-trim every clip
+to ``--trim-seconds`` (default: 3) via ffmpeg so the endcards always
+end on a clean, branded beat.
 """
 
 from __future__ import annotations
@@ -104,12 +110,37 @@ def _resolve_target_pngs(args: argparse.Namespace) -> list[Path]:
     raise SystemExit("Pass --game <name|app_id> or --all")
 
 
+def _trim_video(src: Path, dst: Path, seconds: float) -> bool:
+    """ffmpeg-trim ``src`` to its first ``seconds`` and write to ``dst``.
+
+    Re-encodes (libx264 + aac) rather than ``-c copy`` to avoid keyframe
+    boundary issues — at endcard scale (3.5 MB / 3s) the cost is
+    negligible. Returns True on success, False on any failure.
+    """
+    import subprocess
+
+    cmd = [
+        "ffmpeg", "-y", "-i", str(src),
+        "-t", f"{seconds:.2f}",
+        "-c:v", "libx264", "-preset", "fast", "-crf", "22",
+        "-c:a", "aac", "-b:a", "128k",
+        "-movflags", "+faststart",
+        str(dst),
+    ]
+    proc = subprocess.run(cmd, capture_output=True, text=True)
+    if proc.returncode != 0:
+        print(f"      ⚠ trim failed: {proc.stderr.strip()[-200:]}")
+        return False
+    return dst.exists() and dst.stat().st_size > 0
+
+
 def animate_one(
     png: Path,
     *,
     model: str,
     prompt: str,
     overwrite: bool,
+    trim_seconds: float | None,
 ) -> Path | None:
     out_mp4 = png.with_suffix(".mp4")
     if out_mp4.exists() and not overwrite:
@@ -132,8 +163,30 @@ def animate_one(
         print(f"      ⚠ stub returned (job_id={meta.get('job_id')}). Skipping.")
         return None
 
-    _download(url, out_mp4)
-    print(f"      ✓ {out_mp4.name} ({out_mp4.stat().st_size / 1024:.0f} KB)")
+    # Download to a .raw.mp4 sidecar first; the final out_mp4 will be the
+    # post-trimmed version (or a copy of the raw when --no-trim).
+    raw_path = out_mp4.with_suffix(".raw.mp4")
+    _download(url, raw_path)
+    raw_kb = raw_path.stat().st_size / 1024
+
+    if trim_seconds is None:
+        raw_path.replace(out_mp4)
+        print(f"      ✓ {out_mp4.name} ({raw_kb:.0f} KB, untrimmed)")
+        return out_mp4
+
+    if not _trim_video(raw_path, out_mp4, trim_seconds):
+        # Fall back to the untrimmed clip rather than producing nothing.
+        raw_path.replace(out_mp4)
+        print(f"      ⚠ trim failed; kept untrimmed clip {out_mp4.name}")
+        return out_mp4
+
+    raw_path.unlink(missing_ok=True)
+    final_kb = out_mp4.stat().st_size / 1024
+    print(
+        f"      ✓ {out_mp4.name} "
+        f"({final_kb:.0f} KB, trimmed to {trim_seconds:.1f}s "
+        f"from {raw_kb:.0f} KB)"
+    )
     return out_mp4
 
 
@@ -163,6 +216,21 @@ def main() -> int:
         action="store_true",
         help="Re-animate even when the mp4 sibling already exists.",
     )
+    parser.add_argument(
+        "--trim-seconds",
+        type=float,
+        default=3.0,
+        help=(
+            "Post-trim every clip to this many seconds (default: 3). "
+            "Scenario typically returns 5s clips; the last 1-2s tend to "
+            "drift to an empty placeholder CTA, so we trim them off."
+        ),
+    )
+    parser.add_argument(
+        "--no-trim",
+        action="store_true",
+        help="Keep the full untrimmed Scenario clip (overrides --trim-seconds).",
+    )
     args = parser.parse_args()
 
     targets = _resolve_target_pngs(args)
@@ -170,7 +238,12 @@ def main() -> int:
         print("Nothing to animate (all endcards already have an mp4 sibling).")
         return 0
 
-    print(f"Animating {len(targets)} endcards via {args.model}…\n")
+    trim = None if args.no_trim else max(0.5, float(args.trim_seconds))
+    print(
+        f"Animating {len(targets)} endcards via {args.model}"
+        + (f" (trim → {trim:.1f}s)" if trim else " (untrimmed)")
+        + "…\n"
+    )
     failed = 0
     for png in targets:
         if animate_one(
@@ -178,6 +251,7 @@ def main() -> int:
             model=args.model,
             prompt=args.prompt,
             overwrite=args.overwrite,
+            trim_seconds=trim,
         ) is None:
             failed += 1
 
