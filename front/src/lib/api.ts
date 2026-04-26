@@ -345,6 +345,44 @@ export interface VariantVideoResponse {
   job_ids: string[];
   /** True when one or more clips fell back to a Picsum placeholder. */
   stub: boolean;
+  has_audio?: boolean;
+}
+
+export interface VariantVideoStatus {
+  exists: boolean;
+  video_url?: string | null;
+  duration_s?: number;
+  has_audio?: boolean;
+  endcard_appended?: boolean;
+}
+
+/**
+ * Cheap existence check that runs whenever the Insights detail view
+ * mounts. If the user previously generated a video for this variant
+ * (in any session), ``exists: true`` lets the UI render the cached
+ * mp4 instantly without re-triggering the 5-min Scenario job.
+ */
+export function useVariantVideoStatus(
+  gameName: string | undefined,
+  archetypeId: string | undefined,
+) {
+  return useQuery<VariantVideoStatus>({
+    queryKey: ["variant-video-status", gameName, archetypeId],
+    queryFn: async () => {
+      if (!gameName || !archetypeId) return { exists: false };
+      const url = new URL(
+        "/api/variants/render-video/status",
+        API_BASE,
+      );
+      url.searchParams.set("game_name", gameName);
+      url.searchParams.set("archetype_id", archetypeId);
+      const res = await fetch(url.toString());
+      if (!res.ok) return { exists: false };
+      return res.json() as Promise<VariantVideoStatus>;
+    },
+    enabled: Boolean(gameName && archetypeId),
+    staleTime: 30 * 1000,
+  });
 }
 
 /**

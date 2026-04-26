@@ -34,7 +34,10 @@ import {
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { useRenderVariantVideo } from "@/lib/api";
+import {
+  useRenderVariantVideo,
+  useVariantVideoStatus,
+} from "@/lib/api";
 import type { GeneratedVariant } from "@/types/hooklens";
 
 const API_BASE =
@@ -66,11 +69,48 @@ export function GeneratedAdSection({
 
   const render = useRenderVariantVideo();
 
+  // Status check — runs on mount + on variant change. If a video for
+  // this (game, variant) was rendered in a previous session it lives
+  // on disk under data/cache/videos/ and we surface it instantly,
+  // skipping the 5-min Scenario round-trip.
+  const status = useVariantVideoStatus(
+    gameName,
+    selected?.brief.archetype_id,
+  );
+
   if (!selected) return null;
 
-  const videoUrl = render.data?.video_url
+  // Pick the most relevant video URL:
+  //   1. The live render result (just-finished generation),
+  //   2. The cached-on-disk URL the status endpoint reported,
+  //   3. None — show the Generate CTA.
+  const liveUrl = render.data?.video_url
     ? `${API_BASE}${render.data.video_url}`
     : null;
+  const cachedUrl =
+    status.data?.exists && status.data.video_url
+      ? `${API_BASE}${status.data.video_url}`
+      : null;
+  const videoUrl = liveUrl ?? cachedUrl;
+  const videoMeta = render.data
+    ? {
+        cached: render.data.cached,
+        duration_s: render.data.duration_s,
+        clips: render.data.clips,
+        endcard_appended: render.data.endcard_appended,
+        stub: render.data.stub,
+        has_audio: render.data.has_audio ?? false,
+      }
+    : status.data?.exists && status.data.video_url
+      ? {
+          cached: true,
+          duration_s: status.data.duration_s ?? 0,
+          clips: 3,
+          endcard_appended: status.data.endcard_appended ?? false,
+          stub: false,
+          has_audio: status.data.has_audio ?? false,
+        }
+      : null;
 
   function handleGenerate() {
     render.mutate({
@@ -143,12 +183,8 @@ export function GeneratedAdSection({
           </div>
         </div>
 
-        {/* Render area — generate CTA, loading, video, error */}
+        {/* Render area — pick one of: generate CTA, loading, error, video */}
         <div className="p-5">
-          {!render.data && !render.isPending && !render.isError && (
-            <GenerateCta selected={selected} onGenerate={handleGenerate} />
-          )}
-
           {render.isPending && <RenderingState selected={selected} />}
 
           {render.isError && (
@@ -174,13 +210,17 @@ export function GeneratedAdSection({
             </div>
           )}
 
-          {render.data && videoUrl && (
+          {/* Idle: show the cached video if we have one, else the CTA. */}
+          {!render.isPending && !render.isError && videoUrl && videoMeta && (
             <RenderedVideo
               videoUrl={videoUrl}
-              meta={render.data}
+              meta={videoMeta}
               variantTitle={selected.brief.title}
               onRegenerate={handleGenerate}
             />
+          )}
+          {!render.isPending && !render.isError && !videoUrl && (
+            <GenerateCta selected={selected} onGenerate={handleGenerate} />
           )}
         </div>
       </Card>
@@ -258,6 +298,7 @@ function RenderedVideo({
     clips: number;
     endcard_appended: boolean;
     stub: boolean;
+    has_audio: boolean;
   };
   variantTitle: string;
   onRegenerate: () => void;
@@ -281,7 +322,9 @@ function RenderedVideo({
           controls
           autoPlay
           loop
-          muted
+          /* Only mute when there's no audio track — otherwise the
+             user has to manually unmute every time they reload. */
+          muted={!meta.has_audio}
           playsInline
           className="w-full max-w-xs rounded-xl border border-border bg-black"
           style={{ aspectRatio: "9 / 16" }}
@@ -295,10 +338,14 @@ function RenderedVideo({
         </Chip>
         <Chip>{meta.clips} clips concatenated</Chip>
         <Chip>≈ {meta.duration_s.toFixed(1)}s</Chip>
+        {meta.has_audio && (
+          <Chip className="border-violet-500/30 bg-violet-500/10 text-violet-300">
+            ♪ Audio
+          </Chip>
+        )}
         {meta.endcard_appended && (
           <Chip className="border-emerald-500/30 bg-emerald-500/10 text-emerald-300">
-            + {variantTitle.slice(0, 1)}
-            {variantTitle.slice(1, 3).toLowerCase()} endcard
+            + endcard
           </Chip>
         )}
       </div>

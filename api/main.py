@@ -1786,6 +1786,25 @@ class VariantVideoResponse(BaseModel):
     """``True`` when one or more clips fell back to a Picsum placeholder
     (e.g. Scenario auth missing or job timed out). Frontend should warn."""
 
+    has_audio: bool = False
+    """``True`` when an audio overlay was applied to the final mp4."""
+
+
+class VariantVideoStatus(BaseModel):
+    """Lightweight existence check used by the React UI on Insights load.
+
+    Mirrors the fields of VariantVideoResponse but with ``exists`` so the
+    frontend can render a previously-rendered video instantly (no need
+    to re-trigger the 5-min generation just because the user navigated
+    away and came back).
+    """
+
+    exists: bool
+    video_url: str | None = None
+    duration_s: float = 0.0
+    has_audio: bool = False
+    endcard_appended: bool = False
+
 
 def _slugify_game(name: str) -> str:
     import re
@@ -1813,6 +1832,10 @@ async def render_variant_video(
     include_endcard: bool = Query(
         True,
         description="Append the game's pre-rendered endcard at the end if available",
+    ),
+    include_audio: bool = Query(
+        True,
+        description="Overlay an emotional-pitch-matched soundtrack from data/cache/audio/library/",
     ),
     model: str | None = Query(
         None,
@@ -2042,6 +2065,20 @@ async def render_variant_video(
             detail="ffmpeg concat failed — check server logs",
         )
 
+    # 10. Optional audio overlay — picks a stock track from
+    #     data/cache/audio/library/<vibe>.mp3 based on the variant's
+    #     emotional pitch and ffmpeg-overlays it on the silent concat.
+    #     Runs synchronously after concat; the AI-generated providers
+    #     (ElevenLabs, Suno) are intentionally NOT wired here to keep
+    #     the request bounded — use scripts/generate_soundtrack.py
+    #     after the fact for those.
+    audio_overlay_applied = False
+    if include_audio:
+        audio_overlay_applied = _try_apply_stock_soundtrack(
+            video_path=final_path,
+            variant=variant,
+        )
+
     return VariantVideoResponse(
         video_url=f"/videos/{final_filename}",
         cached=False,
@@ -2050,7 +2087,208 @@ async def render_variant_video(
         endcard_appended=endcard is not None,
         job_ids=job_ids,
         stub=any_stub,
+        has_audio=audio_overlay_applied or _video_has_audio(final_path),
     )
+
+
+@app.get(
+    "/api/variants/render-video/status",
+    response_model=VariantVideoStatus,
+)
+def variant_video_status(
+    game_name: str = Query(...),
+    archetype_id: str = Query(...),
+    include_endcard: bool = Query(True),
+) -> VariantVideoStatus:
+    """Cheap existence check for a previously rendered variant video.
+
+    Lets the React Insights view render the video instantly on
+    revisit without waiting on (or re-triggering) the 5-min Scenario
+    generation. Mirrors the cache-key computation of the POST endpoint
+    so the same (game, archetype, endcard mtime) combo resolves to the
+    same mp4.
+
+    Returns ``exists=False`` when no matching mp4 is on disk; the UI
+    then shows the Generate Ad CTA. ``exists=True`` carries the URL +
+    metadata so the player can mount immediately.
+    """
+    import re
+
+    try:
+        app_id = _resolve_app_id_for_game(game_name)
+    except HTTPException:
+        return VariantVideoStatus(exists=False)
+
+    cache_path = REPORTS_CACHE_DIR / f"{app_id}_e2e.json"
+    if not cache_path.exists():
+        return VariantVideoStatus(exists=False)
+    report = json.loads(cache_path.read_text())
+    target_game = report.get("target_game") or {}
+    game_slug = _slugify_game(target_game.get("name") or game_name)
+
+    safe_archetype = re.sub(r"[^a-zA-Z0-9_-]+", "-", archetype_id)[:40]
+    endcard_for_cache = (
+        _endcard_path_for(app_id) if include_endcard else None
+    )
+    endcard_tag = (
+        f"_ec{int(endcard_for_cache.stat().st_mtime)}"
+        if endcard_for_cache
+        else "_noec"
+    )
+    final_filename = f"variant_{game_slug}_{safe_archetype}{endcard_tag}.mp4"
+    final_path = _VIDEOS_DIR / final_filename
+
+    if not final_path.exists() or final_path.stat().st_size == 0:
+        # Also accept the previous-generation no-suffix file (when the
+        # endcard was added between renders) — the UI doesn't care which
+        # exact mtime tag was used as long as we have any cached video.
+        legacy = _VIDEOS_DIR / f"variant_{game_slug}_{safe_archetype}.mp4"
+        if legacy.exists() and legacy.stat().st_size > 0:
+            final_path = legacy
+            final_filename = legacy.name
+        else:
+            return VariantVideoStatus(exists=False)
+
+    return VariantVideoStatus(
+        exists=True,
+        video_url=f"/videos/{final_filename}",
+        duration_s=_estimate_video_duration(final_path),
+        has_audio=_video_has_audio(final_path),
+        endcard_appended=endcard_for_cache is not None,
+    )
+
+
+_AUDIO_LIBRARY_DIR = CACHE_DIR / "audio" / "library"
+
+# Map emotional_pitch → vibe filename (matches
+# scripts/generate_soundtrack.py:VIBE_MAP and the README in
+# data/cache/audio/library/).
+_PITCH_VIBE: dict[str, str] = {
+    "satisfaction": "satisfaction",
+    "fail": "rage_bait",
+    "curiosity": "curiosity",
+    "rage_bait": "rage_bait",
+    "tutorial": "tutorial",
+    "asmr": "asmr",
+    "celebrity": "celebrity",
+    "challenge": "challenge",
+    "transformation": "transformation",
+    "other": "satisfaction",
+}
+
+
+def _try_apply_stock_soundtrack(
+    *,
+    video_path: Path,
+    variant: dict[str, Any],
+) -> bool:
+    """Best-effort overlay of a stock track from
+    ``data/cache/audio/library/<vibe>.mp3`` onto ``video_path``.
+
+    Picks the track by mapping the variant's emotional pitch to a
+    vibe key (or falls back to ``default.mp3``). When no library file
+    is on disk, silently no-ops — the video stays silent and the
+    response carries ``has_audio=false``. The original silent mp4 is
+    saved as ``.silent.mp4`` first so the soundtrack overlay step can
+    be re-rolled later via ``scripts/generate_soundtrack.py`` without
+    regenerating the underlying clips.
+
+    Returns ``True`` iff an overlay actually landed on disk.
+    """
+    import subprocess
+
+    pitch = (
+        ((variant.get("brief") or {}).get("emotional_pitch"))
+        or "satisfaction"
+    )
+    # The brief's emotional_pitch is sometimes nested under archetype
+    # rather than directly on the brief — be permissive.
+    if "centroid_hook" in variant:
+        pitch = (
+            (variant.get("centroid_hook") or {}).get("emotional_pitch") or pitch
+        )
+
+    vibe = _PITCH_VIBE.get(pitch, _PITCH_VIBE["other"])
+    candidate = _AUDIO_LIBRARY_DIR / f"{vibe}.mp3"
+    if not candidate.exists():
+        candidate = _AUDIO_LIBRARY_DIR / "default.mp3"
+    if not candidate.exists():
+        log.info(
+            "soundtrack: no library track for vibe=%s — keeping video silent",
+            vibe,
+        )
+        return False
+
+    # Backup the silent video so generate_soundtrack.py can swap the
+    # audio later without re-running the Scenario calls.
+    silent_backup = video_path.with_suffix(".silent.mp4")
+    if not silent_backup.exists():
+        try:
+            silent_backup.write_bytes(video_path.read_bytes())
+        except OSError:
+            pass
+
+    duration = _estimate_video_duration(video_path)
+    if duration <= 0:
+        log.warning("soundtrack: ffprobe failed on %s", video_path)
+        return False
+
+    out = video_path.with_suffix(".audio.mp4")
+    cmd = [
+        "ffmpeg", "-y",
+        "-i", str(silent_backup if silent_backup.exists() else video_path),
+        "-stream_loop", "-1",
+        "-i", str(candidate),
+        "-map", "0:v:0", "-map", "1:a:0",
+        "-c:v", "copy",
+        "-c:a", "aac", "-b:a", "192k",
+        "-t", f"{duration:.3f}",
+        "-shortest",
+        "-movflags", "+faststart",
+        str(out),
+    ]
+    proc = subprocess.run(cmd, capture_output=True, text=True)
+    if proc.returncode != 0:
+        log.warning(
+            "soundtrack: ffmpeg overlay failed (%s)",
+            proc.stderr.strip()[-200:],
+        )
+        return False
+
+    # Replace the silent video with the audio version.
+    try:
+        out.replace(video_path)
+    except OSError as e:
+        log.warning("soundtrack: rename failed: %s", e)
+        return False
+
+    log.info(
+        "soundtrack: applied %s (vibe=%s, pitch=%s) → %s",
+        candidate.name, vibe, pitch, video_path.name,
+    )
+    return True
+
+
+def _video_has_audio(path: Path) -> bool:
+    """Return True iff the mp4 contains an audio stream. Used by the
+    Status endpoint and the render response so the UI can show an
+    accurate "audio?" chip."""
+    import subprocess
+
+    try:
+        result = subprocess.run(
+            [
+                "ffprobe", "-v", "error",
+                "-select_streams", "a",
+                "-show_entries", "stream=codec_type",
+                "-of", "default=noprint_wrappers=1:nokey=1",
+                str(path),
+            ],
+            capture_output=True, text=True, timeout=10,
+        )
+        return "audio" in result.stdout
+    except subprocess.SubprocessError:
+        return False
 
 
 def _resolve_app_id_for_game(game_name: str) -> str:
