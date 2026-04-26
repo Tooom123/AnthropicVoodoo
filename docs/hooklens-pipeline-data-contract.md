@@ -111,11 +111,11 @@ Orchestration: `STEPS` at `app/pipeline.py:432-443`, `run_pipeline` at `app/pipe
 
 - **File:** `app/pipeline.py:295-298`, `app/analysis/archetypes.py`.
 
-- **What it does:** Clusters on `(emotional_pitch, visual_style)` (`archetypes.py:45-47`). Signals: `freshness` (mean days from `first_seen_at`), `freshness_norm`, `derivative_spread` = unique advertisers / cluster size, `velocity` = `min(2, 1/freshness_norm)` as **proxy** (`archetypes.py:54-68`), `overall_signal_score` weighted 0.4 / 0.35 / 0.25. Centroid = max `raw.share` (`archetypes.py:71-72`). `state.top_archetypes` = first `top_k_archetypes` (`pipeline.py:296-297`).
+- **What it does:** Clusters on `(emotional_pitch, visual_style)`. Signals: `freshness` (mean days from `first_seen_at`), `freshness_norm`, `derivative_spread` = unique advertisers / cluster size, **`velocity` = real Share-of-Voice growth from SensorTower's `/v1/{os}/ad_intel/network_analysis` endpoint** (`archetypes.py:_compute_real_velocity`). For each archetype we resolve its members' advertiser app_ids, fetch weekly SoV over the last 4 weeks, and express velocity as `recent_2w_avg / older_2w_avg` clipped to `[0.5, 5.0]`. When SoV data is missing (no resolvable app_ids, empty `network_analysis` response, fewer than 2 weeks of data, quota exhaustion) we **fall back to the legacy `min(2, 1/freshness_norm)` proxy and log loudly** — the pipeline keeps running for niche apps. SoV time series cached on disk under `data/cache/sensortower/network_analysis_*` so re-clustering is free. `overall_signal_score` weighted 0.4 / 0.35 / 0.25. Centroid = max `raw.share`. `state.top_archetypes` = first `top_k_archetypes`.
 
 - **Outputs:** `list[CreativeArchetype]`; `common_mechanics` always `[]` (`archetypes.py:87`).
 
-- **Improvement opportunities:** Replace velocity proxy with real ST trend if multi-period data available; fill `common_mechanics`; richer cluster keys (e.g. `phashion_group`).
+- **Improvement opportunities:** Per-network velocity (currently aggregated across all networks); decay-weighted SoV (recent days weigh more); fill `common_mechanics`; richer cluster keys (e.g. `phashion_group`).
 
 ---
 
