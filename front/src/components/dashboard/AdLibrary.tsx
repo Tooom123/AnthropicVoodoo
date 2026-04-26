@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
-import { Play, ChevronDown, Check, Image as ImageIcon, ExternalLink } from "lucide-react";
-import { Link } from "@tanstack/react-router";
+import { Play, ChevronDown, Check, Image as ImageIcon, ExternalLink, Sparkles } from "lucide-react";
+import { Link, useNavigate } from "@tanstack/react-router";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import {
@@ -25,7 +25,7 @@ import {
   type Network,
   type Format,
 } from "@/data/sample";
-import { useCreatives } from "@/lib/api";
+import { useCreatives, useGeneratedCreatives } from "@/lib/api";
 import { useGame } from "@/lib/game-context";
 import { NetworkBadge } from "./NetworkBadge";
 
@@ -118,18 +118,56 @@ function MultiSelect<T extends string>({
 const COUNTRIES = ["All", "US", "GB", "DE", "FR", "JP", "BR", "KR"] as const;
 type Country = (typeof COUNTRIES)[number];
 
+const API_BASE =
+  (import.meta.env.VITE_API_URL as string | undefined) ?? "http://localhost:8000";
+
+/**
+ * Generated ads come back from the API with relative paths
+ * (``/videos/variant_xyz.mp4``) because they're served by FastAPI's
+ * static mount, not SensorTower's CDN. The browser would resolve
+ * those against the React app origin (8080) instead of the API
+ * (8000), so we rewrite to absolute URLs at the boundary.
+ */
+function resolveMediaUrl(url: string | null | undefined): string | undefined {
+  if (!url) return undefined;
+  if (url.startsWith("http://") || url.startsWith("https://")) return url;
+  if (url.startsWith("/")) return `${API_BASE}${url}`;
+  return url;
+}
+
+/**
+ * Top-of-page mode toggle: ``competitor`` shows every ad in the
+ * Gemini-deconstruction knowledge base (~500 entries),
+ * ``generated`` shows only the ads VoodRadar has rendered itself
+ * via the per-variant pipeline (Scenario + ffmpeg). Defaults to
+ * competitor for the demo narrative ("here's the market") with
+ * a 1-click swap to "here's what we built from it".
+ */
+type LibraryMode = "competitor" | "generated";
+
 export function AdLibrary() {
   const { gameName, period } = useGame();
   const [country, setCountry] = useState<Country>("US");
-  const { data: creativesData = [], isLoading } = useCreatives({
+  // Default to ``generated`` so a fresh Ad Library visit shows the ads
+  // VoodRadar has rendered itself — that's the punchline. Toggle to
+  // ``competitor`` reveals the underlying knowledge base used to write
+  // those briefs.
+  const [mode, setMode] = useState<LibraryMode>("generated");
+
+  const { data: competitorData = [], isLoading: competitorLoading } = useCreatives({
     game_name: gameName || undefined,
-    // The TopNav time dropdown drives this — switching from "Last 30 days"
-    // to "Last 7 days" or "Last 90 days" re-queries SensorTower with the
-    // new period bucket.
     period,
     country: country === "All" ? "all" : country,
-    limit: 80,
+    // The backend defaults to knowledge-base mode (every
+    // Gemini-deconstructed ad on disk, ~499 entries) instead of the
+    // live SensorTower top-N capped at ~40. Bump the cap accordingly.
+    limit: 500,
   });
+  const { data: generatedData = [], isLoading: generatedLoading } =
+    useGeneratedCreatives();
+
+  const creativesData = mode === "generated" ? generatedData : competitorData;
+  const isLoading = mode === "generated" ? generatedLoading : competitorLoading;
   const [networks, setNetworks] = useState<Set<Network>>(new Set());
   const [formats, setFormats] = useState<Set<Format>>(new Set());
   const [games, setGames] = useState<Set<string>>(new Set());
@@ -210,9 +248,56 @@ export function AdLibrary() {
 
   return (
     <div className="space-y-5">
+      {/* Mode toggle — competitor knowledge base vs our own generated
+          outputs. Two distinct corpora; the rest of the filter bar
+          adapts (tier pills hidden in generated mode since runDays /
+          startedAt are not meaningful for our renders). */}
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="inline-flex rounded-lg border border-border bg-card p-0.5 text-xs">
+          <button
+            type="button"
+            onClick={() => setMode("competitor")}
+            className={`rounded-md px-3 py-1.5 font-medium transition-all ${
+              mode === "competitor"
+                ? "bg-primary text-primary-foreground shadow-sm"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+            title="Every ad we've Gemini-deconstructed (the knowledge base)"
+          >
+            Market ads
+            <span className="ml-1.5 tabular-nums opacity-70">
+              {competitorData.length}
+            </span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setMode("generated")}
+            className={`rounded-md px-3 py-1.5 font-medium transition-all ${
+              mode === "generated"
+                ? "bg-primary text-primary-foreground shadow-sm"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+            title="Ads VoodRadar has rendered through the per-variant pipeline"
+          >
+            VoodRadar outputs
+            <span className="ml-1.5 tabular-nums opacity-70">
+              {generatedData.length}
+            </span>
+          </button>
+        </div>
+        {mode === "generated" && (
+          <span className="text-xs text-muted-foreground">
+            Variants rendered through the Scenario → Kling → ffmpeg pipeline,
+            with bespoke Opus narration when audio is enabled.
+          </span>
+        )}
+      </div>
+
       {/* Tier pills — quick performance filter (Performing / Trending /
           Fresh / All) with live counts. Single-select; clicking the
-          active pill re-clicks "All". */}
+          active pill re-clicks "All". Only meaningful for competitor
+          ads (run-duration / first-seen come from SensorTower). */}
+      {mode === "competitor" && (
       <div className="flex flex-wrap items-center gap-1.5">
         {TIER_FILTERS.map((t) => {
           const active = tierFilter === t.value;
@@ -250,6 +335,7 @@ export function AdLibrary() {
           );
         })}
       </div>
+      )}
 
       <div className="flex flex-wrap items-center gap-2">
         <MultiSelect
@@ -345,10 +431,16 @@ function CreativeCard({ creative: c }: CreativeCardProps) {
   const [thumbErrored, setThumbErrored] = useState(false);
   const [iconErrored, setIconErrored] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
+  const navigate = useNavigate();
+  const { setGameName } = useGame();
 
-  const hasThumb = Boolean(c.thumbUrl) && !thumbErrored;
-  const hasIcon = Boolean(c.appIconUrl) && !iconErrored;
-  const hasVideo = Boolean(c.creativeUrl) && c.format === "Video";
+  const isGenerated = c.id.startsWith("generated:");
+  const resolvedThumb = resolveMediaUrl(c.thumbUrl);
+  const resolvedIcon = resolveMediaUrl(c.appIconUrl);
+  const resolvedVideo = resolveMediaUrl(c.creativeUrl);
+  const hasThumb = Boolean(resolvedThumb) && !thumbErrored;
+  const hasIcon = Boolean(resolvedIcon) && !iconErrored;
+  const hasVideo = Boolean(resolvedVideo) && c.format === "Video";
 
   function handleHeroClick() {
     if (hasVideo) {
@@ -369,7 +461,7 @@ function CreativeCard({ creative: c }: CreativeCardProps) {
         >
           {hasThumb ? (
             <img
-              src={c.thumbUrl ?? undefined}
+              src={resolvedThumb}
               alt={`${c.game} — ${c.format} ad`}
               loading="lazy"
               onError={() => setThumbErrored(true)}
@@ -392,6 +484,12 @@ function CreativeCard({ creative: c }: CreativeCardProps) {
           <span className="pointer-events-none absolute right-2 top-2 rounded-md bg-background/80 px-1.5 py-0.5 text-[10px] font-medium backdrop-blur-sm">
             {c.format}
           </span>
+          {isGenerated && (
+            <span className="pointer-events-none absolute left-2 top-2 inline-flex items-center gap-1 rounded-md bg-primary/90 px-1.5 py-0.5 text-[10px] font-semibold text-primary-foreground backdrop-blur-sm">
+              <span aria-hidden>✦</span>
+              VoodRadar
+            </span>
+          )}
         </button>
 
         <div className="flex flex-1 flex-col gap-3 p-4">
@@ -400,7 +498,7 @@ function CreativeCard({ creative: c }: CreativeCardProps) {
             <div className="h-9 w-9 flex-shrink-0 overflow-hidden rounded-md bg-muted ring-1 ring-border">
               {hasIcon ? (
                 <img
-                  src={c.appIconUrl ?? undefined}
+                  src={resolvedIcon}
                   alt={c.game}
                   loading="lazy"
                   onError={() => setIconErrored(true)}
@@ -422,7 +520,7 @@ function CreativeCard({ creative: c }: CreativeCardProps) {
                 </div>
               )}
             </div>
-            <NetworkBadge network={c.network} />
+            {!isGenerated && <NetworkBadge network={c.network} />}
           </div>
 
           {/* Performance signal: runDays-based tier + a "trending" badge
@@ -478,11 +576,30 @@ function CreativeCard({ creative: c }: CreativeCardProps) {
             )}
           </div>
 
-          <Button size="sm" variant="secondary" className="mt-auto w-full" asChild>
-            <Link to="/ad/$id" params={{ id: c.id }}>
-              View details
-            </Link>
-          </Button>
+          {isGenerated ? (
+            // Generated ads have no /ad/$id dossier (they're our own
+            // renders, not SensorTower creatives). Route to /insights
+            // instead, after seeding the GameContext with the source
+            // game so the page lands on the right report.
+            <Button
+              size="sm"
+              variant="secondary"
+              className="mt-auto w-full gap-1.5"
+              onClick={() => {
+                setGameName(c.game);
+                navigate({ to: "/insights" });
+              }}
+            >
+              <Sparkles className="h-3.5 w-3.5" />
+              Open analysis
+            </Button>
+          ) : (
+            <Button size="sm" variant="secondary" className="mt-auto w-full" asChild>
+              <Link to="/ad/$id" params={{ id: c.id }}>
+                View details
+              </Link>
+            </Button>
+          )}
         </div>
       </Card>
 
@@ -497,32 +614,32 @@ function CreativeCard({ creative: c }: CreativeCardProps) {
                   · {c.network} · {c.format}
                 </span>
               </span>
-              {c.creativeUrl && (
+              {resolvedVideo && (
                 <a
-                  href={c.creativeUrl}
+                  href={resolvedVideo}
                   target="_blank"
                   rel="noreferrer"
                   className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-xs font-normal text-muted-foreground transition-colors hover:border-primary/50 hover:text-foreground"
                 >
-                  Open original
+                  {isGenerated ? "Download MP4" : "Open original"}
                   <ExternalLink className="h-3 w-3" />
                 </a>
               )}
             </DialogTitle>
           </DialogHeader>
           <div className="relative aspect-[9/16] max-h-[70vh] w-full bg-black">
-            {c.creativeUrl ? (
+            {resolvedVideo ? (
               <video
-                key={c.creativeUrl}
-                src={c.creativeUrl}
+                key={resolvedVideo}
+                src={resolvedVideo}
                 controls
                 autoPlay
                 playsInline
                 className="h-full w-full object-contain"
               />
-            ) : c.thumbUrl ? (
+            ) : resolvedThumb ? (
               <img
-                src={c.thumbUrl}
+                src={resolvedThumb}
                 alt={c.game}
                 className="h-full w-full object-contain"
               />

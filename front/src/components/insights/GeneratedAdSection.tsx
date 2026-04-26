@@ -73,11 +73,12 @@ export function GeneratedAdSection({
 
   // Audio knobs — sticky local state so the user's choice persists
   // across variant switches within the same Insights session.
-  // Music + SFX default ON (no-op when no library file on disk).
-  // Voice default OFF — TTS without a music bed sounds robotic, so
-  // the user opts in once they've populated data/cache/audio/library/.
+  // All three default ON: the backend's `_try_apply_audio_layers`
+  // mixes music (auto-ducked to 25%), voice (100%), and SFX
+  // (timestamp-spliced) into a single track. The Opus-authored
+  // bespoke narration is now reliable enough to be the demo default.
   const [includeMusic, setIncludeMusic] = useState(true);
-  const [includeVoice, setIncludeVoice] = useState(false);
+  const [includeVoice, setIncludeVoice] = useState(true);
   const [includeSfx, setIncludeSfx] = useState(true);
   const [audioQuality, setAudioQuality] = useState<"fast" | "rich">(
     "fast",

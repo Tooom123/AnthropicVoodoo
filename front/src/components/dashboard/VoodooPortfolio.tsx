@@ -65,6 +65,8 @@ function networkColor(network: string): string {
   return NETWORK_HEX[network] ?? "#94a3b8";
 }
 
+const PAGE_SIZE = 9;
+
 export function VoodooPortfolio() {
   const { gameName, setGameName } = useGame();
   const { data, isLoading, error } = useVoodooPortfolio(50);
@@ -75,6 +77,11 @@ export function VoodooPortfolio() {
   // already filled when it pops open. Distinct from the global gameName
   // in GameContext (which can be stale from a previous Insights load).
   const [pendingGameName, setPendingGameName] = useState<string>("");
+  // ⚠️ Pagination state MUST live before the early returns below (loading
+  // / error / empty). Otherwise React sees a different hook count on the
+  // first render vs the loaded render → "Rendered more hooks than during
+  // the previous render". Hard rule of hooks.
+  const [page, setPage] = useState(0);
   const { startRun, openDialog, run } = usePipelineRuns();
 
   // Auto-navigate to the Insights page when a run completes from this view.
@@ -176,8 +183,6 @@ export function VoodooPortfolio() {
     return ta - tb;
   });
 
-  const PAGE_SIZE = 9;
-  const [page, setPage] = useState(0);
   const totalPages = Math.ceil(sortedApps.length / PAGE_SIZE);
   const pageApps = sortedApps.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
 

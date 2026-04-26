@@ -4,8 +4,10 @@ import { createContext, useContext, useState } from "react";
  * App-wide period selection driven by the TopNav time dropdown.
  *
  * Values map to the SensorTower ``period`` query param:
- * - ``week``    → Last 7 days
- * - ``month``   → Last 30 days (default)
+ * - ``week``    → Last 7 days (default — favours the Weekly Brief
+ *                 narrative + keeps Ad Library focused on freshly
+ *                 trending creatives)
+ * - ``month``   → Last 30 days
  * - ``quarter`` → Last 90 days OR Year-to-date (front sets period_date
  *                 = Jan 1 in YTD mode, but the SensorTower bucket is
  *                 still ``quarter``)
@@ -31,13 +33,13 @@ const GameContext = createContext<GameContextValue>({
   gameName: "",
   setGameName: () => {},
   period: "month",
-  periodLabel: "Last 30 days",
+  periodLabel: "Last 7 days",
   setPeriodByLabel: () => {},
 });
 
 export function GameProvider({ children }: { children: React.ReactNode }) {
   const [gameName, setGameName] = useState("");
-  const [periodLabel, setPeriodLabel] = useState<string>("Last 30 days");
+  const [periodLabel, setPeriodLabel] = useState<string>("Last 7 days");
   const period = (PERIOD_OPTIONS.find((p) => p.label === periodLabel)?.value ??
     "month") as PeriodValue;
 
