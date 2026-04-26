@@ -1,4 +1,4 @@
-import { Calendar, ChevronDown, Sparkles } from "lucide-react";
+import { Calendar, ChevronDown, Sparkles, PanelLeftOpen } from "lucide-react";
 import { useNavigate } from "@tanstack/react-router";
 import { Button } from "@/components/ui/button";
 import {
@@ -9,7 +9,12 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { PERIOD_OPTIONS, useGame } from "@/lib/game-context";
 
-export function TopNav() {
+interface TopNavProps {
+  sidebarOpen?: boolean;
+  onToggleSidebar?: () => void;
+}
+
+export function TopNav({ sidebarOpen = true, onToggleSidebar }: TopNavProps) {
   const { periodLabel, setPeriodByLabel } = useGame();
   const navigate = useNavigate();
 
@@ -18,32 +23,34 @@ export function TopNav() {
   }
 
   return (
-    <header className="flex h-14 items-center justify-between border-b border-border bg-white px-6">
-      {/* Left: product identity */}
-      <div className="flex items-center gap-3">
-        <span className="text-base font-bold text-[#6366f1]">HookLens</span>
-        <span className="text-xs text-muted-foreground">by Voodoo</span>
-      </div>
+    <header className="flex h-14 items-center justify-between border-b border-slate-100 bg-white/80 backdrop-blur-sm px-4 gap-3">
+      {/* Sidebar toggle — only shown when sidebar is collapsed */}
+      {!sidebarOpen && onToggleSidebar && (
+        <button
+          onClick={onToggleSidebar}
+          className="p-1.5 rounded-md text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors shrink-0"
+          aria-label="Open sidebar"
+        >
+          <PanelLeftOpen className="h-4 w-4" />
+        </button>
+      )}
 
-      {/* Separator */}
+      {/* Spacer */}
       <div className="flex-1" />
 
-      {/* Right: actions */}
+      {/* Right: period picker + CTA */}
       <div className="flex items-center gap-2">
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="outline" size="sm" className="gap-2">
+            <Button variant="outline" size="sm" className="gap-2 border-slate-200 text-slate-600 bg-white hover:bg-slate-50">
               <Calendar className="h-3.5 w-3.5" />
               <span>{periodLabel}</span>
-              <ChevronDown className="h-3.5 w-3.5 opacity-60" />
+              <ChevronDown className="h-3.5 w-3.5 opacity-50" />
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
             {PERIOD_OPTIONS.map((r) => (
-              <DropdownMenuItem
-                key={r.label}
-                onClick={() => setPeriodByLabel(r.label)}
-              >
+              <DropdownMenuItem key={r.label} onClick={() => setPeriodByLabel(r.label)}>
                 {r.label}
               </DropdownMenuItem>
             ))}
@@ -53,7 +60,7 @@ export function TopNav() {
         <Button
           size="sm"
           onClick={launchAnalysis}
-          className="gap-1.5 bg-[#6366f1] hover:bg-[#4f46e5] text-white"
+          className="gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm"
         >
           <Sparkles className="h-3.5 w-3.5" />
           Launch new analysis
