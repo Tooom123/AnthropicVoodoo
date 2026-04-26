@@ -115,41 +115,45 @@ class VideoAdResult(BaseModel):
 
 def _build_concept_prompt(dna: GameDNA) -> str:
     mechanics = ", ".join(dna.key_mechanics) if dna.key_mechanics else "not specified"
+    signals = " · ".join(dna.screenshot_signals[:5]) if dna.screenshot_signals else "not available"
     return f"""{_TREND_RULES}
 
-TARGET GAME DNA:
-- Name: {dna.name}
-- Genre: {dna.genre} / {dna.sub_genre or 'n/a'}
-- Core loop: {dna.core_loop}
-- Key mechanics: {mechanics}
-- Visual style: {dna.visual_style}
-- Palette: primary {dna.palette.primary_hex}, secondary {dna.palette.secondary_hex}, accent {dna.palette.accent_hex}
-- UI mood: {dna.ui_mood}
-- Audience: {dna.audience_proxy}
+TARGET GAME — {dna.name}
+Core loop: {dna.core_loop}
+Key mechanics: {mechanics}
+Visual style: {dna.visual_style} · Palette: {dna.palette.primary_hex} / {dna.palette.secondary_hex} / {dna.palette.accent_hex}
+What is LITERALLY VISIBLE on screen: {signals}
 
-Generate ONE {_ACTIVE_TREND} video ad concept for {dna.name}.
+---
+SCENARIO STRUCTURE (follow this exactly):
 
-CRITICAL — scenario_prompt construction rules for Grok Imagine Video (image-to-video):
-The video will START from a real in-game screenshot of {dna.name} as its first frame.
-The prompt must therefore CONTINUE from the exact visual the screenshot shows.
+BEAT 1 — CRITICAL SITUATION (0–2s):
+Describe the exact danger moment using {dna.name}'s real mechanics.
+Example structure: "Player is [doing X], enemy is [about to do Y], only [Z] away from disaster."
+Use the actual visual elements listed above. This must feel like a real in-game moment.
 
-1. Open with: "Starting from the exact gameplay visuals of {dna.name} ({dna.visual_style} style),"
-2. Base it STRICTLY on the core mechanic: "{dna.core_loop}" — describe what happens NEXT after the screenshot
-3. Escalate the mechanic to apocalyptic extremes within 8 seconds
-4. Camera: stay in the same angle as the real gameplay screenshot, then push into first-person POV
-5. EMBED brainrot narration as spoken dialogue:
-   A voice screams: "NOOOOO [reaction to what's happening]!! OH MY GOD [escalation]!! THIS IS INSANE AHHH"
-   — the voice lines MUST match the visual action beat by beat
-6. Include SFX cues tied to the mechanic (pops, crunches, whooshes, score-tick sounds)
-7. End: score counter explodes, UI flashes, chaos peaks
-8. Format: 9:16 vertical, 8 seconds, mobile game UI visible, {dna.visual_style} art style
+BEAT 2 — ESCALATION (2–5s):
+The danger peaks. Something spectacular happens from the core mechanic.
+Chain reaction, massive score gain, or dramatic kill/elimination.
+The chaos multiplies — show MORE of what the game is about.
 
-The scenario_prompt is ONE dense paragraph sent directly to Grok.
-It must read like a vivid movie scene continuation WITH dialogue embedded.
+BEAT 3 — PEAK BRAINROT (5–8s):
+Apocalyptic scale. Score explodes. UI goes insane. The mechanic reaches maximum absurdity.
 
-narration_script: same lines as embedded in scenario_prompt, formatted as a standalone script.
+VOICE (embed directly in scenario_prompt as spoken dialogue):
+Beat 1: "NOOOOO [specific reaction to the danger]!!"
+Beat 2: "OH MY GOD [specific reaction to the escalation]!! [mechanic-specific exclamation]!!"
+Beat 3: "THIS IS [specific superlative] I LITERALLY CANNOT STOP AHHHHH"
 
-Respond with ONLY a JSON object — no markdown, no explanation:
+IMAGE-TO-VIDEO NOTE: The video starts from a real {dna.name} gameplay screenshot.
+The scenario_prompt must be written to CONTINUE from that visual naturally.
+Keep the same {dna.visual_style} art style. Camera: isometric game view → push to extreme close-up during peak.
+Format: 9:16 vertical, 8 seconds, game UI overlay visible, SFX cues embedded.
+
+Write scenario_prompt as ONE dense vivid paragraph with the voice lines embedded as dialogue.
+Write narration_script as the same voice lines formatted as a standalone script.
+
+Respond with ONLY a JSON object:
 {{
   "title": "...",
   "gameplay_hook": "...",
