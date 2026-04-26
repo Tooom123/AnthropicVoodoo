@@ -410,14 +410,15 @@ function DiscoveryStripe({ run }: { run: ActiveRun }) {
   );
 }
 
-/** Top advertisers expander — name + sov + app_id. Sorted by SoV desc. */
+/** Top advertisers expander — icon + name + publisher + sov + rank chip. */
 function AdvertisersTable({ rows }: { rows: Array<Record<string, unknown>> }) {
   const sorted = [...rows].sort(
     (a, b) => (Number(b.sov) || 0) - (Number(a.sov) || 0),
   );
   return (
     <div className="mt-3 overflow-hidden rounded-md border border-border bg-card/80">
-      <div className="grid grid-cols-[2fr_auto_auto] gap-3 border-b border-border bg-muted/30 px-3 py-1.5 text-[10px] uppercase tracking-wider text-muted-foreground">
+      <div className="grid grid-cols-[auto_2fr_auto_auto] gap-3 border-b border-border bg-muted/30 px-3 py-1.5 text-[10px] uppercase tracking-wider text-muted-foreground">
+        <span>#</span>
         <span>Advertiser</span>
         <span className="text-right">Share of voice</span>
         <span className="text-right">App ID</span>
@@ -438,12 +439,44 @@ function AdvertisersTable({ rows }: { rows: Array<Record<string, unknown>> }) {
             (row.app_id as string) ??
             (row.unified_app_id as string) ??
             "";
+          // SensorTower returns icon_url either at the top level or
+          // nested under app_info — handle both shapes.
+          const iconUrl =
+            (row.icon_url as string | undefined) ??
+            ((row.app_info as Record<string, unknown> | undefined)
+              ?.icon_url as string | undefined);
+          const publisher =
+            (row.publisher_name as string | undefined) ??
+            ((row.app_info as Record<string, unknown> | undefined)
+              ?.publisher_name as string | undefined);
           return (
             <div
               key={`${appId}-${i}`}
-              className="grid grid-cols-[2fr_auto_auto] gap-3 px-3 py-1.5 text-xs"
+              className="grid grid-cols-[auto_2fr_auto_auto] items-center gap-3 px-3 py-1.5 text-xs"
             >
-              <span className="truncate font-medium">{name}</span>
+              <div className="flex items-center gap-2">
+                <span className="font-mono text-[10px] tabular-nums text-muted-foreground">
+                  {i + 1}
+                </span>
+                {iconUrl ? (
+                  <img
+                    src={iconUrl}
+                    alt={name}
+                    loading="lazy"
+                    className="h-7 w-7 rounded-md ring-1 ring-border"
+                  />
+                ) : (
+                  <div className="h-7 w-7 rounded-md bg-muted ring-1 ring-border" />
+                )}
+              </div>
+              <div className="min-w-0">
+                <div className="truncate font-medium">{name}</div>
+                {publisher && (
+                  <div className="truncate text-[10px] text-muted-foreground">
+                    by {publisher}
+                  </div>
+                )}
+              </div>
               <span className="text-right tabular-nums text-foreground/85">
                 {(sov * 100).toFixed(1)}%
               </span>
@@ -458,11 +491,12 @@ function AdvertisersTable({ rows }: { rows: Array<Record<string, unknown>> }) {
   );
 }
 
-/** Top creatives expander — advertiser + network + ad_type + first_seen. */
+/** Top creatives expander — thumbnail + advertiser + network + ad_type + first_seen. */
 function CreativesTable({ rows }: { rows: Array<Record<string, unknown>> }) {
   return (
     <div className="mt-3 overflow-hidden rounded-md border border-border bg-card/80">
-      <div className="grid grid-cols-[2fr_auto_auto_auto] gap-3 border-b border-border bg-muted/30 px-3 py-1.5 text-[10px] uppercase tracking-wider text-muted-foreground">
+      <div className="grid grid-cols-[auto_2fr_auto_auto_auto] gap-3 border-b border-border bg-muted/30 px-3 py-1.5 text-[10px] uppercase tracking-wider text-muted-foreground">
+        <span></span>
         <span>Advertiser</span>
         <span>Network</span>
         <span>Type</span>
@@ -472,8 +506,22 @@ function CreativesTable({ rows }: { rows: Array<Record<string, unknown>> }) {
         {rows.slice(0, 10).map((row, i) => (
           <div
             key={`${row.creative_id ?? i}`}
-            className="grid grid-cols-[2fr_auto_auto_auto] gap-3 px-3 py-1.5 text-xs"
+            className="grid grid-cols-[auto_2fr_auto_auto_auto] items-center gap-3 px-3 py-1.5 text-xs"
           >
+            {row.thumb_url ? (
+              <img
+                src={row.thumb_url as string}
+                alt="ad thumbnail"
+                loading="lazy"
+                className="h-12 w-7 flex-shrink-0 rounded-sm object-cover ring-1 ring-border"
+                style={{ aspectRatio: "9 / 16" }}
+              />
+            ) : (
+              <div
+                className="h-12 w-7 flex-shrink-0 rounded-sm bg-muted ring-1 ring-border"
+                style={{ aspectRatio: "9 / 16" }}
+              />
+            )}
             <span className="truncate font-medium">
               {(row.advertiser_name as string) ?? "Unknown"}
             </span>

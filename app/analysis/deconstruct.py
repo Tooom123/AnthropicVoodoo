@@ -93,6 +93,9 @@ Focus rigorously on:
   the user keeps watching. Identify the emotional pitch from this set:
   satisfaction, fail, curiosity, rage_bait, tutorial, asmr, celebrity,
   challenge, transformation, other.
+  Inside the HOOK object also fill `voiceover_transcript` with the exact
+  spoken words in the first 3 seconds (or null if there is no voice). The
+  brief writer relies on this to mirror the audio cadence.
 - SCENE FLOW: 3-5 bullets describing the narrative arc from start to end.
 - ON-SCREEN TEXT: every readable text overlay, in chronological order.
 - CTA: the call-to-action text and approximately when it first appears (in
@@ -103,6 +106,12 @@ Focus rigorously on:
   {live-action-UGC, in-game, 3D-render, mixed, animation}.
 - AUDIENCE PROXY: a one-sentence guess of the implied audience (e.g.
   'casual women 25-45 who enjoy satisfying puzzles').
+
+Audio is part of the hook on TikTok / Reels — pay attention to:
+voiceover (UGC, AI-narrator, none?), music (trending track, original score,
+silence?), sfx beats (whoosh, pop, chime, fail-buzzer?). Capture this in
+`voiceover_transcript` for the verbal layer; the brief writer infers the
+rest from `scene_flow` text.
 
 Be specific, be concrete, never hedge. Return ONLY the JSON matching the
 provided schema, with no commentary or markdown fence.

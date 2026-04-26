@@ -55,14 +55,27 @@ export function VariantsGallery({ variants }: VariantsGalleryProps) {
       </header>
       <div className={`grid gap-4 ${colsClass}`}>
         {sorted.map((v) => (
-          <VariantCard key={v.brief.archetype_id} variant={v} />
+          <VariantCard
+            key={v.brief.archetype_id}
+            variant={v}
+            isSolo={sorted.length === 1}
+          />
         ))}
       </div>
     </section>
   );
 }
 
-function VariantCard({ variant }: { variant: GeneratedVariant }) {
+function VariantCard({
+  variant,
+  isSolo,
+}: {
+  variant: GeneratedVariant;
+  /** When true, this variant is the only one in the gallery — render its
+   *  3 frames (hero + 2 storyboards) side-by-side at equal size instead
+   *  of the hero-on-top + 3-storyboards-strip layout. */
+  isSolo: boolean;
+}) {
   const { brief, hero_frame_path, storyboard_paths, test_priority } = variant;
   const allUrls = [hero_frame_path, ...storyboard_paths];
   const hasPlaceholder = allUrls.some(isPlaceholder);
@@ -70,46 +83,88 @@ function VariantCard({ variant }: { variant: GeneratedVariant }) {
     PRIORITY_BADGE_CLASS[test_priority] ??
     "bg-muted text-muted-foreground border-border";
 
+  // Solo layout: hero + 2 storyboards (max) at the same width. We slice
+  // the storyboards to 2 so the row stays at 3 lanes total — avoids
+  // jamming when a brief was generated with 3+ storyboards.
+  const soloFrames: { url: string; label: string }[] = isSolo
+    ? [
+        { url: hero_frame_path, label: "Hero" },
+        ...storyboard_paths
+          .slice(0, 2)
+          .map((url, i) => ({ url, label: `Frame ${i + 2}` })),
+      ]
+    : [];
+
   return (
     <Card className="flex h-full flex-col overflow-hidden border-border bg-card p-0">
-      {/* Hero frame — full-width 9:16 inside the card. Storyboards
-          land just below as a 3-column strip. */}
-      <div className="relative aspect-[9/16] w-full overflow-hidden bg-muted/40">
-        <img
-          src={hero_frame_path}
-          alt={`Hero frame for ${brief.title}`}
-          className="h-full w-full object-cover"
-          loading="lazy"
-        />
-        <span className="absolute left-2 top-2 rounded-md bg-background/80 px-1.5 py-0.5 text-[10px] font-medium backdrop-blur-sm">
-          Hero
-        </span>
-        <span
-          className={`absolute right-2 top-2 inline-flex items-center rounded-md border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider backdrop-blur-sm ${priorityClass}`}
-        >
-          #{test_priority}
-        </span>
-      </div>
-
-      {storyboard_paths.length > 0 && (
+      {isSolo ? (
+        // ─── Solo: 3-up grid with equally-sized frames ──────────
         <div className="grid grid-cols-3 gap-1 bg-muted/20 p-1">
-          {storyboard_paths.slice(0, 3).map((path, i) => (
+          {soloFrames.map(({ url, label }, i) => (
             <div
-              key={path + i}
+              key={url + i}
               className="relative aspect-[9/16] overflow-hidden rounded-sm border border-border/50 bg-muted/40"
             >
               <img
-                src={path}
-                alt={`Storyboard frame ${i + 1} for ${brief.title}`}
+                src={url}
+                alt={`${label} for ${brief.title}`}
                 className="h-full w-full object-cover"
                 loading="lazy"
               />
-              <span className="absolute left-1 top-1 rounded bg-background/80 px-1 py-0.5 text-[9px] font-medium backdrop-blur-sm">
-                {i + 2}
+              <span className="absolute left-1 top-1 rounded bg-background/80 px-1 py-0.5 text-[10px] font-medium backdrop-blur-sm">
+                {label}
               </span>
+              {i === 0 && (
+                <span
+                  className={`absolute right-1 top-1 inline-flex items-center rounded border px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider backdrop-blur-sm ${priorityClass}`}
+                >
+                  #{test_priority}
+                </span>
+              )}
             </div>
           ))}
         </div>
+      ) : (
+        <>
+          {/* Multi: hero on top + 3-up storyboard strip below. */}
+          <div className="relative aspect-[9/16] w-full overflow-hidden bg-muted/40">
+            <img
+              src={hero_frame_path}
+              alt={`Hero frame for ${brief.title}`}
+              className="h-full w-full object-cover"
+              loading="lazy"
+            />
+            <span className="absolute left-2 top-2 rounded-md bg-background/80 px-1.5 py-0.5 text-[10px] font-medium backdrop-blur-sm">
+              Hero
+            </span>
+            <span
+              className={`absolute right-2 top-2 inline-flex items-center rounded-md border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider backdrop-blur-sm ${priorityClass}`}
+            >
+              #{test_priority}
+            </span>
+          </div>
+
+          {storyboard_paths.length > 0 && (
+            <div className="grid grid-cols-3 gap-1 bg-muted/20 p-1">
+              {storyboard_paths.slice(0, 3).map((path, i) => (
+                <div
+                  key={path + i}
+                  className="relative aspect-[9/16] overflow-hidden rounded-sm border border-border/50 bg-muted/40"
+                >
+                  <img
+                    src={path}
+                    alt={`Storyboard frame ${i + 1} for ${brief.title}`}
+                    className="h-full w-full object-cover"
+                    loading="lazy"
+                  />
+                  <span className="absolute left-1 top-1 rounded bg-background/80 px-1 py-0.5 text-[9px] font-medium backdrop-blur-sm">
+                    {i + 2}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </>
       )}
 
       <div className="flex flex-1 flex-col gap-3 p-4">
