@@ -33,7 +33,7 @@ CACHE_DIR_CONCEPT  = CACHE_DIR / "video_briefs"
 CACHE_DIR_VIDEO    = CACHE_DIR / "video_renders"
 LLM_MODEL          = "claude-sonnet-4-6"
 SCENARIO_BASE      = "https://api.cloud.scenario.com/v1"
-VIDEO_MODEL_ID     = "model_veo3"  # only video model available on this Scenario account
+VIDEO_MODEL_ID     = "model_xai-grok-imagine-video"
 VIDEO_DURATION_S   = 8                     # seconds — Veo 3 free tier max
 VIDEO_ASPECT_RATIO = "9:16"               # vertical mobile format
 VIDEO_TIMEOUT_S    = 600.0                 # Veo 3 jobs can take several minutes
@@ -242,7 +242,8 @@ def generate_scenario_video(concept: VideoAdConcept, *, project_id: str | None =
         "prompt": concept.scenario_prompt,
         "duration": VIDEO_DURATION_S,
         "aspectRatio": VIDEO_ASPECT_RATIO,
-        "generateAudio": True,
+        "resolution": "720p",
+        "numOutputs": 1,
     }
 
     log.info("Scenario video CACHE MISS · POST %s", url)
