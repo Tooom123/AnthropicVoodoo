@@ -383,6 +383,44 @@ export interface CreativeDeconstruction {
   deconstruction_model: string | null;
 }
 
+// Weekly Report — aggregated knowledge-base view, powers the /weekly route.
+
+export interface WeeklyEntry {
+  creative_id: string;
+  advertiser_name: string | null;
+  icon_url: string | null;
+  network: string | null;
+  ad_type: string | null;
+  thumb_url: string | null;
+  creative_url: string | null;
+  first_seen_at: string | null;
+  days_active: number | null;
+  hook_summary: string | null;
+  hook_emotional_pitch: string | null;
+  visual_style: string | null;
+  palette_hex: string[];
+  cta_text: string | null;
+  deconstructed_at: string | null;
+  new_this_week: boolean;
+}
+
+export interface WeeklyReport {
+  generated_at: string;
+  knowledge_base_size: number;
+  new_this_week: number;
+  by_pitch: Record<string, number>;
+  top_picks: WeeklyEntry[];
+}
+
+export function useWeeklyReport(days = 7, limit = 60) {
+  return useQuery<WeeklyReport>({
+    queryKey: ["weekly-report", days, limit],
+    queryFn: () =>
+      apiFetch<WeeklyReport>("/api/weekly-report", { days, limit }),
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
 export function useCreativeDeconstruction(creativeId: string | undefined) {
   return useQuery<CreativeDeconstruction | null>({
     queryKey: ["creativeDeconstruction", creativeId],

@@ -6,6 +6,7 @@ import {
   Sparkles,
   Compass,
   Gamepad2,
+  Newspaper,
   PanelLeftClose,
   PanelLeftOpen,
 } from "lucide-react";
@@ -46,6 +47,7 @@ const SECTIONS: Section[] = [
   {
     label: "Market",
     items: [
+      { label: "Weekly Brief", to: "/weekly", icon: Newspaper },
       { label: "Performance Signals", to: "/performance", icon: Activity },
       { label: "Global Market Map", to: "/geo", icon: Compass },
     ],
