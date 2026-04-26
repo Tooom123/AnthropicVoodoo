@@ -475,6 +475,7 @@ export function PerformanceSignals() {
                       .filter((c) => c.format === f)
                       .map((c) => ({
                         ...c,
+                        proxyScore: proxyScore(c),
                         z: Math.max(80, Math.min(380, proxyScore(c) * 3)),
                       }))}
                     fill={FORMAT_HEX[f]}
@@ -572,9 +573,7 @@ export function PerformanceSignals() {
                 >
                   <TableCell className="text-muted-foreground">{c.rank}</TableCell>
                   <TableCell>
-                    <div className="grid h-10 w-10 place-items-center rounded-md bg-gradient-to-br from-muted to-muted/40">
-                      <Play className="h-3.5 w-3.5 fill-foreground text-foreground" />
-                    </div>
+                    <ThumbPreview creative={c} />
                   </TableCell>
                   <TableCell>
                     <div className="text-sm font-medium leading-tight">{c.game}</div>
@@ -639,6 +638,71 @@ export function PerformanceSignals() {
         </SheetContent>
       </Sheet>
     </div>
+  );
+}
+
+function ThumbPreview({ creative }: { creative: Creative }) {
+  const [open, setOpen] = useState(false);
+  const [imgErr, setImgErr] = useState(false);
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={(e) => { e.stopPropagation(); if (creative.creativeUrl || creative.thumbUrl) setOpen(true); }}
+        className="group relative h-10 w-10 overflow-hidden rounded-md bg-muted shrink-0"
+        title={creative.creativeUrl ? "Play video" : creative.thumbUrl ? "View image" : "No preview"}
+      >
+        {creative.thumbUrl && !imgErr ? (
+          <img
+            src={creative.thumbUrl}
+            alt=""
+            loading="lazy"
+            onError={() => setImgErr(true)}
+            className="h-full w-full object-cover"
+          />
+        ) : (
+          <div className="grid h-full w-full place-items-center text-muted-foreground/40">
+            <Play className="h-3.5 w-3.5" />
+          </div>
+        )}
+        {creative.creativeUrl && (
+          <div className="absolute inset-0 grid place-items-center bg-black/0 group-hover:bg-black/40 transition-colors">
+            <Play className="h-3 w-3 fill-white text-white opacity-0 group-hover:opacity-100 transition-opacity" />
+          </div>
+        )}
+      </button>
+
+      {open && (creative.creativeUrl || creative.thumbUrl) && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm"
+          onClick={() => setOpen(false)}
+        >
+          <div
+            className="relative max-h-[85vh] max-w-sm w-full rounded-xl overflow-hidden bg-black"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {creative.creativeUrl ? (
+              <video
+                src={creative.creativeUrl}
+                controls
+                autoPlay
+                playsInline
+                className="w-full h-full object-contain"
+              />
+            ) : (
+              <img src={creative.thumbUrl!} alt="" className="w-full h-full object-contain" />
+            )}
+            <button
+              onClick={() => setOpen(false)}
+              className="absolute top-2 right-2 rounded-full bg-black/60 px-2 py-1 text-xs text-white hover:bg-black/80"
+            >
+              ✕
+            </button>
+          </div>
+        </div>
+      )}
+    </>
   );
 }
 
