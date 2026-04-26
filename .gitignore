@@ -24,9 +24,6 @@ dist/
 *.swp
 .DS_Store
 
-# Streamlit
-.streamlit/secrets.toml
-
 # Runtime cache (we keep the dir but ignore its contents by default,
 # then whitelist the small JSON/asset trees below — see audit in the
 # 2026-04-26 commit for sizing).
