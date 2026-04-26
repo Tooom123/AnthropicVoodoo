@@ -77,6 +77,10 @@ export function GeneratedAdSection({
   const [audioQuality, setAudioQuality] = useState<"fast" | "rich">(
     "fast",
   );
+  // Natural-language refinement applied on the next render. Cleared
+  // when the variant changes so a refinement doesn't accidentally
+  // bleed into a different brief.
+  const [correction, setCorrection] = useState("");
 
   const render = useRenderVariantVideo();
 
@@ -124,7 +128,7 @@ export function GeneratedAdSection({
         }
       : null;
 
-  function handleGenerate() {
+  function handleGenerate(opts: { withCorrection?: boolean } = {}) {
     render.mutate({
       gameName,
       archetypeId: selected!.brief.archetype_id,
@@ -133,6 +137,7 @@ export function GeneratedAdSection({
       includeVoice,
       voice: "alloy",
       audioQuality,
+      correction: opts.withCorrection ? correction : undefined,
     });
   }
 
@@ -205,6 +210,7 @@ export function GeneratedAdSection({
                   type="button"
                   onClick={() => {
                     setSelectedId(v.brief.archetype_id);
+                    setCorrection("");
                     render.reset();
                   }}
                   disabled={render.isPending}
@@ -254,7 +260,7 @@ export function GeneratedAdSection({
                   size="sm"
                   variant="outline"
                   className="mt-3"
-                  onClick={handleGenerate}
+                  onClick={() => handleGenerate({ withCorrection: false })}
                 >
                   Retry
                 </Button>
@@ -268,11 +274,19 @@ export function GeneratedAdSection({
               videoUrl={videoUrl}
               meta={videoMeta}
               variantTitle={selected.brief.title}
-              onRegenerate={handleGenerate}
+              correction={correction}
+              onCorrectionChange={setCorrection}
+              onRegenerate={() => handleGenerate({ withCorrection: false })}
+              onRegenerateWithCorrection={() =>
+                handleGenerate({ withCorrection: true })
+              }
             />
           )}
           {!render.isPending && !render.isError && !videoUrl && (
-            <GenerateCta selected={selected} onGenerate={handleGenerate} />
+            <GenerateCta
+              selected={selected}
+              onGenerate={() => handleGenerate({ withCorrection: false })}
+            />
           )}
         </div>
       </Card>
@@ -341,7 +355,10 @@ function RenderedVideo({
   videoUrl,
   meta,
   variantTitle,
+  correction,
+  onCorrectionChange,
   onRegenerate,
+  onRegenerateWithCorrection,
 }: {
   videoUrl: string;
   meta: {
@@ -353,7 +370,10 @@ function RenderedVideo({
     has_audio: boolean;
   };
   variantTitle: string;
+  correction: string;
+  onCorrectionChange: (value: string) => void;
   onRegenerate: () => void;
+  onRegenerateWithCorrection: () => void;
 }) {
   return (
     <div className="space-y-4">
@@ -414,8 +434,48 @@ function RenderedVideo({
           onClick={onRegenerate}
           className="gap-1.5"
         >
-          Regenerate
+          Regenerate (same brief)
         </Button>
+      </div>
+
+      {/* Natural-language refinement loop. The user types a free-text
+          note ("voice should sound surprised", "more saturated reds",
+          "drop the music after 5s") and clicks "Refine & regenerate".
+          The note flows into every per-clip prompt as the highest-priority
+          directive on the next render. Cached separately from the
+          un-corrected version so both stay on disk for A/B'ing. */}
+      <div className="rounded-md border border-border bg-muted/20 p-3">
+        <label
+          htmlFor="render-correction"
+          className="flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-muted-foreground"
+        >
+          <Sparkles className="h-3 w-3" />
+          Not quite right? Refine the next render
+        </label>
+        <textarea
+          id="render-correction"
+          value={correction}
+          onChange={(e) => onCorrectionChange(e.target.value)}
+          rows={2}
+          maxLength={500}
+          placeholder="e.g. 'voice should sound surprised', 'more saturated reds', 'drop music after 5s'"
+          className="mt-1.5 w-full resize-none rounded-md border border-border bg-card px-3 py-2 text-xs text-foreground placeholder:text-muted-foreground/60 focus:border-primary/40 focus:outline-none focus:ring-1 focus:ring-primary/20"
+        />
+        <div className="mt-2 flex items-center justify-between gap-2">
+          <span className="text-[10px] text-muted-foreground">
+            {correction.length} / 500 · sent to all 3 clip prompts
+          </span>
+          <Button
+            size="sm"
+            variant="default"
+            onClick={onRegenerateWithCorrection}
+            disabled={!correction.trim()}
+            className="gap-1.5"
+          >
+            <Sparkles className="h-3.5 w-3.5" />
+            Refine &amp; regenerate
+          </Button>
+        </div>
       </div>
     </div>
   );

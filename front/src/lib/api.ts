@@ -417,6 +417,10 @@ export function useRenderVariantVideo() {
       includeVoice?: boolean;
       voice?: string;
       audioQuality?: "fast" | "rich";
+      /** Free-text refinement appended to every per-clip prompt
+       *  (e.g. "more energetic music", "voice should sound surprised").
+       *  Hashed into the cache key so distinct refinements coexist. */
+      correction?: string;
     }): Promise<VariantVideoResponse> => {
       const url = new URL("/api/variants/render-video", API_BASE);
       url.searchParams.set("game_name", vars.gameName);
@@ -438,6 +442,9 @@ export function useRenderVariantVideo() {
       }
       if (vars.audioQuality) {
         url.searchParams.set("audio_quality", vars.audioQuality);
+      }
+      if (vars.correction && vars.correction.trim()) {
+        url.searchParams.set("correction", vars.correction.trim());
       }
       const res = await fetch(url.toString(), { method: "POST" });
       if (!res.ok) {

@@ -1908,6 +1908,16 @@ async def render_variant_video(
             "swipe, chime on combo, etc.), no post-hoc overlay. ~$1/render."
         ),
     ),
+    correction: str | None = Query(
+        None,
+        description=(
+            "Natural-language refinement appended to every per-clip prompt "
+            "on this render. Example: 'make the music more energetic', "
+            "'voice should sound surprised', 'use darker palette'. Hashed "
+            "into the cache key so the previous output isn't reused."
+        ),
+        max_length=500,
+    ),
     model: str | None = Query(
         None,
         description="Override the Scenario video model (defaults to env or Kling i2v)",
@@ -1973,22 +1983,34 @@ async def render_variant_video(
     # 3. Per-frame motion prompts. Prefer the brief's own scenario_prompts
     #    (which Opus tailored per frame, including audio cues), fall back
     #    to scene_flow beats, then to the global hook.
+    #
+    #    When ``correction`` is provided (the React UI's "Regenerate with
+    #    refinement" textarea), append it to every clip's prompt. The
+    #    video model treats it as the most recent / overriding directive.
     scenario_prompts = brief.get("scenario_prompts") or []
     scene_flow = brief.get("scene_flow") or []
     hook_3s = brief.get("hook_3s") or ""
     per_frame_prompts: list[str] = []
     for i in range(len(frame_urls)):
         if i < len(scenario_prompts) and scenario_prompts[i]:
-            per_frame_prompts.append(str(scenario_prompts[i])[:500])
+            base = str(scenario_prompts[i])
         elif i < len(scene_flow) and scene_flow[i]:
-            per_frame_prompts.append(str(scene_flow[i])[:500])
+            base = str(scene_flow[i])
         else:
-            per_frame_prompts.append(hook_3s[:500] or "5-second cinematic gameplay clip")
+            base = hook_3s or "5-second cinematic gameplay clip"
+        if correction_clean:
+            # Place the user note at the END so it's the last thing the
+            # model reads. Cap the merged result so we stay under each
+            # video model's prompt length cap (Kling 2.6 Pro = 2048,
+            # Kling O1 = ~500). Reserve ~200 chars for the correction.
+            base = base[: 2048 - len(correction_clean) - 60]
+            base = f"{base}\n\nUSER REFINEMENT (highest priority): {correction_clean}"
+        per_frame_prompts.append(base[:2048])
 
     # 4. Final output path — keyed by (archetype_id + endcard mtime +
-    #    audio_quality) so a freshly-rendered endcard or a quality
-    #    swap invalidates the cached final mp4 cleanly. fast vs rich
-    #    outputs coexist on disk so the user can A/B them.
+    #    audio_quality + correction hash) so any change in inputs
+    #    triggers a fresh render. Fast vs rich outputs and any
+    #    user-corrected variants all coexist on disk for A/B'ing.
     safe_archetype = re.sub(r"[^a-zA-Z0-9_-]+", "-", archetype_id)[:40]
     endcard_for_cache = (
         _endcard_path_for(app_id) if include_endcard else None
@@ -1999,8 +2021,22 @@ async def render_variant_video(
         else "_noec"
     )
     quality_tag = "_rich" if audio_quality == "rich" else ""
+
+    # Hash the correction into the filename (and cache key) so two
+    # different corrections produce two distinct cached mp4s. The
+    # correction text itself is also forwarded to the per-frame
+    # prompts further down.
+    import hashlib
+
+    correction_clean = (correction or "").strip()
+    correction_tag = (
+        f"_c{hashlib.sha256(correction_clean.encode()).hexdigest()[:8]}"
+        if correction_clean
+        else ""
+    )
     final_filename = (
-        f"variant_{game_slug}_{safe_archetype}{endcard_tag}{quality_tag}.mp4"
+        f"variant_{game_slug}_{safe_archetype}"
+        f"{endcard_tag}{quality_tag}{correction_tag}.mp4"
     )
     final_path = _VIDEOS_DIR / final_filename
     if final_path.exists() and final_path.stat().st_size > 0:
@@ -2075,7 +2111,16 @@ async def render_variant_video(
                         model_id=chosen_model,
                         image_paths=[frame],
                         prompt=prompt,
-                        label=f"variant_{game_slug}_{safe_archetype}_clip{idx}{quality_tag}",
+                        # correction_tag flows into the on-disk label so
+                        # different refinement attempts get distinct cache
+                        # entries. Different prompts already produce
+                        # different cache keys inside call_scenario_video,
+                        # but having it in the label too makes the
+                        # downloaded mp4 filenames self-documenting.
+                        label=(
+                            f"variant_{game_slug}_{safe_archetype}_"
+                            f"clip{idx}{quality_tag}{correction_tag}"
+                        ),
                         tail_image_path=tail,
                         generate_audio=is_rich,
                     ),
@@ -2134,7 +2179,16 @@ async def render_variant_video(
             any_stub = True
         if jid := meta.get("job_id"):
             job_ids.append(str(jid))
-        clip_path = _VIDEOS_DIR / f"variant_{game_slug}_{safe_archetype}_clip{idx}.mp4"
+        # Include both quality_tag and correction_tag in the on-disk
+        # filename so distinct (quality, refinement) tuples don't
+        # shadow each other. The earlier bug here: a Fast-mode silent
+        # clip was being reused as the Rich-mode clip because the
+        # filename was quality-agnostic.
+        clip_path = (
+            _VIDEOS_DIR
+            / f"variant_{game_slug}_{safe_archetype}_clip{idx}"
+              f"{quality_tag}{correction_tag}.mp4"
+        )
         if not clip_path.exists() or clip_path.stat().st_size == 0:
             try:
                 _download_to(video_url, clip_path)
