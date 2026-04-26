@@ -1,6 +1,7 @@
 import { useState } from "react";
 import {
   ExternalLink,
+  Flame,
   Image as ImageIcon,
   Play,
   Radar,
@@ -152,6 +153,11 @@ function ArchetypeRow({
               <h4 className="text-sm font-semibold leading-tight">
                 {displayLabel}
               </h4>
+              {arch.velocity_score >= 1.5 && (
+                <span className="inline-flex items-center gap-1 rounded-full bg-orange-50 border border-orange-200 px-2 py-0.5 text-[10px] font-semibold text-orange-600">
+                  <Flame className="h-2.5 w-2.5" /> Trending
+                </span>
+              )}
               <span
                 className="text-[11px] text-muted-foreground"
                 title={`${arch.member_creative_ids.length} ad creatives clustered together by Gemini Vision`}

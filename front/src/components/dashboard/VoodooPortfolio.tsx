@@ -213,9 +213,9 @@ export function VoodooPortfolio() {
       {decliningApps.length > 0 && (
         <div className="rounded-lg border border-rose-500/30 bg-rose-500/5 p-4">
           <div className="flex items-start gap-3">
-            <TrendingDown className="mt-0.5 h-5 w-5 flex-shrink-0 text-rose-400" />
+            <TrendingDown className="mt-0.5 h-5 w-5 flex-shrink-0 text-rose-500" />
             <div>
-              <h3 className="text-sm font-semibold text-rose-200">
+              <h3 className="text-sm font-semibold text-rose-700">
                 {decliningApps.length} title
                 {decliningApps.length === 1 ? "" : "s"} declining this week —
                 worth running a fresh creative analysis
@@ -681,19 +681,19 @@ function DownloadsTrendStrip({
   let label = "stable";
   if (typeof trendPct === "number") {
     if (trendPct < -0.05) {
-      trendColor = "text-rose-300";
+      trendColor = "text-rose-500";
       trendIcon = <ArrowDown className="h-3 w-3" />;
-      strokeColor = "#fb7185"; // rose-400
+      strokeColor = "#f43f5e";
       label = "declining";
     } else if (trendPct < -0.01) {
-      trendColor = "text-amber-300";
+      trendColor = "text-amber-500";
       trendIcon = <ArrowDown className="h-3 w-3" />;
-      strokeColor = "#fbbf24"; // amber-400
+      strokeColor = "#f59e0b";
       label = "slowing";
     } else if (trendPct > 0.01) {
-      trendColor = "text-emerald-300";
+      trendColor = "text-emerald-600";
       trendIcon = <ArrowUp className="h-3 w-3" />;
-      strokeColor = "#34d399"; // emerald-400
+      strokeColor = "#10b981";
       label = "growing";
     }
   }

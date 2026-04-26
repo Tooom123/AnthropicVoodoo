@@ -39,7 +39,7 @@ const SECTIONS: Section[] = [
   {
     label: "Intelligence",
     items: [
-      { label: "Ad Library", to: "/", icon: LayoutGrid },
+      { label: "Ad Library", to: "/ads", icon: LayoutGrid },
       { label: "Competitive Scope", to: "/competitive", icon: Target },
     ],
   },
