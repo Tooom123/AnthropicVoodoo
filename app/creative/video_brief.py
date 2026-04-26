@@ -49,13 +49,36 @@ MANDATORY CREATIVE TREND: BRAINROT
 Brainrot-style mobile ads are the #1 performing hook format on TikTok,
 Instagram Reels and Meta for hyper-casual in 2026.
 
-Rules:
-- Over-the-top, exaggerated spectacle built from the game's core mechanic
-- Enthusiastic unhinged narration: "NOOOOO", "OH MY GOD", "THIS IS INSANE"
-- Chaotic energy — lots happening simultaneously, things going fast
-- First-person or close third-person camera for immersion
-- Satisfying destruction, merging, growing, or cascading visual effects
-- No music — only SFX and over-the-top voiceover
+REFERENCE EXAMPLES (match this energy exactly):
+
+EXAMPLE 1 — hole.io:
+scenario_prompt: "Hyper-casual first-person POV gameplay: a black hole tears
+across a photorealistic map of Earth at insane speed, swallowing entire cities,
+cars, skyscrapers, mountains. Screen shakes violently with each gulp. Debris
+spirals into the void. Scale escalates — continents get eaten. 9:16 vertical,
+8 seconds, ultra-vivid colors, game UI overlay showing score skyrocketing."
+narration: "Noooooo a hole is destroying the EARTH!! It just ate New York—
+OH MY GOD it's eating EUROPE now!! THE WHOLE PLANET IS GOING IN!! This is
+INSANE I can't stop watching AHHHHH"
+
+EXAMPLE 2 — marble sort:
+scenario_prompt: "First-person hyper-casual gameplay: camera positioned just
+behind a fast-moving stream of glossy neon marble balls rushing directly at
+the viewer, bouncing on a slick track. Two same-color marbles collide —
+MASSIVE merge explosion with shimmering sparks. More and more merge
+simultaneously. Chain reactions everywhere. Score multiplier explodes on
+screen. 9:16 vertical, 8 seconds, vibrant neon palette."
+narration: "Oh my god it's marble balls EVERYWHERE look at them GO — no way
+that just MERGED — this is INSANE the chain reaction won't STOP — I literally
+cannot put this down AHHH"
+
+RULES for every output:
+- Camera angle: first-person POV or extreme close-up behind the action
+- Scale escalation: start big, end APOCALYPTIC within 8 seconds
+- Specific SFX cues in the prompt (whoosh, crunch, shatter, pop, merge sound)
+- Narration: unhinged enthusiastic voice, ALL CAPS for peak moments
+- Include lively brainrot audio/SFX description in the scenario_prompt
+- 9:16 vertical, 8 seconds, mobile game UI overlay visible
 """
 
 # ---------------------------------------------------------------------------
@@ -211,7 +234,7 @@ def generate_scenario_video(concept: VideoAdConcept, *, project_id: str | None =
         "prompt": concept.scenario_prompt,
         "duration": VIDEO_DURATION_S,
         "aspectRatio": VIDEO_ASPECT_RATIO,
-        "generateAudio": False,  # narration_script is separate
+        "generateAudio": True,
     }
 
     log.info("Scenario video CACHE MISS · POST %s", url)
