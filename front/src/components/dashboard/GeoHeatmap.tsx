@@ -25,6 +25,17 @@ const DOT_R    = 4.2;   // dot radius in SVG units
 
 const GEO_URL = "https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json";
 
+interface DotData {
+  x: number;
+  y: number;
+  countryCode: string | null;
+}
+
+// Module-level caches — survive navigation re-mounts, computed once per session
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let _cachedFeatures: any[] | null = null;
+let _cachedDots: DotData[] | null = null;
+
 // Mercator projection — same params as the previous react-simple-maps config
 const projection = geoMercator()
   .scale(128)
@@ -84,12 +95,6 @@ function heatColor(intensity: number): string {
 // Types
 // ---------------------------------------------------------------------------
 
-interface DotData {
-  x: number;
-  y: number;
-  countryCode: string | null; // null = untracked land
-}
-
 interface TooltipState {
   x: number;
   y: number;
@@ -107,17 +112,19 @@ export function GeoHeatmap() {
   );
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [geoFeatures, setGeoFeatures] = useState<any[]>([]);
+  const [geoFeatures, setGeoFeatures] = useState<any[]>(_cachedFeatures ?? []);
   const [tooltip, setTooltip] = useState<TooltipState | null>(null);
   const [hoveredContinent, setHoveredContinent] = useState<string | null>(null);
 
-  // Fetch world topojson once
+  // Fetch world topojson once — skip if already cached from a previous mount
   useEffect(() => {
+    if (_cachedFeatures) return;
     fetch(GEO_URL)
       .then((r) => r.json())
       .then((topo) => {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const world = topoFeature(topo as any, (topo as any).objects.countries) as any;
+        _cachedFeatures = world.features;
         setGeoFeatures(world.features);
       });
   }, []);
@@ -161,8 +168,10 @@ export function GeoHeatmap() {
   // ---------------------------------------------------------------------------
   const dots = useMemo((): DotData[] => {
     if (!geoFeatures.length) return [];
+    // Return cached dot grid if already computed — avoids re-running the
+    // O(grid × features) geoContains loop on every navigation back to this page
+    if (_cachedDots) return _cachedDots;
 
-    // Split features: tracked first (fast exit), then rest (for silhouette)
     const trackedCodes = new Set(Object.values(NUMERIC_TO_CODE));
     const trackedFeatures = geoFeatures.filter((f) => trackedCodes.has(NUMERIC_TO_CODE[f.id]));
     const otherFeatures   = geoFeatures.filter((f) => !trackedCodes.has(NUMERIC_TO_CODE[f.id]));
@@ -175,7 +184,6 @@ export function GeoHeatmap() {
         const svgPos = projection(point);
         if (!svgPos) continue;
 
-        // 1. Check tracked countries first
         let countryCode: string | null = null;
         for (const feat of trackedFeatures) {
           if (geoContains(feat, point)) {
@@ -189,7 +197,6 @@ export function GeoHeatmap() {
           continue;
         }
 
-        // 2. Check remaining land for silhouette dots
         for (const feat of otherFeatures) {
           if (geoContains(feat, point)) {
             result.push({ x: svgPos[0], y: svgPos[1], countryCode: null });
@@ -199,6 +206,7 @@ export function GeoHeatmap() {
       }
     }
 
+    _cachedDots = result;
     return result;
   }, [geoFeatures]);
 
@@ -242,9 +250,9 @@ export function GeoHeatmap() {
           onClick={() => setHoveredContinent(null)}
           className="rounded-full border px-2.5 py-0.5 text-[10px] font-medium transition-colors"
           style={{
-            borderColor: hoveredContinent === null ? "#94a3b8" : "#334155",
-            color: hoveredContinent === null ? "#94a3b8" : "#475569",
-            background: hoveredContinent === null ? "rgba(148,163,184,0.1)" : "transparent",
+            borderColor: hoveredContinent === null ? "#6366f1" : "#cbd5e1",
+            color: hoveredContinent === null ? "#6366f1" : "#94a3b8",
+            background: hoveredContinent === null ? "#eef2ff" : "transparent",
           }}
         >
           All
@@ -255,11 +263,13 @@ export function GeoHeatmap() {
             onClick={() => setHoveredContinent(hoveredContinent === c ? null : c)}
             className="rounded-full border px-2.5 py-0.5 text-[10px] font-medium transition-colors"
             style={{
-              borderColor: CONTINENT_COLOR[c] ?? "#64748b",
+              borderColor: hoveredContinent === null || hoveredContinent === c
+                ? (CONTINENT_COLOR[c] ?? "#64748b")
+                : "#e2e8f0",
               color:
                 hoveredContinent === null || hoveredContinent === c
                   ? (CONTINENT_COLOR[c] ?? "#64748b")
-                  : "#475569",
+                  : "#cbd5e1",
               background:
                 hoveredContinent === c ? `${CONTINENT_COLOR[c]}22` : "transparent",
             }}
@@ -272,8 +282,8 @@ export function GeoHeatmap() {
       {/* Map */}
       <div className="relative rounded-xl border border-border bg-[#060d18] overflow-hidden">
         {(isLoading || dotsLoading) && (
-          <div className="absolute inset-0 z-10 flex items-center justify-center bg-[#060d18]/80">
-            <span className="text-xs text-muted-foreground animate-pulse">
+          <div className="absolute inset-0 z-10 flex items-center justify-center bg-[#060d18]/60">
+            <span className="text-xs text-slate-300 animate-pulse">
               {dotsLoading ? "Building dot map…" : "Querying 34 markets…"}
             </span>
           </div>
