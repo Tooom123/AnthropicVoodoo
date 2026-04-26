@@ -129,13 +129,21 @@ TARGET GAME DNA:
 
 Generate ONE {_ACTIVE_TREND} video ad concept for {dna.name}.
 
-scenario_prompt REQUIREMENTS for Scenario/Veo3:
-- {VIDEO_DURATION_S} seconds, {VIDEO_ASPECT_RATIO} vertical, mobile game ad
-- Describe camera angle, lighting, key visual action, color palette explicitly
-- Must be self-contained (no reference to external assets)
-- Photorealistic or stylized depending on game's visual_style
+CRITICAL — scenario_prompt construction rules for Veo3:
+1. Base it STRICTLY on {dna.name}'s actual core mechanic: "{dna.core_loop}"
+2. Escalate the mechanic to apocalyptic extremes in 8 seconds
+3. Camera: first-person POV or extreme close-up right behind the action
+4. EMBED the brainrot narration as spoken dialogue using this exact format:
+   A voice screams: "NOOOOO [reaction to mechanic]!! OH MY GOD [escalation]!! [peak chaos line]!! THIS IS INSANE AHHH"
+   — the voice lines MUST reference what is visually happening in the game
+5. Include explicit SFX cues: satisfying pops, crunches, whooshes tied to the mechanic
+6. End with score counter exploding / UI going crazy on screen
+7. Format: 9:16 vertical, 8 seconds, mobile game UI overlay, {dna.visual_style} style
 
-narration_script: the over-the-top voiceover, beat-by-beat (~6 lines).
+The scenario_prompt is a SINGLE dense paragraph sent directly to Veo3.
+It must read like a vivid movie scene description WITH the dialogue embedded.
+
+narration_script: same lines as embedded in scenario_prompt, formatted as a standalone script.
 
 Respond with ONLY a JSON object — no markdown, no explanation:
 {{
