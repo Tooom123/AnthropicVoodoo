@@ -39,6 +39,10 @@ export interface CompetitorGame {
   status: "Active" | "Monitoring";
   /** SensorTower app id (unified) — present on backend-driven rows; absent in static fixtures. */
   app_id?: string | null;
+  /** App icon URL (App Store CDN). Used to render game thumbnails on Competitive Scope. */
+  iconUrl?: string | null;
+  /** Publisher name (e.g. "Voodoo"). */
+  publisher?: string | null;
 }
 
 export const NETWORKS: Network[] = ["Meta", "Google", "TikTok", "ironSource"];

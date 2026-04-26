@@ -12,6 +12,7 @@ semaphore so we respect Gemini rate limits and don't blow up the API budget.
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import os
 import time
@@ -197,7 +198,27 @@ async def deconstruct_one(
     """Deconstruct one creative end-to-end.
 
     Returns ``(DeconstructedCreative, elapsed_seconds)``.
+
+    Disk-cached at ``data/cache/deconstruct/{creative_id}.json`` — once
+    a creative has been Gemini-analysed, every subsequent pipeline run
+    (across games, weeks, sessions) skips the Gemini call and rehydrates
+    from disk in <10ms. This is the "knowledge base" that lets the
+    weekly-report flow + cross-game analyses scale without re-billing.
     """
+    DEFAULT_DECONSTRUCT_CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    cache_path = DEFAULT_DECONSTRUCT_CACHE_DIR / f"{creative.creative_id}.json"
+
+    # 0. Cache hit — rehydrate the DeconstructedCreative from disk.
+    if cache_path.exists() and cache_path.stat().st_size > 0:
+        try:
+            cached = json.loads(cache_path.read_text())
+            return DeconstructedCreative.model_validate(cached), 0.0
+        except Exception:
+            log.warning(
+                "deconstruct: corrupted cache for %s — re-running Gemini",
+                creative.creative_id,
+            )
+
     client = client or get_client()
     t0 = time.perf_counter()
 
@@ -247,6 +268,13 @@ async def deconstruct_one(
             output_tokens,
         ),
     )
+
+    # 5. Persist for future runs (cross-game, cross-week, cross-machine)
+    try:
+        cache_path.write_text(result.model_dump_json(indent=2))
+    except OSError as e:
+        log.warning("deconstruct: failed to cache %s: %s", creative.creative_id, e)
+
     return result, elapsed
 
 

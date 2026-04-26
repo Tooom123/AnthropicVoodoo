@@ -94,9 +94,35 @@ export function CompetitiveScope() {
             {competitors.map((c) => (
               <TableRow key={c.game}>
                 <TableCell className="font-medium">
-                  <div className="flex flex-col gap-1">
-                    <span>{c.game}</span>
-                    {c.app_id ? <NetworkRankChips appId={c.app_id} /> : null}
+                  <div className="flex items-start gap-2.5">
+                    {c.iconUrl ? (
+                      <img
+                        src={c.iconUrl}
+                        alt={c.game}
+                        loading="lazy"
+                        className="mt-0.5 h-9 w-9 flex-shrink-0 rounded-md object-cover ring-1 ring-border"
+                      />
+                    ) : (
+                      <div
+                        className="mt-0.5 grid h-9 w-9 flex-shrink-0 place-items-center rounded-md bg-muted text-[10px] font-semibold uppercase text-muted-foreground ring-1 ring-border"
+                        aria-hidden
+                      >
+                        {c.game.slice(0, 2)}
+                      </div>
+                    )}
+                    <div className="min-w-0 flex-1 flex-col gap-1">
+                      <div className="truncate">{c.game}</div>
+                      {c.publisher && (
+                        <div className="truncate text-[11px] text-muted-foreground">
+                          by {c.publisher}
+                        </div>
+                      )}
+                      {c.app_id ? (
+                        <div className="mt-0.5">
+                          <NetworkRankChips appId={c.app_id} />
+                        </div>
+                      ) : null}
+                    </div>
                   </div>
                 </TableCell>
                 <TableCell className="text-muted-foreground">{c.subGenre}</TableCell>

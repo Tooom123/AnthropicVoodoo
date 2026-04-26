@@ -91,6 +91,12 @@ class CompetitorGame(BaseModel):
     # fetch network ranks via /api/advertisers/{app_id}/ranks. Optional so the
     # current sample.ts CompetitorGame stays compatible.
     app_id: str | None = None
+    iconUrl: str | None = None
+    """App icon URL (from SensorTower app_info.icon_url). Lets the
+    Competitive Scope page render real game thumbnails next to each
+    row instead of just the name."""
+    publisher: str | None = None
+    """Publisher name when present in the SensorTower row."""
 
 
 # ---------------------------------------------------------------------------
@@ -307,6 +313,19 @@ def _advertiser_to_competitor(adv: dict, rank: int) -> CompetitorGame:
                 or sub_genre
             )
 
+    # Icon + publisher come from app_info when present (top_advertisers
+    # endpoint embeds it for unified_app rows). Fallback to None — the
+    # frontend renders a colour swatch when icon_url is missing.
+    info = adv.get("app_info") or {}
+    icon_url = (
+        adv.get("icon_url")
+        or info.get("icon_url")
+    )
+    publisher = (
+        adv.get("publisher_name")
+        or info.get("publisher_name")
+    )
+
     return CompetitorGame(
         game=adv.get("name") or adv.get("app_name") or "Unknown",
         subGenre=sub_genre,
@@ -315,6 +334,8 @@ def _advertiser_to_competitor(adv: dict, rank: int) -> CompetitorGame:
         spendTier=tier,
         status="Active",
         app_id=str(raw_app_id) if raw_app_id else None,
+        iconUrl=str(icon_url) if icon_url else None,
+        publisher=str(publisher) if publisher else None,
     )
 
 
@@ -1371,6 +1392,77 @@ def _scan_all_creatives() -> list[dict[str, Any]]:
         for au in data.get("ad_units") or []:
             out.append(au)
     return out
+
+
+_DECONSTRUCT_CACHE_DIR = CACHE_DIR / "deconstruct"
+
+
+class DeconstructionView(BaseModel):
+    """A trimmed shape of ``DeconstructedCreative`` for the /ad/$id page —
+    same fields as on disk, just typed for the React UI without dragging
+    the full ``RawCreative`` payload along.
+    """
+
+    creative_id: str
+    hook_summary: str | None = None
+    hook_visual_action: str | None = None
+    hook_text_overlay: str | None = None
+    hook_voiceover_transcript: str | None = None
+    hook_emotional_pitch: str | None = None
+    scene_flow: list[str] = []
+    on_screen_text: list[str] = []
+    cta_text: str | None = None
+    cta_timing_seconds: float | None = None
+    palette_hex: list[str] = []
+    visual_style: str | None = None
+    audience_proxy: str | None = None
+    deconstruction_model: str | None = None
+
+
+@app.get(
+    "/api/creatives/{creative_id}/deconstruction",
+    response_model=DeconstructionView,
+)
+def get_creative_deconstruction(creative_id: str) -> DeconstructionView:
+    """Return the cached Gemini deconstruction for a creative.
+
+    Reads from data/cache/deconstruct/{creative_id}.json — populated by
+    the pipeline (``app/analysis/deconstruct.py``) on every Gemini call,
+    or pre-warmed by ``scripts/scan_top_competitors.py``. Returns 404
+    when the creative hasn't been deconstructed yet so the frontend can
+    show a "Run analysis" CTA.
+    """
+    path = _DECONSTRUCT_CACHE_DIR / f"{creative_id}.json"
+    if not path.exists() or path.stat().st_size == 0:
+        raise HTTPException(
+            status_code=404,
+            detail=f"No deconstruction cached for creative {creative_id!r}",
+        )
+    try:
+        d = json.loads(path.read_text())
+    except (OSError, json.JSONDecodeError):
+        raise HTTPException(
+            status_code=500,
+            detail=f"Corrupted deconstruction cache for {creative_id!r}",
+        )
+
+    hook = d.get("hook") or {}
+    return DeconstructionView(
+        creative_id=creative_id,
+        hook_summary=hook.get("summary"),
+        hook_visual_action=hook.get("visual_action"),
+        hook_text_overlay=hook.get("text_overlay"),
+        hook_voiceover_transcript=hook.get("voiceover_transcript"),
+        hook_emotional_pitch=hook.get("emotional_pitch"),
+        scene_flow=list(d.get("scene_flow") or []),
+        on_screen_text=list(d.get("on_screen_text") or []),
+        cta_text=d.get("cta_text"),
+        cta_timing_seconds=d.get("cta_timing_seconds"),
+        palette_hex=list(d.get("palette_hex") or []),
+        visual_style=d.get("visual_style"),
+        audience_proxy=d.get("audience_proxy"),
+        deconstruction_model=d.get("deconstruction_model"),
+    )
 
 
 @app.get("/api/creatives/{creative_id}", response_model=CreativeDetail)
