@@ -19,6 +19,8 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   AlertCircle,
+  ChevronLeft,
+  ChevronRight,
   ExternalLink,
   Image as ImageIcon,
   Play,
@@ -174,6 +176,11 @@ export function VoodooPortfolio() {
     return ta - tb;
   });
 
+  const PAGE_SIZE = 9;
+  const [page, setPage] = useState(0);
+  const totalPages = Math.ceil(sortedApps.length / PAGE_SIZE);
+  const pageApps = sortedApps.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
+
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -242,10 +249,36 @@ export function VoodooPortfolio() {
       )}
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {sortedApps.map((app) => (
+        {pageApps.map((app) => (
           <GameCard key={app.app_id} app={app} onAnalyze={handleAnalyze} />
         ))}
       </div>
+
+      {totalPages > 1 && (
+        <div className="flex items-center justify-center gap-3">
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={page === 0}
+            onClick={() => setPage((p) => p - 1)}
+          >
+            <ChevronLeft className="h-4 w-4" />
+            Previous
+          </Button>
+          <span className="text-sm text-muted-foreground">
+            Page {page + 1} / {totalPages}
+          </span>
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={page === totalPages - 1}
+            onClick={() => setPage((p) => p + 1)}
+          >
+            Next
+            <ChevronRight className="h-4 w-4" />
+          </Button>
+        </div>
+      )}
 
       <LaunchAnalysisModal
         open={configOpen}

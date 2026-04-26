@@ -1,5 +1,5 @@
-import { Calendar, ChevronDown, Sparkles, PanelLeftOpen, DatabaseZap } from "lucide-react";
-import { useNavigate, useLocation } from "@tanstack/react-router";
+import { Calendar, ChevronDown, Sparkles, PanelLeftOpen } from "lucide-react";
+import { useNavigate } from "@tanstack/react-router";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -7,16 +7,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
 import { PERIOD_OPTIONS, useGame } from "@/lib/game-context";
-
-// Pages where the period picker has no effect (pre-cached data)
-const PERIOD_DISABLED_PATHS = new Set(["/voodoo", "/"]);
 
 interface TopNavProps {
   sidebarOpen?: boolean;
@@ -26,8 +17,6 @@ interface TopNavProps {
 export function TopNav({ sidebarOpen = true, onToggleSidebar }: TopNavProps) {
   const { periodLabel, setPeriodByLabel } = useGame();
   const navigate = useNavigate();
-  const { pathname } = useLocation();
-  const periodDisabled = PERIOD_DISABLED_PATHS.has(pathname);
 
   function launchAnalysis() {
     navigate({ to: "/insights", search: { launch: "1" } as never });
@@ -48,47 +37,22 @@ export function TopNav({ sidebarOpen = true, onToggleSidebar }: TopNavProps) {
       <div className="flex-1" />
 
       <div className="flex items-center gap-2">
-        <TooltipProvider delayDuration={200}>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <span>
-                {periodDisabled ? (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled
-                    className="gap-2 border-slate-200 text-slate-400 bg-white cursor-not-allowed opacity-60"
-                  >
-                    <DatabaseZap className="h-3.5 w-3.5" />
-                    <span>Pre-cached</span>
-                  </Button>
-                ) : (
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="outline" size="sm" className="gap-2 border-slate-200 text-slate-600 bg-white hover:bg-slate-50">
-                        <Calendar className="h-3.5 w-3.5" />
-                        <span>{periodLabel}</span>
-                        <ChevronDown className="h-3.5 w-3.5 opacity-50" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      {PERIOD_OPTIONS.map((r) => (
-                        <DropdownMenuItem key={r.label} onClick={() => setPeriodByLabel(r.label)}>
-                          {r.label}
-                        </DropdownMenuItem>
-                      ))}
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                )}
-              </span>
-            </TooltipTrigger>
-            {periodDisabled && (
-              <TooltipContent side="bottom" className="max-w-[220px] text-xs">
-                Cette page affiche un snapshot pré-calculé — le filtre de période ne s'applique pas ici.
-              </TooltipContent>
-            )}
-          </Tooltip>
-        </TooltipProvider>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="outline" size="sm" className="gap-2 border-slate-200 text-slate-600 bg-white hover:bg-slate-50">
+              <Calendar className="h-3.5 w-3.5" />
+              <span>{periodLabel}</span>
+              <ChevronDown className="h-3.5 w-3.5 opacity-50" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            {PERIOD_OPTIONS.map((r) => (
+              <DropdownMenuItem key={r.label} onClick={() => setPeriodByLabel(r.label)}>
+                {r.label}
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
 
         <Button
           size="sm"
