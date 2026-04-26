@@ -44,11 +44,44 @@ from app.models import CreativeArchetype, CreativeBrief, GameFitScore, Generated
 log = logging.getLogger(__name__)
 
 SCENARIO_BASE = "https://api.cloud.scenario.com/v1"
-DEFAULT_MODEL_ID = "flux.1-dev"
+
+# Default model: GPT Image 2 (proxied via Scenario's /generate/custom/{id}).
+# We benchmarked 8 models on Marble Sort + Block Blast briefs (cf.
+# data/cache/compare/*); GPT Image 2 produced the most demo-ready visuals
+# (photoreal hero, perfect text rendering, native 9:16). It's a *custom*
+# Scenario model — no IP-Adapter support — so when this is the default we
+# rely on prompt-engineering (the brief's CRITICAL FIDELITY DIRECTIVE in
+# app/creative/brief.py + palette/style/mechanics inlined into the prompt)
+# to keep visuals on-DNA. Switch back to "flux.1-dev" via env var
+# ``SCENARIO_DEFAULT_MODEL_ID`` to fall back to flux + IP-Adapter when
+# game-DNA fidelity matters more than photo-realism.
+DEFAULT_MODEL_ID = os.environ.get(
+    "SCENARIO_DEFAULT_MODEL_ID", "model_openai-gpt-image-2"
+)
+
+# Custom-model prefix used by Scenario for proxied third-party APIs (GPT
+# Image, Imagen, Ideogram, Flux 1.1 Pro, Seedream, Veo, Sora, Kling…).
+# These models route through ``POST /generate/custom/{modelId}`` (no
+# IP-Adapter, prompt-only). Anything else (flux.1-*, sd-xl-*, the ~150
+# LoRA flux variants) goes through the regular ``txt2img`` /
+# ``txt2img-ip-adapter`` / ``img2img`` endpoints.
+CUSTOM_MODEL_PREFIX = "model_"
+
 DEFAULT_CACHE_DIR = CACHE_DIR / "scenario"
 ASSETS_CACHE_DIR = CACHE_DIR / "scenario_assets"
 DEFAULT_IMG2IMG_STRENGTH = 0.6  # 0.0 = identical to reference, 1.0 = ignore reference
 MAX_IPADAPTER_REFS = 3  # Scenario / Veo / most IP-Adapter models cap quality at 3 refs
+
+
+def _is_custom_model(model_id: str) -> bool:
+    """Return True for Scenario's proxied third-party API models.
+
+    These (e.g. ``model_openai-gpt-image-2``, ``model_imagen4-ultra``)
+    only accept the ``/generate/custom/{modelId}`` endpoint and reject
+    ``/generate/txt2img`` with HTTP 400. They also do NOT support
+    IP-Adapter — the route is prompt-only by design.
+    """
+    return model_id.startswith(CUSTOM_MODEL_PREFIX)
 
 
 def _basic_auth_header() -> str | None:
@@ -106,6 +139,126 @@ def upload_asset(image_path: Path, *, name: str | None = None) -> str:
     return asset_id
 
 
+def call_scenario_custom(
+    prompt: str,
+    *,
+    model_id: str,
+    label: str = "asset",
+    timeout_s: float = 360.0,
+) -> tuple[str, dict]:
+    """Generate one image via ``POST /v1/generate/custom/{modelId}``.
+
+    This is the only route Scenario's proxied third-party API models
+    accept (GPT Image 2, Imagen 4, Ideogram 3, Flux 1.1 Pro, Seedream 4,
+    Veo, Sora, Kling, ...). They do **NOT** accept ``/generate/txt2img``
+    (returns 400 *Standalone models are not supported*) and do **NOT**
+    support IP-Adapter — pure prompt-driven, so the brief's prompt-engineering
+    has to do all the work of staying on-DNA.
+
+    Same return shape as :func:`call_scenario`. Cached on disk under
+    ``data/cache/scenario/`` with a non-colliding key namespace.
+    """
+    cache_key = {"p": prompt, "m": model_id, "endpoint": "custom"}
+    cache_path = DEFAULT_CACHE_DIR / f"{label}__{hash_key(cache_key)}.json"
+    if cache_path.exists():
+        cached = json.loads(cache_path.read_text())
+        return cached["url"], cached
+
+    auth = _basic_auth_header()
+    if not auth:
+        url = _picsum_stub(prompt)
+        result = {
+            "url": url,
+            "stub": True,
+            "prompt": prompt,
+            "model_id": model_id,
+            "mode": "custom",
+        }
+        DEFAULT_CACHE_DIR.mkdir(parents=True, exist_ok=True)
+        cache_path.write_text(json.dumps(result, indent=2))
+        return url, result
+
+    headers = {"Content-Type": "application/json", "Authorization": auth}
+    payload = {"prompt": prompt}
+
+    log.info(
+        "Scenario CACHE MISS · POST /generate/custom/%s · prompt-only", model_id
+    )
+    r = httpx.post(
+        f"{SCENARIO_BASE}/generate/custom/{model_id}",
+        headers=headers,
+        json=payload,
+        timeout=60.0,
+    )
+    r.raise_for_status()
+    job_id = r.json()["job"]["jobId"]
+
+    deadline = time.time() + timeout_s
+    while time.time() < deadline:
+        rr = httpx.get(
+            f"{SCENARIO_BASE}/jobs/{job_id}",
+            headers={"Authorization": auth},
+            timeout=30.0,
+        )
+        rr.raise_for_status()
+        body = rr.json()
+        status = body["job"]["status"]
+
+        if status == "success":
+            asset_ids = (body["job"].get("metadata") or {}).get("assetIds") or []
+            if not asset_ids:
+                raise RuntimeError(
+                    f"Scenario custom job {job_id} succeeded but no assetIds"
+                )
+            asset_id = asset_ids[0]
+            ar = httpx.get(
+                f"{SCENARIO_BASE}/assets/{asset_id}",
+                headers={"Authorization": auth},
+                timeout=30.0,
+            )
+            ar.raise_for_status()
+            ar_body = ar.json()
+            asset_url = (
+                (ar_body.get("asset") or {}).get("url")
+                or ar_body.get("url")
+                or ""
+            )
+            result = {
+                "url": asset_url,
+                "job_id": job_id,
+                "asset_id": asset_id,
+                "stub": False,
+                "prompt": prompt,
+                "model_id": model_id,
+                "mode": "custom",
+            }
+            DEFAULT_CACHE_DIR.mkdir(parents=True, exist_ok=True)
+            cache_path.write_text(json.dumps(result, indent=2))
+            return asset_url, result
+
+        if status in ("failure", "canceled"):
+            raise RuntimeError(
+                f"Scenario custom job {job_id} ended with status={status}"
+            )
+        time.sleep(3.0)
+
+    log.warning(
+        "Scenario custom job %s timed out after %.0fs — falling back to stub.",
+        job_id,
+        timeout_s,
+    )
+    fallback_url = _picsum_stub(prompt)
+    return fallback_url, {
+        "url": fallback_url,
+        "stub": True,
+        "stub_reason": "scenario_custom_timeout",
+        "job_id": job_id,
+        "prompt": prompt,
+        "model_id": model_id,
+        "mode": "custom",
+    }
+
+
 def call_scenario(
     prompt: str,
     *,
@@ -118,11 +271,14 @@ def call_scenario(
     ipadapter_type: str = "style",  # "style" or "character"
     img2img_strength: float | None = None,  # if set, force img2img mode (single ref)
 ) -> tuple[str, dict]:
-    """Generate one image via Scenario REST API. Mode auto-selected:
+    """Generate one image via Scenario REST API. Dispatch:
 
+    - ``model_id`` starts with ``model_`` (custom proxied API like GPT
+      Image 2, Imagen 4, Seedream …) → ``call_scenario_custom``. Refs
+      are silently ignored (the route doesn't support IP-Adapter).
     - 0 refs                                 → ``txt2img``
-    - 1+ refs, no ``img2img_strength``       → ``txt2img-ip-adapter`` (recommended for ad creatives)
-    - exactly 1 ref + ``img2img_strength``   → ``img2img`` (composition lock, opt-in)
+    - 1+ refs, no ``img2img_strength``       → ``txt2img-ip-adapter``
+    - exactly 1 ref + ``img2img_strength``   → ``img2img`` (composition lock)
 
     Returns ``(asset_url, metadata_dict)``. ``metadata_dict["stub"]`` is True
     when credentials are missing or when generation timed out (graceful
@@ -134,6 +290,20 @@ def call_scenario(
 
     Cached on disk by all inputs that affect the output.
     """
+    # Custom (third-party proxied) models route through a different endpoint
+    # and ignore reference images. Delegate before any ref upload.
+    if _is_custom_model(model_id):
+        if reference_image_paths:
+            log.info(
+                "Scenario custom model %s ignores %d reference image(s) "
+                "(prompt-only route).",
+                model_id,
+                len(reference_image_paths),
+            )
+        return call_scenario_custom(
+            prompt, model_id=model_id, label=label, timeout_s=timeout_s
+        )
+
     refs = reference_image_paths or []
     refs = refs[:MAX_IPADAPTER_REFS]  # cap
 

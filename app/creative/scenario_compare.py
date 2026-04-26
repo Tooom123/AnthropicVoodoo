@@ -47,6 +47,7 @@ from app.creative.scenario import (
     _basic_auth_header,
     _picsum_stub,
     call_scenario,
+    call_scenario_custom,  # promoted to scenario.py (was defined here)
 )
 from app.models import CreativeBrief
 
@@ -220,129 +221,12 @@ def capability_for_model(
     return list(m.get("capabilities") or []), m
 
 
-CUSTOM_CACHE_DIR = CACHE_DIR / "scenario"
+# NOTE: the canonical implementation of ``call_scenario_custom`` lives in
+# ``app/creative/scenario.py`` since 2026-04-26 (production routes GPT
+# Image 2 and other proxied APIs through the same helper, so it had to
+# be in scenario.py to avoid a circular import). It's re-exported above
+# for the legacy import path used by ``scripts/compare_models.py``.
 
-
-def call_scenario_custom(
-    prompt: str,
-    *,
-    model_id: str,
-    label: str = "asset",
-    timeout_s: float = 360.0,
-) -> tuple[str, dict]:
-    """Generate via ``POST /v1/generate/custom/{modelId}`` for proxied APIs.
-
-    GPT Image 2, Imagen 4, Ideogram 3, Flux 1.1 Pro, Seedream 4 and the
-    rest of Scenario's ``type=custom`` standalone models do NOT accept
-    ``/generate/txt2img`` (returns ``400: Standalone models are not
-    supported for this endpoint``). They expose a uniform "prompt-only"
-    interface at ``/v1/generate/custom/{modelId}`` and return a normal
-    Scenario job that drains assets the same way the regular endpoints do.
-
-    Cached on disk in the same ``data/cache/scenario/`` directory as
-    :func:`call_scenario` (different cache key namespace, no collision).
-    Falls back to a Picsum stub when credentials are missing OR the job
-    times out, so the comparison harness never crashes mid-batch.
-    """
-    cache_key = {"p": prompt, "m": model_id, "endpoint": "custom"}
-    cache_path = CUSTOM_CACHE_DIR / f"{label}__{hash_key(cache_key)}.json"
-    if cache_path.exists():
-        cached = json.loads(cache_path.read_text())
-        return cached["url"], cached
-
-    auth = _basic_auth_header()
-    if not auth:
-        url = _picsum_stub(prompt)
-        result = {
-            "url": url,
-            "stub": True,
-            "prompt": prompt,
-            "model_id": model_id,
-            "mode": "custom",
-        }
-        CUSTOM_CACHE_DIR.mkdir(parents=True, exist_ok=True)
-        cache_path.write_text(json.dumps(result, indent=2))
-        return url, result
-
-    headers = {"Content-Type": "application/json", "Authorization": auth}
-    payload = {"prompt": prompt}
-
-    log.info(
-        "Scenario CACHE MISS · POST /generate/custom/%s · prompt-only", model_id
-    )
-    r = httpx.post(
-        f"{SCENARIO_BASE}/generate/custom/{model_id}",
-        headers=headers,
-        json=payload,
-        timeout=60.0,
-    )
-    r.raise_for_status()
-    job_id = r.json()["job"]["jobId"]
-
-    deadline = time.time() + timeout_s
-    while time.time() < deadline:
-        rr = httpx.get(
-            f"{SCENARIO_BASE}/jobs/{job_id}",
-            headers={"Authorization": auth},
-            timeout=30.0,
-        )
-        rr.raise_for_status()
-        body = rr.json()
-        status = body["job"]["status"]
-
-        if status == "success":
-            asset_ids = (body["job"].get("metadata") or {}).get("assetIds") or []
-            if not asset_ids:
-                raise RuntimeError(
-                    f"Scenario custom job {job_id} succeeded but no assetIds"
-                )
-            asset_id = asset_ids[0]
-            ar = httpx.get(
-                f"{SCENARIO_BASE}/assets/{asset_id}",
-                headers={"Authorization": auth},
-                timeout=30.0,
-            )
-            ar.raise_for_status()
-            ar_body = ar.json()
-            asset_url = (
-                (ar_body.get("asset") or {}).get("url")
-                or ar_body.get("url")
-                or ""
-            )
-            result = {
-                "url": asset_url,
-                "job_id": job_id,
-                "asset_id": asset_id,
-                "stub": False,
-                "prompt": prompt,
-                "model_id": model_id,
-                "mode": "custom",
-            }
-            CUSTOM_CACHE_DIR.mkdir(parents=True, exist_ok=True)
-            cache_path.write_text(json.dumps(result, indent=2))
-            return asset_url, result
-
-        if status in ("failure", "canceled"):
-            raise RuntimeError(
-                f"Scenario custom job {job_id} ended with status={status}"
-            )
-        time.sleep(3.0)
-
-    log.warning(
-        "Scenario custom job %s timed out after %.0fs — falling back to stub.",
-        job_id,
-        timeout_s,
-    )
-    fallback_url = _picsum_stub(prompt)
-    return fallback_url, {
-        "url": fallback_url,
-        "stub": True,
-        "stub_reason": "scenario_custom_timeout",
-        "job_id": job_id,
-        "prompt": prompt,
-        "model_id": model_id,
-        "mode": "custom",
-    }
 
 _SAFE_SLUG_RE = re.compile(r"[^a-zA-Z0-9._-]+")
 
