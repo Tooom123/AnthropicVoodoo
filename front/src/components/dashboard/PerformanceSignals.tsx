@@ -140,15 +140,21 @@ export function PerformanceSignals() {
   const [sortKey, setSortKey] = useState<SortKey>("score");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
 
-  // Use real SoV (0–1) as the performance signal; convert to 0–100 for display
-  const sovOf = (c: Creative) => (c.sov ?? 0) * 100;
+  // Proxy score: runDays normalized to 0–100 across the loaded set.
+  // runDays is the only metric guaranteed non-null on every creative.
+  const maxRunDays = useMemo(
+    () => Math.max(1, ...creatives.map((c) => c.runDays)),
+    [creatives],
+  );
+  const proxyScore = (c: Creative) =>
+    Math.round((c.runDays / maxRunDays) * 100);
 
   const categoryAvg = useMemo(
     () =>
       creatives.length
-        ? creatives.reduce((s, c) => s + sovOf(c), 0) / creatives.length
+        ? creatives.reduce((s, c) => s + proxyScore(c), 0) / creatives.length
         : 0,
-    [creatives],
+    [creatives, maxRunDays],
   );
 
   // ----- derived stats (Section A) -----
@@ -159,11 +165,10 @@ export function PerformanceSignals() {
       creatives.reduce((s, c) => s + c.runDays, 0) / creatives.length,
     );
 
-    // top network by avg SoV
     const byNet = new Map<string, { sum: number; n: number }>();
     creatives.forEach((c) => {
       const e = byNet.get(c.network) ?? { sum: 0, n: 0 };
-      e.sum += sovOf(c);
+      e.sum += c.runDays;
       e.n += 1;
       byNet.set(c.network, e);
     });
@@ -174,11 +179,10 @@ export function PerformanceSignals() {
       if (avg > topNetScore) { topNetScore = avg; topNet = k; }
     });
 
-    // best format by avg SoV
     const byFmt = new Map<string, { sum: number; n: number }>();
     creatives.forEach((c) => {
       const e = byFmt.get(c.format) ?? { sum: 0, n: 0 };
-      e.sum += sovOf(c);
+      e.sum += c.runDays;
       e.n += 1;
       byFmt.set(c.format, e);
     });
@@ -191,28 +195,27 @@ export function PerformanceSignals() {
 
     const longRunners = creatives.filter((c) => c.runDays >= 30).length;
 
-    return { avgRun, topNet, topNetScore, bestFmt, longRunners };
+    return { avgRun, topNet, topNetScore: Math.round(topNetScore), bestFmt, longRunners };
   }, [creatives]);
 
-  // ----- left chart: top 8 by SoV -----
+  // ----- left chart: top 8 by run duration -----
   const top8 = useMemo(
     () =>
       [...creatives]
-        .filter((c) => (c.sov ?? 0) > 0)
-        .sort((a, b) => (b.sov ?? 0) - (a.sov ?? 0))
+        .sort((a, b) => b.runDays - a.runDays)
         .slice(0, 8)
         .map((c) => ({
           ...c,
-          sovPct: parseFloat((sovOf(c)).toFixed(2)),
+          proxyScore: proxyScore(c),
           label: `${c.game.split(" ")[0]} · ${c.format}`,
         })),
-    [creatives],
+    [creatives, maxRunDays],
   );
 
   // ----- table sorting -----
   const sortedRows = useMemo(() => {
     const ranked = [...creatives]
-      .sort((a, b) => (b.sov ?? 0) - (a.sov ?? 0))
+      .sort((a, b) => b.runDays - a.runDays)
       .map((c, i) => ({ ...c, rank: i + 1, trend: trendVsRecent(c) }));
 
     return [...ranked].sort((a, b) => {
@@ -229,10 +232,10 @@ export function PerformanceSignals() {
         case "runDays":
           return (a.runDays - b.runDays) * dir;
         case "impressions":
-          return ((a.sov ?? 0) - (b.sov ?? 0)) * dir;
+          return (a.runDays - b.runDays) * dir;
         case "score":
         default:
-          return ((a.sov ?? 0) - (b.sov ?? 0)) * dir;
+          return (a.runDays - b.runDays) * dir;
       }
     });
   }, [creatives, sortKey, sortDir]);
@@ -361,14 +364,14 @@ export function PerformanceSignals() {
                           Run: <span className="font-medium">{d.runDays}d</span>
                         </div>
                         <div>
-                          SoV: <span className="font-medium">{sovOf(d).toFixed(2)}%</span>
+                          SoV: <span className="font-medium">{proxyScore(d)}d</span>
                         </div>
                       </div>
                     );
                   }}
                 />
                 <Bar
-                  dataKey="sovPct"
+                  dataKey="proxyScore"
                   radius={[0, 4, 4, 0]}
                   cursor="pointer"
                 >
@@ -436,7 +439,7 @@ export function PerformanceSignals() {
                 />
                 <YAxis
                   type="number"
-                  dataKey="score"
+                  dataKey="proxyScore"
                   name="Score"
                   domain={[0, 100]}
                   stroke="#9ca3af"
@@ -457,7 +460,7 @@ export function PerformanceSignals() {
                           {d.network} · {d.format}
                         </div>
                         <div className="mt-1">
-                          SoV: <span className="font-medium">{sovOf(d).toFixed(2)}%</span>
+                          SoV: <span className="font-medium">{proxyScore(d)}d</span>
                         </div>
                         <div>{d.runDays}d active</div>
                       </div>
@@ -469,10 +472,10 @@ export function PerformanceSignals() {
                     key={f}
                     name={f}
                     data={creatives
-                      .filter((c) => c.format === f && (c.sov ?? 0) > 0)
+                      .filter((c) => c.format === f)
                       .map((c) => ({
                         ...c,
-                        z: Math.max(80, Math.min(380, sovOf(c) * 80)),
+                        z: Math.max(80, Math.min(380, proxyScore(c) * 3)),
                       }))}
                     fill={FORMAT_HEX[f]}
                     fillOpacity={0.85}
@@ -594,13 +597,13 @@ export function PerformanceSignals() {
                   </TableCell>
                   <TableCell className="text-right tabular-nums">{c.runDays}d</TableCell>
                   <TableCell className="text-right tabular-nums">
-                    {sovOf(c).toFixed(2)}%
+                    {proxyScore(c)}/100
                   </TableCell>
                   <TableCell>
                     <div className="flex items-center gap-2">
-                      <Progress value={sovOf(c)} className="h-1.5 flex-1" />
+                      <Progress value={proxyScore(c)} className="h-1.5 flex-1" />
                       <span className="w-12 text-right text-xs tabular-nums text-muted-foreground">
-                        {sovOf(c).toFixed(2)}%
+                        {proxyScore(c)}/100
                       </span>
                     </div>
                   </TableCell>
@@ -632,7 +635,7 @@ export function PerformanceSignals() {
           side="right"
           className="w-full sm:max-w-[420px] bg-sidebar border-l border-sidebar-border"
         >
-          {selected && <CreativeDetail creative={selected} categoryAvg={categoryAvg} sovOf={sovOf} />}
+          {selected && <CreativeDetail creative={selected} categoryAvg={categoryAvg} proxyScore={proxyScore} />}
         </SheetContent>
       </Sheet>
     </div>
@@ -674,9 +677,9 @@ function SortableHead({
   );
 }
 
-function CreativeDetail({ creative, categoryAvg, sovOf }: { creative: Creative; categoryAvg: number; sovOf: (c: Creative) => number }) {
+function CreativeDetail({ creative, categoryAvg, proxyScore }: { creative: Creative; categoryAvg: number; proxyScore: (c: Creative) => number }) {
   const data = [
-    { name: "This creative", value: parseFloat(sovOf(creative).toFixed(2)), fill: NETWORK_HEX[creative.network] },
+    { name: "This creative", value: proxyScore(creative), fill: NETWORK_HEX[creative.network] },
     { name: "Category avg", value: parseFloat(categoryAvg.toFixed(2)), fill: "oklch(0.5 0.02 260)" },
   ];
 
@@ -718,9 +721,9 @@ function CreativeDetail({ creative, categoryAvg, sovOf }: { creative: Creative; 
             </span>
           </DetailRow>
           <DetailRow label="Run duration">{creative.runDays} days</DetailRow>
-          <DetailRow label="Share of Voice">{sovOf(creative).toFixed(2)}%</DetailRow>
+          <DetailRow label="Share of Voice">{proxyScore(creative)}/100</DetailRow>
           <DetailRow label="Publisher">{creative.publisherName ?? "—"}</DetailRow>
-          <DetailRow label="SoV score">{sovOf(creative).toFixed(2)}%</DetailRow>
+          <DetailRow label="SoV score">{proxyScore(creative)}/100</DetailRow>
         </div>
 
         <div>
