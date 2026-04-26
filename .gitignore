@@ -60,15 +60,17 @@ data/cache/*
 !data/cache/endcards/
 !data/cache/endcards/**
 
-# ✅ Audio library + cached TTS — the README explains which mp3s to
-# drop in for the soundtrack overlay. Generated/AI music tracks land
-# in data/cache/audio/generated/ and stay ignored (regeneration is
-# cheap and they pollute the repo).
+# ✅ Audio library + cached TTS + SFX — the READMEs explain which mp3s
+# to drop in for the multi-layer soundtrack overlay (music bed, voice,
+# game SFX). Generated/AI music tracks land in data/cache/audio/generated/
+# and stay ignored (regeneration is cheap and they pollute the repo).
 !data/cache/audio/
 !data/cache/audio/library/
 !data/cache/audio/library/**
 !data/cache/audio/tts/
 !data/cache/audio/tts/**
+!data/cache/audio/sfx/
+!data/cache/audio/sfx/**
 data/cache/audio/generated/
 
 # ❌ Stays ignored — too large or genuinely ephemeral:

@@ -32,6 +32,7 @@ import {
   Music,
   Sparkles,
   Video,
+  Volume2,
   Zap,
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
@@ -74,6 +75,7 @@ export function GeneratedAdSection({
   // across variant switches within the same Insights session.
   const [includeMusic, setIncludeMusic] = useState(true);
   const [includeVoice, setIncludeVoice] = useState(true);
+  const [includeSfx, setIncludeSfx] = useState(true);
   const [audioQuality, setAudioQuality] = useState<"fast" | "rich">(
     "fast",
   );
@@ -135,6 +137,7 @@ export function GeneratedAdSection({
       includeEndcard: true,
       includeAudio: includeMusic,
       includeVoice,
+      includeSfx,
       voice: "alloy",
       audioQuality,
       correction: opts.withCorrection ? correction : undefined,
@@ -197,6 +200,18 @@ export function GeneratedAdSection({
                   audioQuality === "rich"
                     ? "Disabled in Rich mode — Kling 2.6 Pro generates voice + sfx natively from the brief's audio cues."
                     : "OpenAI TTS reads the brief's text_overlays + cta. Music auto-ducks to 25% volume."
+                }
+              />
+              <AudioToggle
+                label="Game SFX"
+                icon={<Volume2 className="h-3 w-3" />}
+                active={includeSfx && audioQuality === "fast"}
+                onClick={() => setIncludeSfx((v) => !v)}
+                disabled={render.isPending || audioQuality === "rich"}
+                tooltip={
+                  audioQuality === "rich"
+                    ? "Disabled in Rich mode — Kling 2.6 Pro generates SFX natively per clip."
+                    : "Splices whoosh / swoosh / drop / brand chime at fixed beats matching the 5-second clip boundaries. Reads from data/cache/audio/sfx/<stem>.mp3."
                 }
               />
             </div>

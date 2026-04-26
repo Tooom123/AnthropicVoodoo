@@ -415,6 +415,7 @@ export function useRenderVariantVideo() {
       includeEndcard?: boolean;
       includeAudio?: boolean;
       includeVoice?: boolean;
+      includeSfx?: boolean;
       voice?: string;
       audioQuality?: "fast" | "rich";
       /** Free-text refinement appended to every per-clip prompt
@@ -436,6 +437,10 @@ export function useRenderVariantVideo() {
       url.searchParams.set(
         "include_voice",
         vars.includeVoice === true ? "true" : "false",
+      );
+      url.searchParams.set(
+        "include_sfx",
+        vars.includeSfx === false ? "false" : "true",
       );
       if (vars.voice) {
         url.searchParams.set("voice", vars.voice);

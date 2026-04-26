@@ -1892,6 +1892,16 @@ async def render_variant_video(
             "text_overlays + cta and mix it on top of the music bed."
         ),
     ),
+    include_sfx: bool = Query(
+        True,
+        description=(
+            "Splice mobile-game SFX (whoosh, swoosh × 2, drop, brand "
+            "chime) at fixed beats matching the 5-second clip boundaries. "
+            "Reads from data/cache/audio/sfx/<stem>.mp3 — missing files "
+            "are silently skipped so you can drop in just the sfx you "
+            "want."
+        ),
+    ),
     voice: str = Query(
         "alloy",
         description=(
@@ -2223,12 +2233,13 @@ async def render_variant_video(
     #   fast → clips are silent; run the multi-layer overlay
     #          (music bed + optional voice) like before.
     audio_overlay_applied = False
-    if not is_rich and (include_audio or include_voice):
+    if not is_rich and (include_audio or include_voice or include_sfx):
         audio_overlay_applied = _try_apply_audio_layers(
             video_path=final_path,
             variant=variant,
             include_music=include_audio,
             include_voice=include_voice,
+            include_sfx=include_sfx,
             voice_id=voice,
         )
 
@@ -2330,6 +2341,25 @@ def variant_video_status(
 
 
 _AUDIO_LIBRARY_DIR = CACHE_DIR / "audio" / "library"
+_AUDIO_SFX_DIR = CACHE_DIR / "audio" / "sfx"
+
+# Standard SFX timing for the 18-second concat (3 clips × 5s + endcard
+# 3s). Each tuple is (filename_stem, delay_ms, volume). The user drops
+# matching mp3s into data/cache/audio/sfx/ and they ffmpeg-splice in
+# automatically. Missing files are silently skipped.
+#
+# Volumes are calibrated below the music+voice mix so SFX punctuate
+# without overpowering the narration:
+#   music bed = 0.25
+#   voice TTS = 1.00
+#   sfx       = 0.70-0.85 (varies by impact)
+_SFX_TIMELINE: list[tuple[str, int, float]] = [
+    ("whoosh_in",    0,     0.85),  # opening attention-grab
+    ("swoosh_1",     4500,  0.70),  # clip 1 → clip 2 cut
+    ("swoosh_2",     9500,  0.70),  # clip 2 → clip 3 cut
+    ("drop",         14500, 0.85),  # build before endcard
+    ("brand_chime",  15000, 0.80),  # endcard appears
+]
 
 # Map emotional_pitch → vibe filename (matches
 # scripts/generate_soundtrack.py:VIBE_MAP and the README in
@@ -2445,24 +2475,48 @@ def _generate_tts_openai(
         return False
 
 
+def _resolve_sfx_layers(video_duration: float) -> list[tuple[Path, int, float]]:
+    """Return the list of SFX mp3s to splice onto the final mix.
+
+    Each entry is (mp3_path, delay_ms, volume). Files that aren't on
+    disk are silently skipped — the user controls which sfx are
+    enabled simply by dropping/removing mp3s in data/cache/audio/sfx/.
+    SFX whose delay falls beyond the video's duration are also pruned.
+    """
+    out: list[tuple[Path, int, float]] = []
+    if not _AUDIO_SFX_DIR.exists():
+        return out
+    duration_ms = int(video_duration * 1000)
+    for stem, delay_ms, volume in _SFX_TIMELINE:
+        if delay_ms >= duration_ms:
+            continue
+        candidate = _AUDIO_SFX_DIR / f"{stem}.mp3"
+        if candidate.exists() and candidate.stat().st_size > 0:
+            out.append((candidate, delay_ms, volume))
+    return out
+
+
 def _try_apply_audio_layers(
     *,
     video_path: Path,
     variant: dict[str, Any],
     include_music: bool,
     include_voice: bool,
+    include_sfx: bool = True,
     voice_id: str = "alloy",
 ) -> bool:
-    """Multi-layer audio overlay: music bed (low volume) + voiceover
-    (full volume) mixed onto the silent variant mp4.
+    """Multi-layer audio overlay: music bed + voiceover + game SFX
+    mixed onto the silent variant mp4.
 
     Tier strategy:
-      • music ON, voice OFF  → simple stock-music overlay (was the
-        previous behaviour).
-      • music OFF, voice ON  → voice-only over silent video.
-      • both ON              → music ducked to ~25% volume + voice on
-        top so the narration always cuts through.
-      • neither              → no-op.
+      • music alone             → stock-music overlay (loop to length).
+      • voice alone             → TTS narration over silent video.
+      • music + voice           → music ducks to 25%, voice rides on top.
+      • + sfx (when on disk)    → up to 5 mobile-game SFX (whoosh,
+        swoosh ×2, drop, brand chime) spliced at fixed beats matching
+        the 5-second clip boundaries. Volumes calibrated to punctuate
+        without burying the narration.
+      • none of the above       → no-op.
 
     The original silent mp4 is backed up as ``.silent.mp4`` so the
     user can re-roll the audio mix without re-running Scenario.
@@ -2471,7 +2525,7 @@ def _try_apply_audio_layers(
     """
     import subprocess
 
-    if not include_music and not include_voice:
+    if not include_music and not include_voice and not include_sfx:
         return False
 
     duration = _estimate_video_duration(video_path)
@@ -2528,45 +2582,86 @@ def _try_apply_audio_layers(
                     len(narration), voice_id,
                 )
 
-    if music_path is None and voice_path is None:
+    # ─── Resolve SFX layers ─────────────────────────────────────
+    sfx_layers: list[tuple[Path, int, float]] = (
+        _resolve_sfx_layers(duration) if include_sfx else []
+    )
+
+    if music_path is None and voice_path is None and not sfx_layers:
         return False
 
     # ─── ffmpeg mix ─────────────────────────────────────────────
     out = video_path.with_suffix(".audio.mp4")
     inputs: list[str] = ["-i", str(src_video)]
-    audio_inputs: list[tuple[int, str]] = []  # (input_index, role)
+    # Track which input slot maps to which audio role; build the
+    # filter_complex below by walking this list.
+    audio_inputs: list[tuple[int, str, dict]] = []  # (idx, role, meta)
     next_idx = 1
+
     if music_path is not None:
         inputs += ["-stream_loop", "-1", "-i", str(music_path)]
-        audio_inputs.append((next_idx, "music"))
+        audio_inputs.append((next_idx, "music", {}))
         next_idx += 1
     if voice_path is not None:
         inputs += ["-i", str(voice_path)]
-        audio_inputs.append((next_idx, "voice"))
+        audio_inputs.append((next_idx, "voice", {}))
+        next_idx += 1
+    for sfx_path, delay_ms, sfx_volume in sfx_layers:
+        inputs += ["-i", str(sfx_path)]
+        audio_inputs.append(
+            (next_idx, "sfx", {"delay_ms": delay_ms, "volume": sfx_volume})
+        )
         next_idx += 1
 
-    # Build filter_complex. The CRUCIAL trick: pad every short audio
-    # source with silence (apad=pad_dur) so ffmpeg never decides the
-    # output should end early because one input ran out. We then trim
-    # to the EXACT video duration via the outer ``-t``. This avoids
-    # the bug where a 3-second TTS voice was truncating an 18-second
-    # video down to 3s because of -shortest semantics.
-    if len(audio_inputs) == 1:
-        only_idx, only_role = audio_inputs[0]
-        vol = "0.55" if only_role == "music" else "1.0"
-        filter_str = (
-            f"[{only_idx}:a]volume={vol},apad=whole_dur={duration:.3f},"
-            f"atrim=0:{duration:.3f},asetpts=N/SR/TB[a]"
-        )
+    # Build filter_complex. CRUCIAL: pad every audio source with
+    # silence (apad) and then trim to video duration. Without this
+    # ffmpeg shortens the output to the briefest input, which is how
+    # we previously truncated 18s videos to 3s. Each role uses a
+    # tailored chain:
+    #   music → low volume, looped to length
+    #   voice → full volume, padded to length
+    #   sfx   → adelay to its timestamp, volume calibrated, padded
+    chains: list[str] = []
+    mix_labels: list[str] = []
+    for idx, role, meta in audio_inputs:
+        label = f"a{idx}"
+        if role == "music":
+            chains.append(
+                f"[{idx}:a]volume=0.25,apad=whole_dur={duration:.3f},"
+                f"atrim=0:{duration:.3f},asetpts=N/SR/TB[{label}]"
+            )
+        elif role == "voice":
+            chains.append(
+                f"[{idx}:a]volume=1.0,apad=whole_dur={duration:.3f},"
+                f"atrim=0:{duration:.3f},asetpts=N/SR/TB[{label}]"
+            )
+        elif role == "sfx":
+            delay_ms = meta["delay_ms"]
+            volume = meta["volume"]
+            # adelay shifts the sfx to its timestamp; apad then
+            # extends silence to the full video length so amix doesn't
+            # drop early.
+            chains.append(
+                f"[{idx}:a]volume={volume},adelay={delay_ms}|{delay_ms},"
+                f"apad=whole_dur={duration:.3f},"
+                f"atrim=0:{duration:.3f},asetpts=N/SR/TB[{label}]"
+            )
+        else:
+            continue
+        mix_labels.append(f"[{label}]")
+
+    if not mix_labels:
+        return False
+
+    if len(mix_labels) == 1:
+        # Single source: rename the chain output to [a] for the -map.
+        # Easier: append a noop concat to relabel.
+        filter_str = chains[0].replace(f"[a{audio_inputs[0][0]}]", "[a]")
     else:
-        # Two layers: music ducks to 25%, voice at 100%. Both padded
-        # to video length so the amix output equals video length.
         filter_str = (
-            f"[1:a]volume=0.25,apad=whole_dur={duration:.3f},"
-            f"atrim=0:{duration:.3f},asetpts=N/SR/TB[m];"
-            f"[2:a]volume=1.0,apad=whole_dur={duration:.3f},"
-            f"atrim=0:{duration:.3f},asetpts=N/SR/TB[v];"
-            f"[m][v]amix=inputs=2:duration=first:dropout_transition=0[a]"
+            ";".join(chains)
+            + f";{''.join(mix_labels)}amix=inputs={len(mix_labels)}:"
+            f"duration=first:dropout_transition=0[a]"
         )
 
     # NOTE: NO ``-shortest`` flag — that's what was making ffmpeg cut
@@ -2597,7 +2692,7 @@ def _try_apply_audio_layers(
         log.warning("audio: rename failed: %s", e)
         return False
 
-    layers = ", ".join(role for _, role in audio_inputs)
+    layers = ", ".join(role for _, role, _ in audio_inputs)
     log.info("audio: mixed [%s] onto %s", layers, video_path.name)
     return True
 
