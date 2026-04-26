@@ -13,7 +13,7 @@
  * Empty state: when no cached report exists, point user to:
  *   `uv run python -m scripts.precache "<game_name>"`
  */
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Clock,
   DollarSign,
@@ -38,10 +38,9 @@ import { GameFitGrid } from "@/components/insights/GameFitGrid";
 import { LaunchAnalysisModal } from "@/components/insights/LaunchAnalysisModal";
 import { PitchStoryBlock } from "@/components/insights/PitchStoryBlock";
 import { ReportPicker } from "@/components/insights/ReportPicker";
-import {
-  RunAnalysisDialog,
-  type PipelineRunConfig,
-} from "@/components/insights/RunAnalysisDialog";
+import { RunAnalysisDialog } from "@/components/insights/RunAnalysisDialog";
+import type { PipelineRunConfig } from "@/lib/pipeline-runs-context";
+import { usePipelineRuns } from "@/lib/pipeline-runs-context";
 import { VariantsGallery } from "@/components/insights/VariantsGallery";
 import { VideoAdCard } from "@/components/insights/VideoAdCard";
 import {
@@ -68,40 +67,44 @@ export function Insights({ autoLaunch = false }: InsightsProps = {}) {
   // surface real ad thumbnails next to the analytical text.
   const { data: sourceCreatives = {} } = useReportSourceCreatives(gameName);
 
-  // Two-step flow: configure (LaunchAnalysisModal) → run (RunAnalysisDialog).
+  // Configure flow stays local; the run itself lives in the global
+  // PipelineRunsContext so it survives navigation / closed dialogs.
   const [configOpen, setConfigOpen] = useState(false);
-  const [runOpen, setRunOpen] = useState(false);
-  const [pendingRun, setPendingRun] = useState<{
-    gameName: string;
-    config: PipelineRunConfig;
-  } | null>(null);
+  const { startRun, openDialog, run } = usePipelineRuns();
 
   // Navbar "Launch new analysis" → /insights?launch=1 → auto-open modal.
   useEffect(() => {
     if (autoLaunch) setConfigOpen(true);
   }, [autoLaunch]);
 
+  // Auto-load the freshly-cached report when a run completes — this is
+  // what makes the Insights view switch from empty/old to the new report
+  // without the user having to click anything.
+  const lastDoneRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (run?.phase === "done" && run.doneEvent) {
+      const finishedId = `${run.id}:${run.doneEvent.app_id}`;
+      if (lastDoneRef.current !== finishedId) {
+        lastDoneRef.current = finishedId;
+        setGameName(run.doneEvent.name);
+      }
+    }
+  }, [run?.phase, run?.id, run?.doneEvent?.app_id, run?.doneEvent?.name, setGameName]);
+
   const trimmedGame = gameName.trim();
 
-  // Stable game name for the run dialog: prefer the canonical resolved name
-  // from a loaded report; else what the user actually picked in the modal.
-  const dialogGameName =
-    pendingRun?.gameName ?? report?.target_game.name ?? trimmedGame;
-
   function openConfigForReRun() {
-    // Pre-fill the modal with the loaded report's params (or sensible defaults).
     setConfigOpen(true);
   }
 
   function handleLaunch(name: string, config: PipelineRunConfig) {
-    setPendingRun({ gameName: name, config });
     setConfigOpen(false);
-    setRunOpen(true);
+    startRun(name, config);
+    openDialog();
   }
 
-  // Hoisted above early returns so the modal/dialog stay mounted across
-  // loading → empty → loaded transitions (otherwise re-mount auto-fires
-  // a duplicate run when the report becomes available).
+  // Hoisted above early returns so the modal stays mounted across
+  // loading → empty → loaded transitions.
   const modals = (
     <>
       <LaunchAnalysisModal
@@ -118,16 +121,7 @@ export function Insights({ autoLaunch = false }: InsightsProps = {}) {
         }
         onLaunch={handleLaunch}
       />
-      <RunAnalysisDialog
-        open={runOpen}
-        onOpenChange={setRunOpen}
-        gameName={dialogGameName}
-        config={pendingRun?.config}
-        onComplete={(name) => {
-          setGameName(name);
-          setPendingRun(null);
-        }}
-      />
+      <RunAnalysisDialog />
     </>
   );
 

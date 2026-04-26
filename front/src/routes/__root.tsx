@@ -4,6 +4,8 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import appCss from "../styles.css?url";
 import { ThemeProvider } from "@/components/theme-provider";
 import { GameProvider } from "@/lib/game-context";
+import { PipelineRunsProvider } from "@/lib/pipeline-runs-context";
+import { FloatingRunPill } from "@/components/insights/FloatingRunPill";
 
 const queryClient = new QueryClient();
 
@@ -77,9 +79,15 @@ function RootComponent() {
   return (
     <QueryClientProvider client={queryClient}>
       <GameProvider>
-        <ThemeProvider>
-          <Outlet />
-        </ThemeProvider>
+        <PipelineRunsProvider>
+          <ThemeProvider>
+            <Outlet />
+            {/* Persistent bottom-right indicator for the active pipeline
+                run. Survives navigation; only renders when a run exists
+                and the dialog is closed. See pipeline-runs-context.tsx. */}
+            <FloatingRunPill />
+          </ThemeProvider>
+        </PipelineRunsProvider>
       </GameProvider>
     </QueryClientProvider>
   );

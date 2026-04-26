@@ -16,7 +16,7 @@
  *   - Each card has a "Run analysis" CTA → opens LaunchAnalysisModal
  *     pre-filled with the picked game name
  */
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   AlertCircle,
   ExternalLink,
@@ -25,7 +25,6 @@ import {
   Sparkles,
   Star,
 } from "lucide-react";
-import { useQueryClient } from "@tanstack/react-query";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -36,12 +35,12 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { ArrowDown, ArrowUp, Minus, TrendingDown } from "lucide-react";
-import { useNavigate } from "@tanstack/react-router";
 import { LaunchAnalysisModal } from "@/components/insights/LaunchAnalysisModal";
+import { RunAnalysisDialog } from "@/components/insights/RunAnalysisDialog";
 import {
-  RunAnalysisDialog,
+  usePipelineRuns,
   type PipelineRunConfig,
-} from "@/components/insights/RunAnalysisDialog";
+} from "@/lib/pipeline-runs-context";
 import {
   useVoodooPortfolio,
   type VoodooAdSample,
@@ -65,17 +64,22 @@ function networkColor(network: string): string {
 }
 
 export function VoodooPortfolio() {
-  const navigate = useNavigate();
-  const queryClient = useQueryClient();
   const { setGameName } = useGame();
   const { data, isLoading, error } = useVoodooPortfolio(30);
 
   const [configOpen, setConfigOpen] = useState(false);
-  const [runOpen, setRunOpen] = useState(false);
-  const [pendingRun, setPendingRun] = useState<{
-    gameName: string;
-    config: PipelineRunConfig;
-  } | null>(null);
+  const { startRun, openDialog, run } = usePipelineRuns();
+
+  // Auto-navigate to the Insights page when a run completes from this view.
+  // The Insights page itself also watches the run, but we want the user to
+  // land there even if they kicked off the analysis from the portfolio.
+  useEffect(() => {
+    if (run?.phase === "done" && run.doneEvent) {
+      setGameName(run.doneEvent.name);
+      // Don't dismiss here — leave the floating pill clickable so the
+      // user can navigate to /insights at their own pace.
+    }
+  }, [run?.phase, run?.doneEvent?.name, setGameName]);
 
   function handleAnalyze(name: string) {
     setGameName(name);
@@ -83,9 +87,9 @@ export function VoodooPortfolio() {
   }
 
   function handleLaunch(name: string, config: PipelineRunConfig) {
-    setPendingRun({ gameName: name, config });
     setConfigOpen(false);
-    setRunOpen(true);
+    startRun(name, config);
+    openDialog();
   }
 
   if (isLoading) {
@@ -240,29 +244,10 @@ export function VoodooPortfolio() {
       <LaunchAnalysisModal
         open={configOpen}
         onOpenChange={setConfigOpen}
-        initialGameName={pendingRun?.gameName ?? ""}
+        initialGameName={run?.gameName ?? ""}
         onLaunch={handleLaunch}
       />
-      <RunAnalysisDialog
-        open={runOpen}
-        onOpenChange={(o) => {
-          setRunOpen(o);
-          if (!o && pendingRun) {
-            // After the user closes a successful run, navigate to /insights so
-            // they can see the new HookLensReport.
-            queryClient.invalidateQueries({ queryKey: ["report"] });
-            queryClient.invalidateQueries({ queryKey: ["reports"] });
-          }
-        }}
-        gameName={pendingRun?.gameName ?? ""}
-        config={pendingRun?.config}
-        onComplete={(name) => {
-          setGameName(name);
-          // Optimistic: jump to the Insights view to see the new report.
-          setTimeout(() => navigate({ to: "/insights" }), 800);
-          setPendingRun(null);
-        }}
-      />
+      <RunAnalysisDialog />
     </div>
   );
 }
