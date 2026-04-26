@@ -31,6 +31,47 @@ import { NetworkBadge } from "./NetworkBadge";
 
 type SortKey = "Run duration" | "Impressions" | "Date";
 
+/**
+ * Performance-tier filter values. ``"all"`` is the no-filter default;
+ * the three others map 1:1 to the badges rendered by
+ * ``performanceTier()`` further down in this file. Single-select keeps
+ * the UI predictable (multi-select would have to handle the implicit
+ * "ordinary, untiered" rows separately).
+ */
+type TierFilter = "all" | "performing" | "trending" | "fresh";
+
+const TIER_FILTERS: {
+  value: TierFilter;
+  label: string;
+  emoji: string;
+  cls: string;
+}[] = [
+  {
+    value: "all",
+    label: "All",
+    emoji: "",
+    cls: "border-border bg-card text-foreground",
+  },
+  {
+    value: "performing",
+    label: "Performing",
+    emoji: "🟢",
+    cls: "border-emerald-500/30 bg-emerald-500/10 text-emerald-300",
+  },
+  {
+    value: "trending",
+    label: "Trending",
+    emoji: "📈",
+    cls: "border-sky-500/30 bg-sky-500/10 text-sky-300",
+  },
+  {
+    value: "fresh",
+    label: "Fresh",
+    emoji: "🆕",
+    cls: "border-amber-500/30 bg-amber-500/10 text-amber-300",
+  },
+];
+
 function MultiSelect<T extends string>({
   label,
   options,
@@ -93,6 +134,35 @@ export function AdLibrary() {
   const [formats, setFormats] = useState<Set<Format>>(new Set());
   const [games, setGames] = useState<Set<string>>(new Set());
   const [sort, setSort] = useState<SortKey>("Impressions");
+  const [tierFilter, setTierFilter] = useState<TierFilter>("all");
+
+  /**
+   * Per-tier counts on the *currently visible* (non-tier-filtered) corpus
+   * — i.e. respecting Network / Format / Game / Region but NOT the tier
+   * pill itself. Lets each pill show a badge like "Performing · 12" so
+   * the PM knows at a glance which buckets have signal.
+   */
+  const tierCounts = useMemo(() => {
+    const base = creativesData.filter(
+      (c) =>
+        (networks.size === 0 || networks.has(c.network)) &&
+        (formats.size === 0 || formats.has(c.format)) &&
+        (games.size === 0 || games.has(c.game)),
+    );
+    const counts: Record<TierFilter, number> = {
+      all: base.length,
+      performing: 0,
+      trending: 0,
+      fresh: 0,
+    };
+    for (const c of base) {
+      const t = performanceTier(c.runDays, c.startedAt);
+      if (!t) continue;
+      const key = t.label.toLowerCase() as TierFilter;
+      if (key in counts) counts[key]++;
+    }
+    return counts;
+  }, [creativesData, networks, formats, games]);
 
   const gamesList = useMemo(
     () => [...new Set(creativesData.map((c) => c.game))].sort(),
@@ -110,8 +180,15 @@ export function AdLibrary() {
       (c) =>
         (networks.size === 0 || networks.has(c.network)) &&
         (formats.size === 0 || formats.has(c.format)) &&
-        (games.size === 0 || games.has(c.game))
+        (games.size === 0 || games.has(c.game)),
     );
+    // Tier pill — keep only creatives whose performanceTier matches.
+    if (tierFilter !== "all") {
+      list = list.filter((c) => {
+        const t = performanceTier(c.runDays, c.startedAt);
+        return t && t.label.toLowerCase() === tierFilter;
+      });
+    }
     list = [...list].sort((a, b) => {
       if (sort === "Run duration") return b.runDays - a.runDays;
       // "Impressions" → sort by REAL SoV (the synthetic impressions field is
@@ -121,7 +198,7 @@ export function AdLibrary() {
       return new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime();
     });
     return list;
-  }, [creativesData, networks, formats, games, sort]);
+  }, [creativesData, networks, formats, games, sort, tierFilter]);
 
   if (isLoading) {
     return (
@@ -133,6 +210,47 @@ export function AdLibrary() {
 
   return (
     <div className="space-y-5">
+      {/* Tier pills — quick performance filter (Performing / Trending /
+          Fresh / All) with live counts. Single-select; clicking the
+          active pill re-clicks "All". */}
+      <div className="flex flex-wrap items-center gap-1.5">
+        {TIER_FILTERS.map((t) => {
+          const active = tierFilter === t.value;
+          const count = tierCounts[t.value];
+          const disabled = count === 0 && t.value !== "all";
+          return (
+            <button
+              key={t.value}
+              type="button"
+              disabled={disabled}
+              onClick={() => setTierFilter(active ? "all" : t.value)}
+              className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-all ${
+                active
+                  ? `${t.cls} ring-1 ring-current/30 shadow-sm`
+                  : "border-border bg-card text-muted-foreground hover:text-foreground hover:border-border/70"
+              } ${disabled ? "cursor-not-allowed opacity-40" : "cursor-pointer"}`}
+              title={
+                t.value === "all"
+                  ? `Show all ${count} creatives`
+                  : disabled
+                    ? `No ${t.label.toLowerCase()} creatives in current view`
+                    : `Show only ${t.label.toLowerCase()} (${count})`
+              }
+            >
+              {t.emoji && <span aria-hidden>{t.emoji}</span>}
+              <span>{t.label}</span>
+              <span
+                className={`tabular-nums ${
+                  active ? "opacity-90" : "text-muted-foreground/70"
+                }`}
+              >
+                {count}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+
       <div className="flex flex-wrap items-center gap-2">
         <MultiSelect
           label="Network"
