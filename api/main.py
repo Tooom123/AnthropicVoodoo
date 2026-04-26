@@ -2234,9 +2234,14 @@ async def render_variant_video(
     #          (music bed + optional voice) like before.
     audio_overlay_applied = False
     if not is_rich and (include_audio or include_voice or include_sfx):
+        # Stash the target_game on the variant dict so the audio layer
+        # can read Game DNA when authoring the bespoke narration script.
+        # (Variant dicts as cached on disk don't carry the target_game
+        # link, so we attach it here for the duration of this request.)
+        variant_with_dna = {**variant, "_target_game": target_game}
         audio_overlay_applied = _try_apply_audio_layers(
             video_path=final_path,
-            variant=variant,
+            variant=variant_with_dna,
             include_music=include_audio,
             include_voice=include_voice,
             include_sfx=include_sfx,
@@ -2378,16 +2383,128 @@ _PITCH_VIBE: dict[str, str] = {
 }
 
 
+def _opus_brainrot_script(
+    *,
+    brief: dict[str, Any],
+    target_game: dict[str, Any],
+    archetype_id: str,
+) -> str | None:
+    """Ask Claude Opus to write a bespoke 12-15-second TikTok-style ad
+    voiceover script for this specific (variant × game) pair.
+
+    Why not just concatenate ``text_overlays + cta``: those are short
+    on-screen captions, not spoken narration. Reading them aloud
+    sounds like an audiobook of subtitle lines. Opus, given the same
+    inputs + the Game DNA, can produce a punchy 30-50-word script
+    with TikTok-narrator energy — direct address ("Hold UP"), all-caps
+    emphasis, mid-sentence beat drops — which is what makes a
+    VO sit right on a 15s ad.
+
+    Output is plain UTF-8 text ready for TTS (caller strips the
+    surrounding markdown if any). Cached on disk per
+    (archetype_id, target_game.app_id) so re-renders of the same
+    variant don't re-bill Anthropic.
+
+    Returns None on any failure (caller falls back to the
+    text_overlays concat path).
+    """
+    import hashlib
+    import os
+    import httpx
+
+    api_key = os.environ.get("ANTHROPIC_API_KEY")
+    if not api_key:
+        return None
+
+    game_name = target_game.get("name") or "the game"
+    palette = target_game.get("palette") or {}
+    visual_style = target_game.get("visual_style") or ""
+    ui_mood = target_game.get("ui_mood") or ""
+    audience = target_game.get("audience_proxy") or ""
+
+    title = brief.get("title") or ""
+    hook = brief.get("hook_3s") or ""
+    scene_flow = brief.get("scene_flow") or []
+    overlays = brief.get("text_overlays") or []
+    cta = brief.get("cta") or "Play now"
+
+    user_prompt = f"""Write a TikTok-style mobile-game ad voiceover for "{game_name}".
+
+The voiceover plays over a 15-second video that ends on the game's logo.
+Length: 30-50 spoken words (≈ 12-15 seconds at conversational TikTok speed).
+
+Tone: brainrot energy, direct address to the viewer, ALL-CAPS emphasis on
+the punchline word, mid-sentence beat drops, ellipses for pauses. Think
+"hold up — that ONE guy is about to take the WHOLE CITY" rather than
+descriptive narration. End with the game name + the CTA verbatim.
+
+Inputs:
+- Game: {game_name}
+- Visual style: {visual_style}
+- UI mood: {ui_mood}
+- Audience: {audience}
+- Variant title: "{title}"
+- 3-second hook: {hook}
+- Scene beats: {" / ".join(scene_flow[:3])}
+- On-screen captions (for tone reference, not to read verbatim): {", ".join([str(o) for o in overlays[:3]])}
+- CTA: {cta}
+
+Return ONLY the spoken text, no quotes, no markdown, no stage directions.
+Keep it under 50 words."""
+
+    cache_key = hashlib.sha256(
+        f"{archetype_id}|{target_game.get('app_id', '')}|{title}".encode()
+    ).hexdigest()[:16]
+    cache_path = (
+        CACHE_DIR / "audio" / "scripts" / f"{cache_key}.txt"
+    )
+    cache_path.parent.mkdir(parents=True, exist_ok=True)
+    if cache_path.exists() and cache_path.stat().st_size > 0:
+        return cache_path.read_text().strip()
+
+    try:
+        r = httpx.post(
+            "https://api.anthropic.com/v1/messages",
+            headers={
+                "x-api-key": api_key,
+                "anthropic-version": "2023-06-01",
+                "content-type": "application/json",
+            },
+            json={
+                # Match the alias used elsewhere in the codebase
+                # (app/creative/brief.py, app/analysis/game_fit.py).
+                # Anthropic resolves the alias to the latest snapshot.
+                "model": "claude-opus-4-7",
+                "max_tokens": 250,
+                "messages": [{"role": "user", "content": user_prompt}],
+            },
+            timeout=30.0,
+        )
+        r.raise_for_status()
+        body = r.json()
+        text = (body.get("content") or [{}])[0].get("text", "").strip()
+        # Strip surrounding quotes / fences if Opus added them
+        text = text.strip("\"'`").strip()
+        if text:
+            cache_path.write_text(text)
+            log.info(
+                "narration script: %d chars · variant=%s · game=%s",
+                len(text), archetype_id, game_name,
+            )
+            return text
+    except Exception as exc:
+        log.warning("Opus narration script failed: %s", exc)
+    return None
+
+
 def _build_brainrot_narration(brief: dict[str, Any]) -> str:
-    """Compose a punchy TikTok-style narration script from the brief.
+    """Fallback narration builder: compose from the brief's
+    ``text_overlays`` + ``cta`` when Opus isn't available.
 
-    The brief's ``text_overlays`` are already short, high-energy lines
-    (3-7 words: "Can 1 person take the whole city?", "Tap to swarm",
-    "210… 480… 900?!"). Concatenating up to 3 of them with the CTA
-    gives a 6-12 second voiceover that fits a 15-18s ad neatly.
-
-    Cleans symbols/arrows that confuse TTS, normalises ellipses for
-    natural pause delivery.
+    Mainly here so the audio pipeline keeps working without Anthropic
+    credentials. The Opus-authored script (``_opus_brainrot_script``)
+    is the preferred path — much punchier delivery, custom per variant
+    rather than a captions-read-aloud feel.
     """
     import re
 
@@ -2570,7 +2687,16 @@ def _try_apply_audio_layers(
     voice_path: Path | None = None
     if include_voice:
         brief = variant.get("brief") or {}
-        narration = _build_brainrot_narration(brief)
+        # Prefer Opus-authored bespoke script (custom per variant),
+        # fall back to text_overlays concat when Anthropic isn't
+        # reachable.
+        target_game = variant.get("_target_game") or {}
+        archetype_id_for_voice = brief.get("archetype_id") or ""
+        narration = _opus_brainrot_script(
+            brief=brief,
+            target_game=target_game,
+            archetype_id=archetype_id_for_voice,
+        ) or _build_brainrot_narration(brief)
         if narration.strip(". "):
             voice_path = video_path.with_suffix(".voice.mp3")
             ok = _generate_tts_openai(narration, voice_id, voice_path)
