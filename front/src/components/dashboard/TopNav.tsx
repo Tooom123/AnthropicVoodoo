@@ -8,15 +8,12 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useTheme } from "@/components/theme-provider";
 import { useState } from "react";
-import { useGame } from "@/lib/game-context";
-
-const RANGES = ["Last 7 days", "Last 30 days", "Last 90 days", "Year to date"] as const;
+import { PERIOD_OPTIONS, useGame } from "@/lib/game-context";
 
 export function TopNav() {
   const { theme, toggle } = useTheme();
-  const { gameName, setGameName } = useGame();
+  const { gameName, setGameName, periodLabel, setPeriodByLabel } = useGame();
   const [input, setInput] = useState(gameName);
-  const [range, setRange] = useState<string>("Last 30 days");
 
   function handleSearch(e: React.FormEvent) {
     e.preventDefault();
@@ -59,14 +56,17 @@ export function TopNav() {
           <DropdownMenuTrigger asChild>
             <Button variant="outline" size="sm" className="gap-2">
               <Calendar className="h-3.5 w-3.5" />
-              <span>{range}</span>
+              <span>{periodLabel}</span>
               <ChevronDown className="h-3.5 w-3.5 opacity-60" />
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
-            {RANGES.map((r) => (
-              <DropdownMenuItem key={r} onClick={() => setRange(r)}>
-                {r}
+            {PERIOD_OPTIONS.map((r) => (
+              <DropdownMenuItem
+                key={r.label}
+                onClick={() => setPeriodByLabel(r.label)}
+              >
+                {r.label}
               </DropdownMenuItem>
             ))}
           </DropdownMenuContent>

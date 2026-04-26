@@ -288,11 +288,19 @@ def get_game(name: str = Query(...)):
     return meta
 
 
+# Curated worldwide expansion for the AdLibrary's "All" Region option.
+# Mirrors app/pipeline.py ALL_COUNTRIES — keep them in sync.
+_AD_LIBRARY_ALL_COUNTRIES = ["US", "GB", "DE", "FR", "JP", "BR", "KR"]
+
+
 @app.get("/api/creatives", response_model=list[Creative])
 def get_creatives(
     game_name: str | None = Query(None),
     category_id: int = Query(7012),
-    country: str = Query("US"),
+    country: str = Query(
+        "US",
+        description="Country code, or 'all' to fan out across the curated worldwide list",
+    ),
     period: str = Query("month"),
     period_date: str = Query(DEFAULT_DATE),
     limit: int = Query(60, ge=1, le=120),
@@ -301,6 +309,11 @@ def get_creatives(
 
     When ``game_name`` is supplied, SensorTower resolves it first and uses its
     category to scope the ad-intel query.
+
+    When ``country='all'``, fans out across the curated worldwide list
+    (US/GB/DE/FR/JP/BR/KR) and dedupes by ``creative_id`` — the AdLibrary's
+    Region filter offers this as the implicit default for showing the
+    broadest global trend slice.
 
     Each row is enriched with the advertiser's ``publisher_name`` and
     ``icon_url`` (from the cached SensorTower app_info payload), so the
@@ -315,27 +328,41 @@ def get_creatives(
     if game_name:
         category_id, _ = _resolve_category(game_name, category_id)
 
-    per_network = max(1, limit // len(_NETWORKS))
-    results: list[Creative] = []
+    countries = (
+        _AD_LIBRARY_ALL_COUNTRIES
+        if country.strip().lower() == "all"
+        else [country]
+    )
+    per_network = max(1, limit // (len(_NETWORKS) * len(countries)))
 
-    for st_network, fe_network in _NETWORKS:
-        try:
-            raws = fetch_top_creatives(
-                category_id=category_id,
-                country=country,
-                network=st_network,
-                period=period,
-                period_date=period_date,
-                max_creatives=per_network,
-            )
-            # Build the enrichment index AFTER the fetches so the cache is
-            # warm. Cheap (10-30 file reads) and only done once per request.
-            app_info_index = _index_sensortower_app_info()
+    seen_ids: set[str] = set()
+    results: list[Creative] = []
+    app_info_index = _index_sensortower_app_info()
+
+    for ctry in countries:
+        for st_network, fe_network in _NETWORKS:
+            try:
+                raws = fetch_top_creatives(
+                    category_id=category_id,
+                    country=ctry,
+                    network=st_network,
+                    period=period,
+                    period_date=period_date,
+                    max_creatives=max(per_network, 4),
+                )
+            except Exception:
+                log.exception(
+                    "fetch_top_creatives failed for %s × %s", st_network, ctry
+                )
+                continue
             for rc in raws:
+                if rc.creative_id in seen_ids:
+                    continue
+                seen_ids.add(rc.creative_id)
                 c = _raw_to_creative(rc, app_info_index=app_info_index)
                 results.append(c.model_copy(update={"network": fe_network}))
-        except Exception:
-            log.exception("fetch_top_creatives failed for network %s", st_network)
+                if len(results) >= limit:
+                    return results
 
     return results
 

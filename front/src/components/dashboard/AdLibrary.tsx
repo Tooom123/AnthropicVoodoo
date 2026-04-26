@@ -72,16 +72,22 @@ function MultiSelect<T extends string>({
   );
 }
 
-const COUNTRIES = ["US", "GB", "DE", "FR", "JP", "BR", "KR"] as const;
+// "All" sentinel ⇒ backend fans out across US/GB/DE/FR/JP/BR/KR and
+// dedupes — wired in api/main.py:get_creatives.
+const COUNTRIES = ["All", "US", "GB", "DE", "FR", "JP", "BR", "KR"] as const;
 type Country = (typeof COUNTRIES)[number];
 
 export function AdLibrary() {
-  const { gameName } = useGame();
+  const { gameName, period } = useGame();
   const [country, setCountry] = useState<Country>("US");
   const { data: creativesData = [], isLoading } = useCreatives({
     game_name: gameName || undefined,
-    country,
-    limit: 60,
+    // The TopNav time dropdown drives this — switching from "Last 30 days"
+    // to "Last 7 days" or "Last 90 days" re-queries SensorTower with the
+    // new period bucket.
+    period,
+    country: country === "All" ? "all" : country,
+    limit: 80,
   });
   const [networks, setNetworks] = useState<Set<Network>>(new Set());
   const [formats, setFormats] = useState<Set<Format>>(new Set());
