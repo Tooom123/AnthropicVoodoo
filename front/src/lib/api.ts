@@ -188,6 +188,18 @@ export interface VoodooPortfolioEntry {
   organic_share: number | null;
   /** Total downloads across all sources in the precache window. */
   total_downloads_3mo: number | null;
+  /**
+   * 30 daily download totals (organic + paid + paid_search + browser),
+   * most recent last. Powers the sparkline on the Voodoo Portfolio cards.
+   */
+  downloads_30d_curve?: number[];
+  /**
+   * Week-over-week change (last 7d sum vs prior 7d sum) as a fraction.
+   * Example: ``-0.34`` means downloads dropped 34% w/w → declining hard,
+   * prompts the PM to "Run analysis" for a creative refresh. ``null`` when
+   * fewer than 14 days of data are available.
+   */
+  downloads_trend_7d_pct?: number | null;
 }
 
 export interface VoodooPortfolioResponse {

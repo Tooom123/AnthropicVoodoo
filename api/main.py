@@ -922,6 +922,16 @@ class VoodooPortfolioEntry(BaseModel):
     ads_by_network: dict[str, int] = {}
     ads_latest_first_seen: str | None = None
     ads_sample: list[VoodooAdSample] = []
+    # UA dependency over a 3-month window (set in scripts/precache_voodoo_ads).
+    paid_share: float | None = None
+    organic_share: float | None = None
+    total_downloads_3mo: int | None = None
+    # 30-day daily download totals (sparkline-ready) + week-over-week trend.
+    # ``downloads_trend_7d_pct`` is a fraction: -0.12 = −12% w/w (declining).
+    # The frontend uses these to flag "needs attention" games on the
+    # Voodoo Portfolio page.
+    downloads_30d_curve: list[int] = []
+    downloads_trend_7d_pct: float | None = None
     # UA dependency split (paid vs organic) over the precache window.
     # All three are optional — None when SensorTower has no
     # downloads_by_sources data for the tenant on that app.

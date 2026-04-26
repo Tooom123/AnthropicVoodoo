@@ -162,6 +162,8 @@ def _build_app_entry(
     meta: AppMetadata,
     ads: list[dict[str, Any]],
     downloads_agg: dict[str, Any] | None = None,
+    downloads_curve: list[int] | None = None,
+    downloads_trend_pct: float | None = None,
 ) -> dict[str, Any]:
     sorted_ads = _sort_ads_by_recency(ads)
     sample_keys = (
@@ -194,6 +196,12 @@ def _build_app_entry(
         "paid_share": agg.get("paid_share"),
         "organic_share": agg.get("organic_share"),
         "total_downloads_3mo": agg.get("total_downloads") or None,
+        # 30-day daily download volume (sparkline-ready) + 7d-vs-prior-7d
+        # change. ``downloads_trend_pct`` is a fraction (e.g. -0.12 = −12%).
+        # The frontend uses these to flag "declining games this week" so a
+        # PM knows where to relaunch creative.
+        "downloads_30d_curve": downloads_curve or [],
+        "downloads_trend_7d_pct": downloads_trend_pct,
     }
 
 
@@ -321,8 +329,33 @@ def main() -> int:
             end_date=DOWNLOADS_END_DATE,
         )
 
+        # 30-day daily downloads time series for the sparkline + trend.
+        from app.sources.voodoo import (
+            compute_downloads_trend,
+            fetch_app_downloads_timeseries,
+        )
+
+        downloads_curve: list[int] = []
+        downloads_trend_pct: float | None = None
+        if meta.unified_app_id:
+            try:
+                breakdown = fetch_app_downloads_timeseries(
+                    meta.unified_app_id,
+                    country=args.country,
+                    days=30,
+                    granularity="daily",
+                )
+                downloads_curve, downloads_trend_pct = compute_downloads_trend(breakdown)
+            except Exception:  # noqa: BLE001
+                log.exception(
+                    "30-day timeseries fetch failed for %s — skipping sparkline",
+                    meta.name,
+                )
+
         ok = err is None
-        rows.append((meta, ads, downloads_agg, ok, err))
+        rows.append(
+            (meta, ads, downloads_agg, downloads_curve, downloads_trend_pct, ok, err)
+        )
         total_ads += len(ads)
 
         if args.sleep_between and idx < len(selected):
@@ -340,8 +373,8 @@ def main() -> int:
             "end_date": DOWNLOADS_END_DATE,
         },
         "apps": [
-            _build_app_entry(meta, ads, downloads_agg)
-            for meta, ads, downloads_agg, _, _ in rows
+            _build_app_entry(meta, ads, downloads_agg, curve, trend)
+            for meta, ads, downloads_agg, curve, trend, _, _ in rows
         ],
     }
 
@@ -357,20 +390,24 @@ def main() -> int:
         f"{summary_kb:.2f} KB summary"
     )
     print("=" * 70)
-    for meta, ads, downloads_agg, ok, err in rows:
+    for meta, ads, downloads_agg, curve, trend, ok, err in rows:
         marker = "✓" if ok and ads else "✗" if not ok else "✓"
         name = meta.name[:38].ljust(38)
         ua_str = ""
         if downloads_agg and downloads_agg.get("paid_share") is not None:
             ua_str = f"  UA {int((downloads_agg['paid_share'] or 0) * 100)}%"
+        trend_str = ""
+        if trend is not None:
+            arrow = "📈" if trend > 0.01 else "📉" if trend < -0.01 else "→"
+            trend_str = f"  {arrow} {trend * 100:+.0f}%"
         if not ok:
             print(f"  ✗ {name}  ERROR: {err}")
             continue
         if not ads:
-            print(f"  ✗ {name}   0 ads   (no recent activity, skipping){ua_str}")
+            print(f"  ✗ {name}   0 ads   (no recent activity, skipping){ua_str}{trend_str}")
             continue
         mix = _format_mix_short(_network_mix(ads))
-        print(f"  {marker} {name}  {len(ads):>3} ads   ({mix}){ua_str}")
+        print(f"  {marker} {name}  {len(ads):>3} ads   ({mix}){ua_str}{trend_str}")
     print(f"\nWrote {SUMMARY_PATH.relative_to(REPO_ROOT)}")
     return 0
 

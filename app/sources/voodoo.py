@@ -483,6 +483,88 @@ def fetch_voodoo_app_creatives(
     return out
 
 
+def fetch_app_downloads_timeseries(
+    unified_app_id: str,
+    *,
+    country: str = "US",
+    days: int = 30,
+    granularity: str = "daily",
+) -> list[dict[str, Any]]:
+    """Return a daily/monthly downloads time series for one app.
+
+    Hits ``/v1/unified/downloads_by_sources`` and returns the
+    ``breakdown[]`` array (~30 points for the default 30-day daily
+    request). Each point has ``date``, ``organic_abs``, ``paid_abs``,
+    ``paid_search_abs``, ``browser_abs`` and the matching ``*_frac``.
+
+    Used by the Voodoo Portfolio page to draw a sparkline + compute a
+    "trending up vs declining this week" signal so the PM knows which
+    games to prioritise re-running ads on.
+
+    Cached on disk per (unified_app_id, country, days, granularity).
+    """
+    from datetime import date, timedelta
+
+    end = date.today()
+    start = end - timedelta(days=days)
+    params: dict[str, Any] = {
+        "app_ids": unified_app_id,
+        "countries": country,
+        "date_granularity": granularity,
+        "start_date": start.isoformat(),
+        "end_date": end.isoformat(),
+    }
+    try:
+        resp = disk_cached(
+            VOODOO_CACHE_DIR / "downloads_timeseries",
+            f"{unified_app_id}_{country}_{days}_{granularity}",
+            params,
+            lambda: _get("/v1/unified/downloads_by_sources", params),
+        )
+    except Exception:
+        log.exception(
+            "fetch_app_downloads_timeseries: API call failed for %s",
+            unified_app_id,
+        )
+        return []
+    apps = resp.get("data") or []
+    if not apps:
+        return []
+    return apps[0].get("breakdown") or []
+
+
+def compute_downloads_trend(
+    breakdown: list[dict[str, Any]],
+) -> tuple[list[int], float | None]:
+    """Compute (daily totals list, week-over-week trend percent).
+
+    ``daily_totals``: one entry per breakdown point, sum of all download
+    sources (organic + paid + paid_search + browser; *_browse and *_search
+    are sub-buckets of organic_abs and would double-count).
+
+    ``trend_pct``: (last 7d sum / prior 7d sum) − 1, expressed as a
+    fraction (e.g. 0.065 = +6.5% w/w). Returns ``None`` when there are
+    fewer than 14 daily points or when the prior window is zero.
+    """
+    daily: list[int] = []
+    for p in breakdown:
+        total = (
+            int(p.get("organic_abs") or 0)
+            + int(p.get("paid_abs") or 0)
+            + int(p.get("paid_search_abs") or 0)
+            + int(p.get("browser_abs") or 0)
+        )
+        daily.append(total)
+
+    if len(daily) < 14:
+        return daily, None
+    recent = sum(daily[-7:])
+    prior = sum(daily[-14:-7])
+    if prior == 0:
+        return daily, None
+    return daily, (recent - prior) / prior
+
+
 def is_voodoo_app(app_id: str) -> bool:
     """Cheap catalog-membership check for the brief-generation pipeline.
 
@@ -496,6 +578,8 @@ def is_voodoo_app(app_id: str) -> bool:
 __all__ = [
     "fetch_voodoo_catalog",
     "fetch_voodoo_app_creatives",
+    "fetch_app_downloads_timeseries",
+    "compute_downloads_trend",
     "is_voodoo_app",
     "VOODOO_PUBLISHER_ID",
     "VOODOO_PUBLISHER_NAME",

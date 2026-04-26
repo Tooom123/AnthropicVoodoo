@@ -35,6 +35,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { ArrowDown, ArrowUp, Minus, TrendingDown } from "lucide-react";
 import { useNavigate } from "@tanstack/react-router";
 import { LaunchAnalysisModal } from "@/components/insights/LaunchAnalysisModal";
 import {
@@ -145,6 +146,23 @@ export function VoodooPortfolio() {
 
   const totalAds = data.apps.reduce((acc, a) => acc + a.ads_total, 0);
   const networkTotals = aggregateNetworks(data.apps);
+  const decliningApps = data.apps.filter(
+    (a) =>
+      typeof a.downloads_trend_7d_pct === "number" &&
+      a.downloads_trend_7d_pct < -0.05,
+  );
+
+  // Sort: declining games first (most negative trend at the top), then
+  // unknowns (no trend data), then growers. The PM should see "needs
+  // attention" titles before the cruise-control hits.
+  const sortedApps = [...data.apps].sort((a, b) => {
+    const ta = a.downloads_trend_7d_pct;
+    const tb = b.downloads_trend_7d_pct;
+    if (ta == null && tb == null) return 0;
+    if (ta == null) return 1;
+    if (tb == null) return -1;
+    return ta - tb;
+  });
 
   return (
     <div className="space-y-6">
@@ -182,8 +200,39 @@ export function VoodooPortfolio() {
         )}
       </div>
 
+      {decliningApps.length > 0 && (
+        <div className="rounded-lg border border-rose-500/30 bg-rose-500/5 p-4">
+          <div className="flex items-start gap-3">
+            <TrendingDown className="mt-0.5 h-5 w-5 flex-shrink-0 text-rose-400" />
+            <div>
+              <h3 className="text-sm font-semibold text-rose-200">
+                {decliningApps.length} title
+                {decliningApps.length === 1 ? "" : "s"} declining this week —
+                worth running a fresh creative analysis
+              </h3>
+              <p className="mt-1 text-xs text-muted-foreground">
+                {decliningApps
+                  .slice()
+                  .sort(
+                    (a, b) =>
+                      (a.downloads_trend_7d_pct ?? 0) -
+                      (b.downloads_trend_7d_pct ?? 0),
+                  )
+                  .map(
+                    (a) =>
+                      `${a.name} (${(
+                        (a.downloads_trend_7d_pct ?? 0) * 100
+                      ).toFixed(0)}%)`,
+                  )
+                  .join(" · ")}
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {data.apps.map((app) => (
+        {sortedApps.map((app) => (
           <GameCard key={app.app_id} app={app} onAnalyze={handleAnalyze} />
         ))}
       </div>
@@ -276,6 +325,17 @@ function GameCard({ app, onAnalyze }: GameCardProps) {
             </div>
           </div>
         </div>
+
+        {/* 30-day downloads sparkline + week-over-week trend chip — surfaces
+            "needs attention" titles. The card border tints rose when w/w
+            drop is steep, so a PM scanning the grid spots them in 2s. */}
+        {(app.downloads_30d_curve?.length ?? 0) > 0 && (
+          <DownloadsTrendStrip
+            curve={app.downloads_30d_curve ?? []}
+            trendPct={app.downloads_trend_7d_pct ?? null}
+            country="US"
+          />
+        )}
 
         {/* Ad activity strip */}
         <div className="border-t border-border bg-muted/20 px-4 py-3">
@@ -577,6 +637,129 @@ function UaDependencyStrip({
             {abbrevNumber(totalDownloads)} dl · 90d
           </span>
         )}
+      </div>
+    </div>
+  );
+}
+
+interface DownloadsTrendStripProps {
+  curve: number[];
+  trendPct: number | null;
+  country: string;
+}
+
+/**
+ * 30-day downloads sparkline + week-over-week trend chip.
+ *
+ * Sparkline = inline SVG polyline normalised to the cell's height. No
+ * recharts dep; renders in <1ms even with 30 cards on screen.
+ *
+ * Trend chip color:
+ * - rose when w/w drop ≥ 5% (declining → "run analysis" CTA in primary)
+ * - amber when w/w drop 1–5% (slowing)
+ * - emerald when w/w growth ≥ 1% (healthy)
+ * - muted when |Δ| < 1% (flat)
+ */
+function DownloadsTrendStrip({
+  curve,
+  trendPct,
+  country,
+}: DownloadsTrendStripProps) {
+  if (curve.length === 0) return null;
+
+  const min = Math.min(...curve);
+  const max = Math.max(...curve);
+  const range = max - min || 1;
+  const w = 100;
+  const h = 28;
+  const stepX = curve.length > 1 ? w / (curve.length - 1) : 0;
+  const points = curve
+    .map((v, i) => {
+      const x = i * stepX;
+      const y = h - ((v - min) / range) * h;
+      return `${x.toFixed(2)},${y.toFixed(2)}`;
+    })
+    .join(" ");
+
+  const last7Total = curve.slice(-7).reduce((a, b) => a + b, 0);
+  const last7Avg = Math.round(last7Total / Math.min(7, curve.length));
+
+  let trendColor = "text-muted-foreground";
+  let trendIcon = <Minus className="h-3 w-3" />;
+  let strokeColor = "rgb(148 163 184)"; // slate-400
+  let label = "stable";
+  if (typeof trendPct === "number") {
+    if (trendPct < -0.05) {
+      trendColor = "text-rose-300";
+      trendIcon = <ArrowDown className="h-3 w-3" />;
+      strokeColor = "#fb7185"; // rose-400
+      label = "declining";
+    } else if (trendPct < -0.01) {
+      trendColor = "text-amber-300";
+      trendIcon = <ArrowDown className="h-3 w-3" />;
+      strokeColor = "#fbbf24"; // amber-400
+      label = "slowing";
+    } else if (trendPct > 0.01) {
+      trendColor = "text-emerald-300";
+      trendIcon = <ArrowUp className="h-3 w-3" />;
+      strokeColor = "#34d399"; // emerald-400
+      label = "growing";
+    }
+  }
+
+  return (
+    <div
+      className="border-t border-border bg-muted/10 px-4 py-3"
+      title={`${label} · last 7d avg ${last7Avg.toLocaleString()} dl/day · ${country}`}
+    >
+      <div className="flex items-baseline justify-between text-[11px] uppercase tracking-wider text-muted-foreground">
+        <span>Downloads · 30d</span>
+        {typeof trendPct === "number" ? (
+          <span
+            className={`inline-flex items-center gap-0.5 normal-case tracking-normal ${trendColor}`}
+          >
+            {trendIcon}
+            <span className="font-semibold tabular-nums">
+              {`${trendPct >= 0 ? "+" : ""}${(trendPct * 100).toFixed(0)}%`}
+            </span>
+            <span className="text-[10px] text-muted-foreground">w/w</span>
+          </span>
+        ) : (
+          <span className="text-muted-foreground/60 normal-case tracking-normal">
+            n/a
+          </span>
+        )}
+      </div>
+      <svg
+        viewBox={`0 0 ${w} ${h}`}
+        preserveAspectRatio="none"
+        className="mt-1.5 h-7 w-full"
+        aria-label={`30-day downloads sparkline · ${label}`}
+      >
+        <polyline
+          points={points}
+          fill="none"
+          stroke={strokeColor}
+          strokeWidth="1.5"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          vectorEffect="non-scaling-stroke"
+        />
+        {curve.length > 0 && (
+          <circle
+            cx={(curve.length - 1) * stepX}
+            cy={h - ((curve[curve.length - 1] - min) / range) * h}
+            r="1.6"
+            fill={strokeColor}
+          />
+        )}
+      </svg>
+      <div className="mt-1 text-[10px] text-muted-foreground">
+        last 7d avg{" "}
+        <span className="font-medium text-foreground tabular-nums">
+          {abbrevNumber(last7Avg)}
+        </span>{" "}
+        dl/day · {country}
       </div>
     </div>
   );
