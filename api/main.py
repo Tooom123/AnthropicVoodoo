@@ -2083,16 +2083,25 @@ async def render_variant_video(
             )
 
     last_idx = len(local_frames) - 1
+    # Kling 2.6 Pro REJECTS `lastFrameImage` + `generateAudio` together
+    # (verified empirically: the API returns a job-level error
+    # "End image is not supported when audio generation is enabled").
+    # Trade-off:
+    #   fast → lastFrameImage on clip 3 = smooth visual morph into
+    #          endcard. Clips silent (post-hoc music overlay).
+    #   rich → no lastFrameImage. Clips have native audio, accept a
+    #          visual cut at the clip 3 → endcard handoff (the audio
+    #          cuts there too anyway since the endcard is silent).
+    use_tail_on_last = endcard_png is not None and not is_rich
     log.info(
         "render_variant_video: %s · archetype=%s · %d clips × %s · "
-        "audio=%s · tail_image_on_clip%d=%s",
+        "audio=%s · tail_image=%s",
         game_name,
         archetype_id,
         len(local_frames),
         chosen_model,
         "native" if is_rich else "post-hoc",
-        last_idx,
-        bool(endcard_png),
+        "endcard" if use_tail_on_last else "off",
     )
     try:
         results = await asyncio.gather(
@@ -2101,10 +2110,10 @@ async def render_variant_video(
                     i,
                     frame,
                     per_frame_prompts[i],
-                    # Only the LAST clip gets the endcard tail — clips
-                    # 1 and 2 stay free-running so they can develop the
-                    # narrative without being constrained.
-                    endcard_png if i == last_idx else None,
+                    # Only the LAST clip gets the endcard tail in fast
+                    # mode. In rich mode no clip gets a tail (Kling 2.6
+                    # Pro can't combine tail + audio).
+                    endcard_png if (i == last_idx and use_tail_on_last) else None,
                 )
                 for i, frame in enumerate(local_frames)
             ]

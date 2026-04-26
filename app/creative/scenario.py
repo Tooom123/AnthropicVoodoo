@@ -440,8 +440,18 @@ def call_scenario_video(
             return asset_url, result
 
         if status in ("failure", "canceled"):
+            # Scenario surfaces the actual reason under metadata.error
+            # (validation rejections like "end_image not supported with
+            # audio", quota exhaustion, content-policy blocks, etc.).
+            # Bubbling the message up makes 502s in the UI actionable
+            # instead of opaque "status=failure".
+            err_detail = (
+                (body["job"].get("metadata") or {}).get("error")
+                or "no detail provided"
+            )
             raise RuntimeError(
-                f"Scenario video job {job_id} ended with status={status}"
+                f"Scenario video job {job_id} ended with status={status}: "
+                f"{err_detail}"
             )
         time.sleep(5.0)  # video gen polls less aggressively
 
