@@ -39,7 +39,6 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import {
-  abbrevNumber,
   FORMAT_HEX,
   FORMATS,
   NETWORK_HEX,
@@ -59,17 +58,7 @@ function trendVsRecent(c: Creative): number {
   return ((n % 11) - 5); // -5..+5
 }
 
-function spendTier(spend: number): "small" | "medium" | "large" {
-  if (spend >= 150_000) return "large";
-  if (spend >= 60_000) return "medium";
-  return "small";
-}
 
-const TIER_RANGE: Record<ReturnType<typeof spendTier>, [number, number]> = {
-  small: [80, 80],
-  medium: [200, 200],
-  large: [380, 380],
-};
 
 // ---------- subcomponents ----------
 
@@ -151,10 +140,13 @@ export function PerformanceSignals() {
   const [sortKey, setSortKey] = useState<SortKey>("score");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
 
+  // Use real SoV (0–1) as the performance signal; convert to 0–100 for display
+  const sovOf = (c: Creative) => (c.sov ?? 0) * 100;
+
   const categoryAvg = useMemo(
     () =>
       creatives.length
-        ? Math.round(creatives.reduce((s: number, c: Creative) => s + c.score, 0) / creatives.length)
+        ? creatives.reduce((s, c) => s + sovOf(c), 0) / creatives.length
         : 0,
     [creatives],
   );
@@ -167,11 +159,11 @@ export function PerformanceSignals() {
       creatives.reduce((s, c) => s + c.runDays, 0) / creatives.length,
     );
 
-    // top network by avg score
+    // top network by avg SoV
     const byNet = new Map<string, { sum: number; n: number }>();
     creatives.forEach((c) => {
       const e = byNet.get(c.network) ?? { sum: 0, n: 0 };
-      e.sum += c.score;
+      e.sum += sovOf(c);
       e.n += 1;
       byNet.set(c.network, e);
     });
@@ -179,17 +171,14 @@ export function PerformanceSignals() {
     let topNetScore = 0;
     byNet.forEach((v, k) => {
       const avg = v.sum / v.n;
-      if (avg > topNetScore) {
-        topNetScore = avg;
-        topNet = k;
-      }
+      if (avg > topNetScore) { topNetScore = avg; topNet = k; }
     });
 
-    // best format by avg score
+    // best format by avg SoV
     const byFmt = new Map<string, { sum: number; n: number }>();
     creatives.forEach((c) => {
       const e = byFmt.get(c.format) ?? { sum: 0, n: 0 };
-      e.sum += c.score;
+      e.sum += sovOf(c);
       e.n += 1;
       byFmt.set(c.format, e);
     });
@@ -197,10 +186,7 @@ export function PerformanceSignals() {
     let bestFmtScore = 0;
     byFmt.forEach((v, k) => {
       const avg = v.sum / v.n;
-      if (avg > bestFmtScore) {
-        bestFmtScore = avg;
-        bestFmt = k;
-      }
+      if (avg > bestFmtScore) { bestFmtScore = avg; bestFmt = k; }
     });
 
     const longRunners = creatives.filter((c) => c.runDays >= 30).length;
@@ -208,23 +194,25 @@ export function PerformanceSignals() {
     return { avgRun, topNet, topNetScore, bestFmt, longRunners };
   }, [creatives]);
 
-  // ----- left chart: top 8 by score -----
+  // ----- left chart: top 8 by SoV -----
   const top8 = useMemo(
     () =>
       [...creatives]
-        .sort((a, b) => b.score - a.score)
+        .filter((c) => (c.sov ?? 0) > 0)
+        .sort((a, b) => (b.sov ?? 0) - (a.sov ?? 0))
         .slice(0, 8)
         .map((c) => ({
           ...c,
-          label: `${c.game.split(" ")[0]} · ${c.format} · ${c.id.replace("CR-", "#")}`,
+          sovPct: parseFloat((sovOf(c)).toFixed(2)),
+          label: `${c.game.split(" ")[0]} · ${c.format}`,
         })),
-    [],
+    [creatives],
   );
 
   // ----- table sorting -----
   const sortedRows = useMemo(() => {
     const ranked = [...creatives]
-      .sort((a, b) => b.score - a.score)
+      .sort((a, b) => (b.sov ?? 0) - (a.sov ?? 0))
       .map((c, i) => ({ ...c, rank: i + 1, trend: trendVsRecent(c) }));
 
     return [...ranked].sort((a, b) => {
@@ -241,10 +229,10 @@ export function PerformanceSignals() {
         case "runDays":
           return (a.runDays - b.runDays) * dir;
         case "impressions":
-          return (a.impressions - b.impressions) * dir;
+          return ((a.sov ?? 0) - (b.sov ?? 0)) * dir;
         case "score":
         default:
-          return (a.score - b.score) * dir;
+          return ((a.sov ?? 0) - (b.sov ?? 0)) * dir;
       }
     });
   }, [creatives, sortKey, sortDir]);
@@ -319,9 +307,9 @@ export function PerformanceSignals() {
         {/* LEFT: top creatives bar */}
         <Card className="border-border bg-card p-4">
           <div className="mb-3">
-            <h3 className="text-[15px] font-medium">Top creatives by proxy score</h3>
+            <h3 className="text-[15px] font-medium">Top creatives by Share of Voice</h3>
             <p className="text-xs text-muted-foreground">
-              Score = weighted index of run duration × estimated impressions
+              Real SensorTower SoV — % of ad impressions in the category
             </p>
           </div>
           <div className="h-[320px] w-full">
@@ -342,7 +330,8 @@ export function PerformanceSignals() {
                 />
                 <XAxis
                   type="number"
-                  domain={[0, 100]}
+                  domain={[0, "auto"]}
+                  tickFormatter={(v) => `${v.toFixed(1)}%`}
                   stroke="#9ca3af"
                   fontSize={11}
                   tickLine={false}
@@ -372,14 +361,14 @@ export function PerformanceSignals() {
                           Run: <span className="font-medium">{d.runDays}d</span>
                         </div>
                         <div>
-                          Score: <span className="font-medium">{d.score}</span>
+                          SoV: <span className="font-medium">{sovOf(d).toFixed(2)}%</span>
                         </div>
                       </div>
                     );
                   }}
                 />
                 <Bar
-                  dataKey="score"
+                  dataKey="sovPct"
                   radius={[0, 4, 4, 0]}
                   cursor="pointer"
                 >
@@ -410,9 +399,9 @@ export function PerformanceSignals() {
         {/* RIGHT: scatter */}
         <Card className="border-border bg-card p-4">
           <div className="mb-3">
-            <h3 className="text-[15px] font-medium">Run duration vs reach</h3>
+            <h3 className="text-[15px] font-medium">Run duration vs performance score</h3>
             <p className="text-xs text-muted-foreground">
-              Dot size = estimated spend tier
+              X = days active · Y = proxy score · dot size = estimated spend tier
             </p>
           </div>
           <div className="h-[320px] w-full">
@@ -447,13 +436,13 @@ export function PerformanceSignals() {
                 />
                 <YAxis
                   type="number"
-                  dataKey="impressions"
-                  name="Impressions"
+                  dataKey="score"
+                  name="Score"
+                  domain={[0, 100]}
                   stroke="#9ca3af"
                   fontSize={11}
                   tickLine={false}
                   axisLine={false}
-                  tickFormatter={(v) => abbrevNumber(v)}
                 />
                 <ZAxis type="number" dataKey="z" range={[80, 380]} />
                 <Tooltip
@@ -468,11 +457,9 @@ export function PerformanceSignals() {
                           {d.network} · {d.format}
                         </div>
                         <div className="mt-1">
-                          Score: <span className="font-medium">{d.score}</span>
+                          SoV: <span className="font-medium">{sovOf(d).toFixed(2)}%</span>
                         </div>
-                        <div>
-                          {d.runDays}d · {abbrevNumber(d.impressions)} impr.
-                        </div>
+                        <div>{d.runDays}d active</div>
                       </div>
                     );
                   }}
@@ -482,10 +469,10 @@ export function PerformanceSignals() {
                     key={f}
                     name={f}
                     data={creatives
-                      .filter((c) => c.format === f)
+                      .filter((c) => c.format === f && (c.sov ?? 0) > 0)
                       .map((c) => ({
                         ...c,
-                        z: TIER_RANGE[spendTier(c.spendEstimate)][0],
+                        z: Math.max(80, Math.min(380, sovOf(c) * 80)),
                       }))}
                     fill={FORMAT_HEX[f]}
                     fillOpacity={0.85}
@@ -607,13 +594,13 @@ export function PerformanceSignals() {
                   </TableCell>
                   <TableCell className="text-right tabular-nums">{c.runDays}d</TableCell>
                   <TableCell className="text-right tabular-nums">
-                    {abbrevNumber(c.impressions)}
+                    {sovOf(c).toFixed(2)}%
                   </TableCell>
                   <TableCell>
                     <div className="flex items-center gap-2">
-                      <Progress value={c.score} className="h-1.5 flex-1" />
-                      <span className="w-7 text-right text-xs tabular-nums text-muted-foreground">
-                        {c.score}
+                      <Progress value={sovOf(c)} className="h-1.5 flex-1" />
+                      <span className="w-12 text-right text-xs tabular-nums text-muted-foreground">
+                        {sovOf(c).toFixed(2)}%
                       </span>
                     </div>
                   </TableCell>
@@ -645,7 +632,7 @@ export function PerformanceSignals() {
           side="right"
           className="w-full sm:max-w-[420px] bg-sidebar border-l border-sidebar-border"
         >
-          {selected && <CreativeDetail creative={selected} categoryAvg={categoryAvg} />}
+          {selected && <CreativeDetail creative={selected} categoryAvg={categoryAvg} sovOf={sovOf} />}
         </SheetContent>
       </Sheet>
     </div>
@@ -687,10 +674,10 @@ function SortableHead({
   );
 }
 
-function CreativeDetail({ creative, categoryAvg }: { creative: Creative; categoryAvg: number }) {
+function CreativeDetail({ creative, categoryAvg, sovOf }: { creative: Creative; categoryAvg: number; sovOf: (c: Creative) => number }) {
   const data = [
-    { name: "This creative", value: creative.score, fill: NETWORK_HEX[creative.network] },
-    { name: "Category avg", value: categoryAvg, fill: "oklch(0.5 0.02 260)" },
+    { name: "This creative", value: parseFloat(sovOf(creative).toFixed(2)), fill: NETWORK_HEX[creative.network] },
+    { name: "Category avg", value: parseFloat(categoryAvg.toFixed(2)), fill: "oklch(0.5 0.02 260)" },
   ];
 
   return (
@@ -731,9 +718,9 @@ function CreativeDetail({ creative, categoryAvg }: { creative: Creative; categor
             </span>
           </DetailRow>
           <DetailRow label="Run duration">{creative.runDays} days</DetailRow>
-          <DetailRow label="Impressions">{abbrevNumber(creative.impressions)}</DetailRow>
-          <DetailRow label="Est. spend">${abbrevNumber(creative.spendEstimate)}</DetailRow>
-          <DetailRow label="Perf. score">{creative.score}</DetailRow>
+          <DetailRow label="Share of Voice">{sovOf(creative).toFixed(2)}%</DetailRow>
+          <DetailRow label="Publisher">{creative.publisherName ?? "—"}</DetailRow>
+          <DetailRow label="SoV score">{sovOf(creative).toFixed(2)}%</DetailRow>
         </div>
 
         <div>
