@@ -47,34 +47,34 @@
 
 /* Light mode (kept clean & readable) */
 :root {
-  --radius: 0.5rem;
-  --background: oklch(0.98 0.005 250);
-  --foreground: oklch(0.18 0.02 260);
+  --radius: 0.625rem;
+  --background: oklch(0.99 0 0);
+  --foreground: oklch(0.13 0.02 265);
   --card: oklch(1 0 0);
-  --card-foreground: oklch(0.18 0.02 260);
+  --card-foreground: oklch(0.13 0.02 265);
   --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.18 0.02 260);
-  --primary: oklch(0.62 0.18 255);
-  --primary-foreground: oklch(0.98 0.005 250);
-  --secondary: oklch(0.95 0.01 250);
-  --secondary-foreground: oklch(0.2 0.02 260);
-  --muted: oklch(0.95 0.01 250);
-  --muted-foreground: oklch(0.5 0.02 260);
-  --accent: oklch(0.62 0.18 255);
-  --accent-foreground: oklch(0.98 0.005 250);
+  --popover-foreground: oklch(0.13 0.02 265);
+  --primary: oklch(0.58 0.22 264);
+  --primary-foreground: oklch(0.99 0 0);
+  --secondary: oklch(0.96 0.008 265);
+  --secondary-foreground: oklch(0.2 0.02 265);
+  --muted: oklch(0.96 0.005 265);
+  --muted-foreground: oklch(0.52 0.02 265);
+  --accent: oklch(0.58 0.22 264);
+  --accent-foreground: oklch(0.99 0 0);
   --destructive: oklch(0.6 0.22 27);
-  --destructive-foreground: oklch(0.98 0.005 250);
-  --border: oklch(0.9 0.01 250);
-  --input: oklch(0.9 0.01 250);
-  --ring: oklch(0.62 0.18 255);
-  --sidebar: oklch(0.97 0.005 250);
-  --sidebar-foreground: oklch(0.2 0.02 260);
-  --sidebar-primary: oklch(0.62 0.18 255);
-  --sidebar-primary-foreground: oklch(0.98 0.005 250);
-  --sidebar-accent: oklch(0.94 0.01 250);
-  --sidebar-accent-foreground: oklch(0.2 0.02 260);
-  --sidebar-border: oklch(0.9 0.01 250);
-  --sidebar-ring: oklch(0.62 0.18 255);
+  --destructive-foreground: oklch(0.99 0 0);
+  --border: oklch(0.91 0.007 265);
+  --input: oklch(0.91 0.007 265);
+  --ring: oklch(0.58 0.22 264);
+  --sidebar: oklch(0.985 0.003 265);
+  --sidebar-foreground: oklch(0.2 0.02 265);
+  --sidebar-primary: oklch(0.58 0.22 264);
+  --sidebar-primary-foreground: oklch(0.99 0 0);
+  --sidebar-accent: oklch(0.93 0.01 265);
+  --sidebar-accent-foreground: oklch(0.2 0.02 265);
+  --sidebar-border: oklch(0.9 0.007 265);
+  --sidebar-ring: oklch(0.58 0.22 264);
   --network-meta: oklch(0.6 0.2 260);
   --network-google: oklch(0.65 0.18 145);
   --network-tiktok: oklch(0.62 0.27 5);
@@ -130,6 +130,8 @@
 
   body {
     background-color: var(--color-background);
+    background-image: radial-gradient(circle, oklch(0.82 0.01 265) 1px, transparent 1px);
+    background-size: 22px 22px;
     color: var(--color-foreground);
     font-feature-settings:
       "cv11", "ss01";
