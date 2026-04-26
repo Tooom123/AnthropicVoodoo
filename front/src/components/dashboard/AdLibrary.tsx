@@ -307,8 +307,23 @@ function CreativeCard({ creative: c }: CreativeCardProps) {
             <NetworkBadge network={c.network} />
           </div>
 
-          {/* Honest stats: run duration + (Share of Voice when SensorTower
-              provides it, else first-seen date — never a fake numeric). */}
+          {/* Performance signal: runDays-based tier + a "trending" badge
+              when first-seen is < 14d. The tier is the most honest
+              read-at-a-glance KPI we have — when a creative survives
+              30d+ in the SensorTower top-N, it's performing. */}
+          {(() => {
+            const tier = performanceTier(c.runDays, c.startedAt);
+            if (!tier) return null;
+            return (
+              <div
+                className={`flex items-center gap-1.5 rounded-md border px-2 py-1 text-[10px] font-medium ${tier.cls}`}
+                title={tier.tooltip}
+              >
+                <span>{tier.emoji}</span>
+                <span>{tier.label}</span>
+              </div>
+            );
+          })()}
           <div className="grid grid-cols-2 gap-2 text-xs">
             <div className="rounded-md bg-muted/50 px-2 py-1.5">
               <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
@@ -399,4 +414,56 @@ function CreativeCard({ creative: c }: CreativeCardProps) {
       </Dialog>
     </>
   );
+}
+
+/**
+ * Classify a creative as Trending / Performing / Fresh based on its
+ * SensorTower-reported run duration and first-seen date — the most
+ * honest read-at-a-glance signal we have without growth-rate data.
+ *
+ * Heuristics (drawn from mobile UA folklore):
+ * - **Performing** ≥ 90 days running. Long-runners are battle-tested
+ *   winners; advertisers don't keep losing creatives in market for 3+
+ *   months. Emerald.
+ * - **Trending** 30–90 days running AND first-seen ≤ 60 days ago. Recent
+ *   enough to still be growing, established enough to know it works.
+ *   Sky-blue.
+ * - **Fresh** < 7 days first-seen. Just launched, watch this one.
+ *   Amber.
+ *
+ * Returns ``null`` when the creative falls in the "ordinary" 7-30 day
+ * band — no badge clutter for unremarkable rows.
+ */
+function performanceTier(
+  runDays: number,
+  startedAt: string,
+): { label: string; emoji: string; cls: string; tooltip: string } | null {
+  const startedMs = startedAt ? new Date(startedAt).getTime() : 0;
+  const ageDays = startedMs > 0 ? (Date.now() - startedMs) / 86_400_000 : 999;
+
+  if (runDays >= 90) {
+    return {
+      label: "Performing",
+      emoji: "🟢",
+      cls: "border-emerald-500/30 bg-emerald-500/10 text-emerald-300",
+      tooltip: `Running ${runDays}d (3 months+) — battle-tested winner`,
+    };
+  }
+  if (runDays >= 30 && ageDays <= 60) {
+    return {
+      label: "Trending",
+      emoji: "📈",
+      cls: "border-sky-500/30 bg-sky-500/10 text-sky-300",
+      tooltip: `Running ${runDays}d, launched ${Math.round(ageDays)}d ago — proven hook still in growth`,
+    };
+  }
+  if (ageDays <= 7) {
+    return {
+      label: "Fresh",
+      emoji: "🆕",
+      cls: "border-amber-500/30 bg-amber-500/10 text-amber-300",
+      tooltip: `First seen ${Math.round(ageDays)}d ago — just launched`,
+    };
+  }
+  return null;
 }
