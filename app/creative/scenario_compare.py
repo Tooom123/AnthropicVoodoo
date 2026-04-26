@@ -10,6 +10,19 @@ the most on-DNA visual for a given game. Reuses ``call_scenario`` verbatim
 (prompt, IP-Adapter refs, mode auto-selection) — the only thing that varies
 between calls is ``model_id``.
 
+Some Scenario models (``flux.1-dev``, ``flux.1-schnell``, ``stable-diffusion-xl-base-1.0``,
+``flux.1-composition``) support the ``txt2img-ip-adapter`` endpoint and can
+ingest game screenshots as IP-Adapter style refs. Most "external" custom
+models proxied through Scenario (GPT Image 2, Imagen 4, Ideogram 3, Flux 1.1
+Pro, Seedream 4 …) do NOT — their capability list is just ``[txt2img,
+img2img]``. For those we fall back to plain ``txt2img`` (no refs), so the
+comparison is "pure prompt fidelity" vs "prompt + IPA-anchored DNA".
+
+The list of comparison candidates lives in :data:`DEFAULT_MODELS_TO_COMPARE`
+(curated 2026-04-26 from Scenario's ``GET /v1/models?privacy=public``
+catalog cached at ``data/cache/scenario/models_catalog.json``). Discovery
+helpers below let you re-run that probe whenever Scenario adds new tenants.
+
 Outputs land under ``out_dir/<sanitized_model_id>/hero.png`` together with a
 ``summary.json`` describing the run and a static ``grid.html`` for
 side-by-side review in the browser.
@@ -23,23 +36,313 @@ import re
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
+from typing import NamedTuple
 
 import httpx
 
-from app.creative.scenario import call_scenario
+from app._cache import hash_key
+from app._paths import CACHE_DIR
+from app.creative.scenario import (
+    SCENARIO_BASE,
+    _basic_auth_header,
+    _picsum_stub,
+    call_scenario,
+)
 from app.models import CreativeBrief
 
 log = logging.getLogger(__name__)
 
-DEFAULT_MODELS_TO_COMPARE: list[tuple[str, str]] = [
-    ("flux.1-dev", "Flux 1.0 dev"),
-    ("flux.1-schnell", "Flux Schnell (fast)"),
+
+class ModelCandidate(NamedTuple):
+    """One Scenario model row in the compare matrix.
+
+    Three flavors of Scenario model end up dispatched differently:
+
+    1. ``type=flux.1`` / ``flux.1-composition`` / similar IPA-capable models
+       (``supports_ip_adapter=True``) → :func:`call_scenario` with the
+       brief's screenshot refs (true IPA mode).
+    2. Same family, no refs available → :func:`call_scenario` with
+       ``reference_image_paths=None`` (plain ``txt2img``).
+    3. ``type=custom`` proxied APIs (GPT Image, Imagen, Ideogram, Flux
+       1.1 Pro, Seedream, Veo …) → :func:`call_scenario_custom` which
+       hits ``POST /v1/generate/custom/{modelId}``. The plain
+       ``/v1/generate/txt2img`` route 400s for these with
+       ``Standalone models are not supported for this endpoint``.
+    """
+
+    model_id: str
+    label: str
+    supports_ip_adapter: bool
+    use_custom_endpoint: bool = False
+
+
+# Curated 2026-04-26 from /v1/models?privacy=public (531 models total on the
+# tenant). The 4 IPA-capable rows below are the only ones for which
+# game-DNA style transfer actually works; the rest are pure prompt-driven
+# baselines we test for "ceiling quality" / text-rendering / cost.
+#
+# DO NOT replace this list silently — the script's --models override accepts
+# bare ids and looks up capability metadata from the cached catalog at
+# data/cache/scenario/models_catalog.json (see ``capability_for_model``).
+DEFAULT_MODELS_TO_COMPARE: list[ModelCandidate] = [
+    # ── IP-Adapter capable (game-DNA injection works) ──────────────────
+    # Production default (kept here so the comparison always shows the
+    # baseline the live pipeline ships).
+    ModelCandidate("flux.1-dev", "Flux 1.0 dev", True),
+    # Same family, ~10x cheaper. Useful as a "fast-and-good-enough" sanity
+    # check during cost-sensitive runs.
+    ModelCandidate("flux.1-schnell", "Flux Schnell (fast)", True),
+    # ── Prompt-only premium models (proxied via /generate/custom) ──────
+    # 2026-04-26 ranking on Marble Sort + Block Blast briefs:
+    #   #1  GPT Image 2   — best photoreal hero, perfect text rendering,
+    #                       always returns 9:16; ~11 CU/call.
+    #   #2  Imagen 4 Ult. — premium photoreal, slightly less stylised,
+    #                       defaults to landscape; ~10 CU/call.
+    #   #3  Seedream 4.0  — strong photoreal #2, native 9:16, fastest
+    #                       non-Flux (~30s, 4 CU/call) — cheap+good combo.
+    # Dropped from defaults but available via --models override:
+    #   model_ideogram-v3-quality   — best text rendering but wrong aspect
+    #   model_bfl-flux-1-1-pro      — middle-of-the-road, text issues
+    #   model_7oiHtKChpcLpy4jq3Jq2BG8n (Cutesy 3D) — empty compositions
+    ModelCandidate(
+        "model_openai-gpt-image-2", "GPT Image 2", False, use_custom_endpoint=True
+    ),
+    ModelCandidate(
+        "model_imagen4-ultra", "Imagen 4 Ultra", False, use_custom_endpoint=True
+    ),
+    ModelCandidate(
+        "model_bytedance-seedream-4-editing",
+        "Seedream 4.0",
+        False,
+        use_custom_endpoint=True,
+    ),
 ]
-# NOTE: ``model-sdxl-1-0``, ``model-sdxl-lightning``, ``model-anime-xl`` were
-# tested on 2026-04-26 against /generate/txt2img-ip-adapter and all returned
-# HTTP 404. They're either unavailable on this Scenario tenant or don't
-# support the IP-Adapter route. To extend the comparison set, fish out the
-# real model IDs from the Scenario dashboard and pass them via --models.
+# Historic notes (kept so future agents don't repeat the mistakes):
+#   * ``model-sdxl-1-0`` / ``model-sdxl-lightning`` / ``model-anime-xl`` from
+#     the very first probe all 404'd — those were dashboard slugs, not API
+#     ids.
+#   * ``stable-diffusion-xl-base-1.0`` is the *real* SDXL id but Scenario
+#     returned ``410 Gone — SD 1.5 and SDXL inference is no longer available``
+#     on 2026-04-26. SDXL is dead on this tenant; do not re-add.
+#   * Catalog says ~531 public models (mostly Flux 1.x LoRAs and 14
+#     ``flux.1-composition`` LoRA bundles like ``Cutesy 3D`` — those still
+#     work via the IPA endpoint with ``baseModelId=flux.1-dev`` under the
+#     hood). All third-party APIs (GPT Image, Imagen, Ideogram, Flux 1.1
+#     Pro, Seedream, Veo, Kling …) are ``type=custom`` and require
+#     ``POST /v1/generate/custom/{modelId}`` — see ``call_scenario_custom``.
+#   * The production pipeline default (``DEFAULT_MODEL_ID`` in
+#     ``app.creative.scenario``) stays at ``flux.1-dev`` for now: switching
+#     to GPT Image 2 / Imagen 4 / Seedream would require teaching
+#     ``call_scenario`` about the ``/generate/custom/{modelId}`` route,
+#     which is out of scope for this harness change. See commit body.
+
+CATALOG_CACHE_PATH = CACHE_DIR / "scenario" / "models_catalog.json"
+
+
+def discover_scenario_models(
+    *,
+    cache_path: Path = CATALOG_CACHE_PATH,
+    refresh: bool = False,
+    page_size: int = 100,
+) -> list[dict]:
+    """Fetch every public model on the tenant via ``GET /v1/models``.
+
+    Cached on disk to ``data/cache/scenario/models_catalog.json``. Set
+    ``refresh=True`` to force a re-fetch (Scenario adds new "external"
+    models — Imagen, Seedream, Veo — fairly often).
+
+    Returns the raw ``list[dict]`` from Scenario, with each entry carrying
+    its own ``capabilities``, ``type``, ``name``, ``tags``, etc. If
+    credentials are missing OR the cache exists, no network call is made.
+    """
+    if not refresh and cache_path.exists():
+        return json.loads(cache_path.read_text()).get("models") or []
+
+    auth = _basic_auth_header()
+    if not auth:
+        log.warning(
+            "discover_scenario_models: no SCENARIO credentials, returning empty"
+        )
+        return []
+
+    headers = {"Authorization": auth}
+    all_models: list[dict] = []
+    token: str | None = None
+    page = 0
+    with httpx.Client(timeout=60.0) as client:
+        while True:
+            params: dict[str, object] = {"privacy": "public", "pageSize": page_size}
+            if token:
+                params["paginationToken"] = token
+            r = client.get(
+                f"{SCENARIO_BASE}/models", headers=headers, params=params
+            )
+            r.raise_for_status()
+            body = r.json()
+            chunk = body.get("models") or []
+            all_models.extend(chunk)
+            token = (
+                body.get("nextPaginationToken")
+                or body.get("paginationToken")
+                or (body.get("pagination") or {}).get("nextPaginationToken")
+            )
+            log.info(
+                "discover_scenario_models page=%d got=%d total=%d next=%s",
+                page,
+                len(chunk),
+                len(all_models),
+                "<set>" if token else None,
+            )
+            page += 1
+            if not chunk or not token or page > 30:
+                break
+
+    cache_path.parent.mkdir(parents=True, exist_ok=True)
+    cache_path.write_text(json.dumps({"models": all_models}, indent=2))
+    return all_models
+
+
+def capability_for_model(
+    model_id: str, *, catalog: list[dict] | None = None
+) -> tuple[list[str], dict | None]:
+    """Return ``(capabilities, raw_metadata)`` for a single ``model_id``.
+
+    Used by the CLI when the user passes a bare ``--models foo,bar`` list
+    and we need to decide whether each model can accept IP-Adapter refs.
+    Falls back to an empty list when the model isn't in the catalog.
+    """
+    if catalog is None:
+        catalog = discover_scenario_models()
+    by_id = {m["id"]: m for m in catalog}
+    m = by_id.get(model_id)
+    if not m:
+        return [], None
+    return list(m.get("capabilities") or []), m
+
+
+CUSTOM_CACHE_DIR = CACHE_DIR / "scenario"
+
+
+def call_scenario_custom(
+    prompt: str,
+    *,
+    model_id: str,
+    label: str = "asset",
+    timeout_s: float = 360.0,
+) -> tuple[str, dict]:
+    """Generate via ``POST /v1/generate/custom/{modelId}`` for proxied APIs.
+
+    GPT Image 2, Imagen 4, Ideogram 3, Flux 1.1 Pro, Seedream 4 and the
+    rest of Scenario's ``type=custom`` standalone models do NOT accept
+    ``/generate/txt2img`` (returns ``400: Standalone models are not
+    supported for this endpoint``). They expose a uniform "prompt-only"
+    interface at ``/v1/generate/custom/{modelId}`` and return a normal
+    Scenario job that drains assets the same way the regular endpoints do.
+
+    Cached on disk in the same ``data/cache/scenario/`` directory as
+    :func:`call_scenario` (different cache key namespace, no collision).
+    Falls back to a Picsum stub when credentials are missing OR the job
+    times out, so the comparison harness never crashes mid-batch.
+    """
+    cache_key = {"p": prompt, "m": model_id, "endpoint": "custom"}
+    cache_path = CUSTOM_CACHE_DIR / f"{label}__{hash_key(cache_key)}.json"
+    if cache_path.exists():
+        cached = json.loads(cache_path.read_text())
+        return cached["url"], cached
+
+    auth = _basic_auth_header()
+    if not auth:
+        url = _picsum_stub(prompt)
+        result = {
+            "url": url,
+            "stub": True,
+            "prompt": prompt,
+            "model_id": model_id,
+            "mode": "custom",
+        }
+        CUSTOM_CACHE_DIR.mkdir(parents=True, exist_ok=True)
+        cache_path.write_text(json.dumps(result, indent=2))
+        return url, result
+
+    headers = {"Content-Type": "application/json", "Authorization": auth}
+    payload = {"prompt": prompt}
+
+    log.info(
+        "Scenario CACHE MISS · POST /generate/custom/%s · prompt-only", model_id
+    )
+    r = httpx.post(
+        f"{SCENARIO_BASE}/generate/custom/{model_id}",
+        headers=headers,
+        json=payload,
+        timeout=60.0,
+    )
+    r.raise_for_status()
+    job_id = r.json()["job"]["jobId"]
+
+    deadline = time.time() + timeout_s
+    while time.time() < deadline:
+        rr = httpx.get(
+            f"{SCENARIO_BASE}/jobs/{job_id}",
+            headers={"Authorization": auth},
+            timeout=30.0,
+        )
+        rr.raise_for_status()
+        body = rr.json()
+        status = body["job"]["status"]
+
+        if status == "success":
+            asset_ids = (body["job"].get("metadata") or {}).get("assetIds") or []
+            if not asset_ids:
+                raise RuntimeError(
+                    f"Scenario custom job {job_id} succeeded but no assetIds"
+                )
+            asset_id = asset_ids[0]
+            ar = httpx.get(
+                f"{SCENARIO_BASE}/assets/{asset_id}",
+                headers={"Authorization": auth},
+                timeout=30.0,
+            )
+            ar.raise_for_status()
+            ar_body = ar.json()
+            asset_url = (
+                (ar_body.get("asset") or {}).get("url")
+                or ar_body.get("url")
+                or ""
+            )
+            result = {
+                "url": asset_url,
+                "job_id": job_id,
+                "asset_id": asset_id,
+                "stub": False,
+                "prompt": prompt,
+                "model_id": model_id,
+                "mode": "custom",
+            }
+            CUSTOM_CACHE_DIR.mkdir(parents=True, exist_ok=True)
+            cache_path.write_text(json.dumps(result, indent=2))
+            return asset_url, result
+
+        if status in ("failure", "canceled"):
+            raise RuntimeError(
+                f"Scenario custom job {job_id} ended with status={status}"
+            )
+        time.sleep(3.0)
+
+    log.warning(
+        "Scenario custom job %s timed out after %.0fs — falling back to stub.",
+        job_id,
+        timeout_s,
+    )
+    fallback_url = _picsum_stub(prompt)
+    return fallback_url, {
+        "url": fallback_url,
+        "stub": True,
+        "stub_reason": "scenario_custom_timeout",
+        "job_id": job_id,
+        "prompt": prompt,
+        "model_id": model_id,
+        "mode": "custom",
+    }
 
 _SAFE_SLUG_RE = re.compile(r"[^a-zA-Z0-9._-]+")
 
@@ -66,6 +369,8 @@ def _run_one(
     *,
     model_id: str,
     model_label: str,
+    supports_ip_adapter: bool,
+    use_custom_endpoint: bool,
     prompt: str,
     label_base: str,
     out_dir: Path,
@@ -73,23 +378,42 @@ def _run_one(
 ) -> dict:
     """Generate one image for one ``model_id``. Never raises.
 
+    Dispatch:
+
+    * ``use_custom_endpoint=True`` → :func:`call_scenario_custom` (proxied
+      third-party APIs: GPT Image, Imagen, Ideogram, Flux Pro, Seedream …).
+      Refs are ignored — the ``/generate/custom/{modelId}`` route is
+      prompt-only by design.
+    * ``supports_ip_adapter=True`` → :func:`call_scenario` with refs (true
+      IPA mode, real game-DNA injection).
+    * Otherwise → :func:`call_scenario` without refs (plain ``txt2img``).
+
     Returns a result dict with keys: ``model_id``, ``model_label``,
     ``ok``, ``elapsed_s``, ``image_path`` (relative to ``out_dir``) or
-    ``error`` on failure, plus the underlying ``meta`` dict from
-    ``call_scenario`` when successful.
+    ``error`` on failure, plus the underlying ``meta`` dict from the
+    underlying call when successful.
     """
     slug = _safe_slug(model_id)
     model_dir = out_dir / slug
     image_path = model_dir / "hero.png"
 
+    refs_for_call = reference_image_paths if supports_ip_adapter else None
+
     t0 = time.perf_counter()
     try:
-        url, meta = call_scenario(
-            prompt,
-            label=f"{label_base}__{slug}",
-            model_id=model_id,
-            reference_image_paths=reference_image_paths,
-        )
+        if use_custom_endpoint:
+            url, meta = call_scenario_custom(
+                prompt,
+                model_id=model_id,
+                label=f"{label_base}__{slug}",
+            )
+        else:
+            url, meta = call_scenario(
+                prompt,
+                label=f"{label_base}__{slug}",
+                model_id=model_id,
+                reference_image_paths=refs_for_call,
+            )
     except Exception as e:  # noqa: BLE001
         elapsed = time.perf_counter() - t0
         log.warning("Scenario compare failed for model_id=%s: %s", model_id, e)
@@ -163,6 +487,8 @@ def _render_grid_html(
             )
             badge = "FAIL"
 
+        mode_tag = (r.get("mode") or "?").replace("txt2img-ip-adapter", "ipa")
+        ipa_dot = "●" if r.get("supports_ip_adapter") else "○"
         cards.append(
             f"""
         <figure class="card">
@@ -170,6 +496,7 @@ def _render_grid_html(
           <figcaption>
             <strong>{r["model_label"]}</strong>
             <code>{r["model_id"]}</code>
+            <span class="meta">{ipa_dot} {mode_tag}</span>
             <span class="badge">{badge}</span>
           </figcaption>
         </figure>"""
@@ -223,6 +550,10 @@ def _render_grid_html(
   figcaption code {{
     font-size: 11px; opacity: .65;
   }}
+  figcaption .meta {{
+    font-size: 10px; opacity: .55; letter-spacing: .03em;
+    margin-top: 2px;
+  }}
   .badge {{
     align-self: flex-start; margin-top: 4px;
     background: #23232c; padding: 2px 6px; border-radius: 4px;
@@ -244,14 +575,51 @@ def _render_grid_html(
     return grid_path
 
 
+def _normalize_candidates(
+    model_ids: (
+        list[ModelCandidate]
+        | list[tuple[str, str]]
+        | list[tuple[str, str, bool]]
+        | list[tuple[str, str, bool, bool]]
+    ),
+) -> list[ModelCandidate]:
+    """Coerce legacy tuple inputs to :class:`ModelCandidate`.
+
+    * 2-tuple ``(id, label)`` → IPA-capable, non-custom (historical
+      Flux-only behavior).
+    * 3-tuple ``(id, label, ipa)`` → custom-endpoint defaults to False.
+    * 4-tuple ``(id, label, ipa, use_custom_endpoint)`` → as given.
+    """
+    out: list[ModelCandidate] = []
+    for item in model_ids:
+        if isinstance(item, ModelCandidate):
+            out.append(item)
+        elif len(item) == 4:
+            out.append(
+                ModelCandidate(item[0], item[1], bool(item[2]), bool(item[3]))
+            )
+        elif len(item) == 3:
+            out.append(ModelCandidate(item[0], item[1], bool(item[2]), False))
+        elif len(item) == 2:
+            out.append(ModelCandidate(item[0], item[1], True, False))
+        else:
+            raise ValueError(f"Unrecognized model spec: {item!r}")
+    return out
+
+
 def compare_models_for_brief(
     brief: CreativeBrief,
     *,
-    model_ids: list[tuple[str, str]],
+    model_ids: list[ModelCandidate] | list[tuple[str, str]] | list[tuple[str, str, bool]],
     reference_image_paths: list[Path] | None = None,
     out_dir: Path,
 ) -> dict[str, list[Path]]:
     """Generate ``brief``'s hero shot through every ``model_id`` in parallel.
+
+    Each ``ModelCandidate`` carries its own ``supports_ip_adapter`` bit; for
+    models without that capability the call is forced through plain
+    ``txt2img`` (no refs) so the API doesn't 404. For backward compatibility
+    a 2-tuple ``(id, label)`` is treated as IPA-capable.
 
     Reuses ``call_scenario`` from :mod:`app.creative.scenario` (and therefore
     its on-disk cache, keyed by prompt + model + mode + refs). Subsequent
@@ -273,6 +641,8 @@ def compare_models_for_brief(
             f"Brief {brief.archetype_id!r} has no scenario_prompts to compare."
         )
 
+    candidates = _normalize_candidates(model_ids)
+
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
 
@@ -280,24 +650,32 @@ def compare_models_for_brief(
     label_base = f"compare_{_safe_slug(brief.target_game_id)}_{_safe_slug(brief.archetype_id)}"
 
     results: list[dict] = []
-    max_workers = max(1, len(model_ids))
+    max_workers = max(1, len(candidates))
     with ThreadPoolExecutor(max_workers=max_workers) as ex:
         futures = {
             ex.submit(
                 _run_one,
-                model_id=mid,
-                model_label=mlabel,
+                model_id=c.model_id,
+                model_label=c.label,
+                supports_ip_adapter=c.supports_ip_adapter,
+                use_custom_endpoint=c.use_custom_endpoint,
                 prompt=hero_prompt,
                 label_base=label_base,
                 out_dir=out_dir,
                 reference_image_paths=reference_image_paths,
-            ): mid
-            for mid, mlabel in model_ids
+            ): c.model_id
+            for c in candidates
         }
         for fut in as_completed(futures):
-            results.append(fut.result())
+            r = fut.result()
+            cand = next(
+                (c for c in candidates if c.model_id == r["model_id"]), None
+            )
+            r["supports_ip_adapter"] = cand.supports_ip_adapter if cand else False
+            r["use_custom_endpoint"] = cand.use_custom_endpoint if cand else False
+            results.append(r)
 
-    order = {mid: i for i, (mid, _) in enumerate(model_ids)}
+    order = {c.model_id: i for i, c in enumerate(candidates)}
     results.sort(key=lambda r: order.get(r["model_id"], 999))
 
     grid_path = _render_grid_html(
@@ -318,6 +696,8 @@ def compare_models_for_brief(
             {
                 "model_id": r["model_id"],
                 "model_label": r["model_label"],
+                "supports_ip_adapter": r.get("supports_ip_adapter", False),
+                "use_custom_endpoint": r.get("use_custom_endpoint", False),
                 "ok": r["ok"],
                 "elapsed_s": round(r["elapsed_s"], 2),
                 "image_path": r.get("image_path"),

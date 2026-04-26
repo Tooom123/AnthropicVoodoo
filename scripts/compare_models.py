@@ -49,7 +49,10 @@ logging.getLogger("httpx").setLevel(logging.WARNING)
 from app._paths import CACHE_DIR  # noqa: E402
 from app.creative.scenario_compare import (  # noqa: E402
     DEFAULT_MODELS_TO_COMPARE,
+    ModelCandidate,
+    capability_for_model,
     compare_models_for_brief,
+    discover_scenario_models,
 )
 from app.models import CreativeBrief  # noqa: E402
 
@@ -62,12 +65,40 @@ def _slug(value: str) -> str:
     return _SLUG_RE.sub("_", value).strip("_").lower() or "unknown"
 
 
-def _resolve_models(arg: str | None) -> list[tuple[str, str]]:
+def _resolve_models(arg: str | None) -> list[ModelCandidate]:
+    """Build the comparison row list.
+
+    Without ``--models`` the curated default set in
+    ``DEFAULT_MODELS_TO_COMPARE`` is returned verbatim. With ``--models``,
+    each requested id is looked up in (1) the default set (cheapest, no
+    network), (2) the cached Scenario catalog at
+    ``data/cache/scenario/models_catalog.json`` for capability metadata.
+    Unknown ids default to IPA=True (best-effort) so the user can probe
+    raw new ids without re-running discovery.
+    """
     if not arg:
-        return DEFAULT_MODELS_TO_COMPARE
+        return list(DEFAULT_MODELS_TO_COMPARE)
+
+    by_id = {c.model_id: c for c in DEFAULT_MODELS_TO_COMPARE}
+    catalog: list[dict] | None = None
+
     requested = [m.strip() for m in arg.split(",") if m.strip()]
-    label_by_id = {mid: lbl for mid, lbl in DEFAULT_MODELS_TO_COMPARE}
-    return [(mid, label_by_id.get(mid, mid)) for mid in requested]
+    out: list[ModelCandidate] = []
+    for mid in requested:
+        if mid in by_id:
+            out.append(by_id[mid])
+            continue
+        if catalog is None:
+            try:
+                catalog = discover_scenario_models()
+            except Exception:  # noqa: BLE001
+                catalog = []
+        caps, meta = capability_for_model(mid, catalog=catalog)
+        label = (meta or {}).get("name") or mid
+        ipa = "txt2img_ip_adapter" in caps if caps else True
+        is_custom = bool(meta and meta.get("type") == "custom")
+        out.append(ModelCandidate(mid, label, ipa, is_custom))
+    return out
 
 
 def _resolve_refs(report: dict) -> list[Path]:
@@ -101,7 +132,7 @@ def main() -> int:
         default=None,
         help=(
             "Comma-separated Scenario model_ids. "
-            f"Default: {','.join(mid for mid, _ in DEFAULT_MODELS_TO_COMPARE)}"
+            f"Default: {','.join(c.model_id for c in DEFAULT_MODELS_TO_COMPARE)}"
         ),
     )
     parser.add_argument(
