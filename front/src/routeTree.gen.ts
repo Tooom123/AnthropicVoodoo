@@ -17,6 +17,7 @@ import { Route as GeoRouteImport } from './routes/geo'
 import { Route as CompetitiveRouteImport } from './routes/competitive'
 import { Route as AdsRouteImport } from './routes/ads'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as CompetitorAppIdRouteImport } from './routes/competitor.$appId'
 import { Route as AdIdRouteImport } from './routes/ad.$id'
 
 const WeeklyRoute = WeeklyRouteImport.update({
@@ -59,6 +60,11 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const CompetitorAppIdRoute = CompetitorAppIdRouteImport.update({
+  id: '/competitor/$appId',
+  path: '/competitor/$appId',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AdIdRoute = AdIdRouteImport.update({
   id: '/ad/$id',
   path: '/ad/$id',
@@ -75,6 +81,7 @@ export interface FileRoutesByFullPath {
   '/voodoo': typeof VoodooRoute
   '/weekly': typeof WeeklyRoute
   '/ad/$id': typeof AdIdRoute
+  '/competitor/$appId': typeof CompetitorAppIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -86,6 +93,7 @@ export interface FileRoutesByTo {
   '/voodoo': typeof VoodooRoute
   '/weekly': typeof WeeklyRoute
   '/ad/$id': typeof AdIdRoute
+  '/competitor/$appId': typeof CompetitorAppIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -98,6 +106,7 @@ export interface FileRoutesById {
   '/voodoo': typeof VoodooRoute
   '/weekly': typeof WeeklyRoute
   '/ad/$id': typeof AdIdRoute
+  '/competitor/$appId': typeof CompetitorAppIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -111,6 +120,7 @@ export interface FileRouteTypes {
     | '/voodoo'
     | '/weekly'
     | '/ad/$id'
+    | '/competitor/$appId'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -122,6 +132,7 @@ export interface FileRouteTypes {
     | '/voodoo'
     | '/weekly'
     | '/ad/$id'
+    | '/competitor/$appId'
   id:
     | '__root__'
     | '/'
@@ -133,6 +144,7 @@ export interface FileRouteTypes {
     | '/voodoo'
     | '/weekly'
     | '/ad/$id'
+    | '/competitor/$appId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -145,6 +157,7 @@ export interface RootRouteChildren {
   VoodooRoute: typeof VoodooRoute
   WeeklyRoute: typeof WeeklyRoute
   AdIdRoute: typeof AdIdRoute
+  CompetitorAppIdRoute: typeof CompetitorAppIdRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -205,6 +218,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/competitor/$appId': {
+      id: '/competitor/$appId'
+      path: '/competitor/$appId'
+      fullPath: '/competitor/$appId'
+      preLoaderRoute: typeof CompetitorAppIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/ad/$id': {
       id: '/ad/$id'
       path: '/ad/$id'
@@ -225,6 +245,7 @@ const rootRouteChildren: RootRouteChildren = {
   VoodooRoute: VoodooRoute,
   WeeklyRoute: WeeklyRoute,
   AdIdRoute: AdIdRoute,
+  CompetitorAppIdRoute: CompetitorAppIdRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

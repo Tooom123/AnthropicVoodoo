@@ -113,6 +113,146 @@ def resolve_game(term: str, *, country: str = "US") -> AppMetadata:
     )
 
 
+def fetch_creatives_for_app(
+    *,
+    unified_app_id: str,
+    country: str = "US",
+    networks: str = "Facebook,Instagram,TikTok,Admob,Applovin,Unity",
+    ad_types: str = "video,video-interstitial,playable",
+    start_date: str | None = None,
+    lookback_days: int = 180,
+    limit: int = 50,
+) -> list[dict[str, Any]]:
+    """Fetch every cached/live ad for one specific advertiser
+    (any unified app_id — Voodoo or external).
+
+    Hits ``/v1/unified/ad_intel/creatives`` with ``app_ids=<unified_id>``.
+    SensorTower returns up to ``limit`` ad_units, each containing the
+    creative URL, network, ad_type, first/last seen dates, etc.
+
+    Cached on disk per (app_id, country, start_date) so opening the
+    same competitor twice is free. Returns an empty list when the app
+    has no recent ad activity (SensorTower 422) or the call fails —
+    callers should treat that as "no data" rather than an error.
+    """
+    from datetime import date, timedelta
+
+    if not unified_app_id or unified_app_id == "unknown":
+        return []
+
+    effective_start = start_date or (
+        date.today() - timedelta(days=lookback_days)
+    ).isoformat()
+
+    params: dict[str, Any] = {
+        "app_ids": unified_app_id,
+        "start_date": effective_start,
+        "countries": country,
+        "networks": networks,
+        "ad_types": ad_types,
+        "limit": limit,
+    }
+
+    try:
+        resp = disk_cached(
+            DEFAULT_CACHE_DIR / "advertiser_creatives",
+            f"{unified_app_id}_{country}_{effective_start}",
+            params,
+            lambda: _get("/v1/unified/ad_intel/creatives", params),
+        )
+    except Exception:
+        log.exception(
+            "fetch_creatives_for_app: SensorTower /creatives failed for %s",
+            unified_app_id,
+        )
+        return []
+
+    return resp.get("ad_units") or []
+
+
+def fetch_app_meta_by_unified_id(
+    unified_app_id: str,
+    *,
+    country: str = "US",
+) -> dict[str, Any] | None:
+    """Look up rich app metadata (name, publisher, icon, description,
+    rating, categories) for any unified_app_id without going through
+    name resolution.
+
+    Two-step process matching how the Voodoo catalog resolver works:
+      1. ``/v1/unified/apps?app_ids=<id>&app_id_type=unified`` →
+         returns ``itunes_apps[]`` (the iOS variant of the unified app)
+      2. ``/v1/ios/apps?app_ids=<itunes_id>`` → returns the rich meta
+         (icon_url, publisher_name, description, rating…)
+
+    Both calls cached on disk so re-opening the same competitor is
+    free. Returns ``None`` when either lookup fails — callers fall
+    back to whatever metadata they already have.
+    """
+    if not unified_app_id or unified_app_id == "unknown":
+        return None
+
+    # ─── Step 1: unified → iTunes app_id ────────────────────────
+    unified_params = {"app_ids": unified_app_id, "app_id_type": "unified"}
+    try:
+        unified_resp = disk_cached(
+            DEFAULT_CACHE_DIR,
+            f"unified_app_meta_{unified_app_id}",
+            unified_params,
+            lambda: _get("/v1/unified/apps", unified_params),
+        )
+    except Exception:
+        log.exception(
+            "fetch_app_meta_by_unified_id: /v1/unified/apps failed for %s",
+            unified_app_id,
+        )
+        return None
+
+    apps = unified_resp.get("apps") or []
+    if not apps:
+        return None
+    unified_app = apps[0]
+    itunes_apps = unified_app.get("itunes_apps") or []
+    if not itunes_apps:
+        # No iOS variant — return what little the unified call gave us
+        # rather than nothing (name + humanized_name are usually set).
+        return {
+            "name": unified_app.get("name") or unified_app.get("humanized_name"),
+            "publisher_name": unified_app.get("publisher_name"),
+            "icon_url": unified_app.get("icon_url"),
+            "description": unified_app.get("description"),
+        }
+
+    itunes_app_id = str(itunes_apps[0].get("app_id") or itunes_apps[0].get("id") or "")
+    if not itunes_app_id:
+        return None
+
+    # ─── Step 2: iTunes app_id → rich meta ──────────────────────
+    ios_params = {"app_ids": itunes_app_id, "country": country}
+    try:
+        ios_resp = disk_cached(
+            DEFAULT_CACHE_DIR,
+            f"ios_app_meta_{itunes_app_id}_{country}",
+            ios_params,
+            lambda: _get("/v1/ios/apps", ios_params),
+        )
+    except Exception:
+        log.exception(
+            "fetch_app_meta_by_unified_id: /v1/ios/apps failed for %s",
+            itunes_app_id,
+        )
+        # Graceful: still surface what unified gave us
+        return {
+            "name": unified_app.get("name") or unified_app.get("humanized_name"),
+            "publisher_name": unified_app.get("publisher_name"),
+            "icon_url": unified_app.get("icon_url"),
+        }
+    ios_apps = ios_resp.get("apps") or []
+    if not ios_apps:
+        return None
+    return ios_apps[0]
+
+
 def fetch_top_advertisers(
     *,
     category_id: int,

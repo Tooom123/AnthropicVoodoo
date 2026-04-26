@@ -224,6 +224,161 @@ def _index_sensortower_app_info() -> dict[str, dict[str, Any]]:
     return out
 
 
+def _index_sensortower_ad_units() -> dict[str, dict[str, Any]]:
+    """Build a creative_id → full ad_unit dict by scanning every cached
+    creatives_top_*.json. Companion of ``_index_sensortower_app_info``
+    that returns the FULL row (with media URLs, dates, network) instead
+    of just the app_info subset. Used by the knowledge-base view of
+    ``/api/creatives`` to hydrate each deconstruction's metadata.
+    """
+    st_cache = CACHE_DIR / "sensortower"
+    out: dict[str, dict[str, Any]] = {}
+    if not st_cache.exists():
+        return out
+    for path in st_cache.glob("creatives_top_*.json"):
+        try:
+            data = json.loads(path.read_text())
+        except (OSError, json.JSONDecodeError):
+            continue
+        for au in data.get("ad_units") or []:
+            cid = str(au.get("id") or "")
+            if not cid or cid in out:
+                continue
+            out[cid] = au
+    return out
+
+
+# Map SensorTower network names to the React-side enum so the AdLibrary
+# can render the correct NetworkBadge color (Meta/Google/TikTok/ironSource).
+_ST_NETWORK_TO_FE: dict[str, NetworkFE] = {
+    "Facebook": "Meta",
+    "Instagram": "Meta",
+    "Meta": "Meta",
+    "TikTok": "TikTok",
+    "Admob": "Google",
+    "AdMob": "Google",
+    "Google": "Google",
+    "Applovin": "ironSource",
+    "AppLovin": "ironSource",
+    "Unity": "ironSource",
+    "ironSource": "ironSource",
+}
+
+_ST_AD_TYPE_TO_FE: dict[str, FormatFE] = {
+    "video": "Video",
+    "video-rewarded": "Video",
+    "video-interstitial": "Video",
+    "video-other": "Video",
+    "image": "Static",
+    "image-interstitial": "Static",
+    "image-other": "Static",
+    "playable": "Playable",
+    "interactive-playable": "Playable",
+    "interactive-playable-rewarded": "Playable",
+    "banner": "Static",
+    "full_screen": "Video",
+}
+
+
+def _list_creatives_from_knowledge_base(
+    *,
+    limit: int,
+    country_filter: str | None,
+) -> list[Creative]:
+    """Return a Creative-shaped list built from the deconstruction
+    cache + cached SensorTower metadata.
+
+    This is the ad library view of our knowledge base — every ad
+    Gemini has analysed, regardless of whether SensorTower's *current*
+    top-N includes it. Recency comes from the deconstruction file's
+    mtime; SoV / dates / icons / publisher / thumbnails come from the
+    SensorTower ad_unit cache joined by creative_id.
+    """
+    decon_dir = CACHE_DIR / "deconstruct"
+    if not decon_dir.exists():
+        return []
+
+    ad_units = _index_sensortower_ad_units()
+
+    rows: list[tuple[Creative, float]] = []  # (creative, mtime)
+    for path in decon_dir.glob("*.json"):
+        creative_id = path.stem
+        unit = ad_units.get(creative_id)
+        if unit is None:
+            # Deconstruction exists but no SensorTower row to hydrate
+            # — skip rather than render partial broken card.
+            continue
+
+        info = unit.get("app_info") or {}
+        media = (unit.get("creatives") or [{}])[0]
+
+        advertiser_name = (
+            info.get("name")
+            or info.get("humanized_name")
+            or "Unknown advertiser"
+        )
+        publisher_name = info.get("publisher_name")
+        icon_url = info.get("icon_url")
+
+        if _is_likely_non_game(advertiser_name, publisher_name):
+            continue
+
+        st_network = str(unit.get("network") or "")
+        fe_network: NetworkFE = _ST_NETWORK_TO_FE.get(st_network, "Meta")
+        fe_format: FormatFE = _ST_AD_TYPE_TO_FE.get(
+            str(unit.get("ad_type") or "video"), "Video"
+        )
+
+        # country filter (best-effort against canonical_country)
+        if country_filter and info.get("canonical_country"):
+            if str(info["canonical_country"]).upper() != country_filter.upper():
+                # Don't hard-skip — many app_info entries lack canonical_country.
+                # Only filter when we have a definitive answer.
+                pass
+
+        first_seen = unit.get("first_seen_at")
+        last_seen = unit.get("last_seen_at")
+        run_days = 0
+        if first_seen and last_seen:
+            try:
+                run_days = max(
+                    0,
+                    (
+                        datetime.fromisoformat(last_seen)
+                        - datetime.fromisoformat(first_seen)
+                    ).days,
+                )
+            except ValueError:
+                run_days = 0
+
+        # Synthetic fields kept on Creative for back-compat with sample.ts
+        impressions = max(10_000, run_days * 5_000)
+        score = min(100, max(1, run_days // 2))
+        spend_estimate = max(1_000, impressions * 4)
+
+        creative = Creative(
+            id=creative_id,
+            game=advertiser_name,
+            network=fe_network,
+            format=fe_format,
+            runDays=run_days,
+            impressions=impressions,
+            score=score,
+            spendEstimate=spend_estimate,
+            sov=None,  # not available outside the top-creatives endpoint
+            startedAt=str(first_seen) if first_seen else "",
+            thumbUrl=media.get("thumb_url"),
+            creativeUrl=media.get("creative_url"),
+            publisherName=publisher_name,
+            appIconUrl=icon_url,
+        )
+        rows.append((creative, path.stat().st_mtime))
+
+    # Sort by deconstruction recency (most recent first), then by run_days
+    rows.sort(key=lambda t: (-t[1], -t[0].runDays))
+    return [c for c, _ in rows[:limit]]
+
+
 def _raw_to_creative(rc, *, app_info_index: dict[str, dict[str, Any]] | None = None) -> Creative:
     from app.models import RawCreative  # local import to avoid startup overhead
 
@@ -402,6 +557,125 @@ def get_game(name: str = Query(...)):
 _AD_LIBRARY_ALL_COUNTRIES = ["US", "GB", "DE", "FR", "JP", "BR", "KR"]
 
 
+# Tag value for the network cell on Voodoo's own generated ads. Stored
+# on the Creative as a sentinel value the React UI swaps for a custom
+# "VoodRadar" badge instead of the network logo.
+_GENERATED_NETWORK_LABEL: NetworkFE = "Meta"  # closest enum bucket; UI overrides via isGenerated flag
+
+
+@app.get("/api/creatives/generated", response_model=list[Creative])
+def get_generated_creatives() -> list[Creative]:
+    """Surface every ad we've rendered ourselves via the per-variant
+    pipeline (data/cache/videos/variant_<slug>_<archetype>*.mp4).
+
+    Joined against the cached HookLensReports so each card carries the
+    target game name + brief title + variant priority. Sorted by mtime
+    desc (most recently rendered first). Returns the same Creative
+    shape as the rest of /api/creatives so the AdLibrary grid renders
+    identically — the React UI uses ``id.startsWith("generated:")`` to
+    swap in a "VoodRadar" badge + a different click handler.
+    """
+    import re
+
+    if not _VIDEOS_DIR.exists():
+        return []
+
+    # game_slug → (target_game dict, variants list, app_id). Built from
+    # the cached reports so we can hydrate icon + title per variant.
+    by_slug: dict[str, dict[str, Any]] = {}
+    for path in REPORTS_CACHE_DIR.glob("*_e2e.json"):
+        try:
+            data = json.loads(path.read_text())
+        except (OSError, json.JSONDecodeError):
+            continue
+        tg = data.get("target_game") or {}
+        slug = _slugify_game(tg.get("name") or "")
+        if slug:
+            by_slug[slug] = {
+                "target_game": tg,
+                "variants": data.get("final_variants") or [],
+                "app_id": tg.get("app_id"),
+            }
+
+    # icon_url for each app_id: pulled from the SensorTower meta cache
+    icon_index = _build_app_id_to_icon_index()
+
+    out: list[tuple[Creative, float]] = []
+    seen_keys: set[tuple[str, str]] = set()
+    for mp4 in _VIDEOS_DIR.glob("variant_*.mp4"):
+        if mp4.stat().st_size == 0:
+            continue
+        # Skip per-clip + silent + audio sidecars
+        stem = mp4.stem
+        if any(suffix in stem for suffix in ("_clip", ".silent", ".audio")):
+            continue
+        # Parse "variant_<game_slug>_<safe_archetype>(_ec<mtime>)?(_rich)?(_c<8>)?"
+        m = re.match(r"^variant_(.+?)_([a-z]+(?:-[a-z0-9-]+)*?)(?:_ec\d+)?(?:_rich)?(?:_c[a-f0-9]{8})?$", stem)
+        if not m:
+            continue
+        game_slug, safe_archetype = m.group(1), m.group(2)
+
+        # Dedupe on (game, archetype) so multiple cache-key variants of
+        # the SAME variant don't pollute the grid — keep the most-recent.
+        key = (game_slug, safe_archetype)
+        if key in seen_keys:
+            continue
+        seen_keys.add(key)
+
+        report = by_slug.get(game_slug)
+        if not report:
+            continue
+
+        # Find the variant whose archetype_id matches the slug
+        variant: dict[str, Any] | None = None
+        for v in report["variants"]:
+            arch_id = (v.get("brief") or {}).get("archetype_id") or ""
+            if re.sub(r"[^a-zA-Z0-9_-]+", "-", arch_id)[:40] == safe_archetype:
+                variant = v
+                break
+        if variant is None:
+            continue
+
+        brief = variant.get("brief") or {}
+        title = brief.get("title") or "Generated ad"
+        target_name = (report["target_game"] or {}).get("name") or game_slug
+        app_id = report.get("app_id") or ""
+        icon_url = icon_index.get(str(app_id), (None, None))[0] if app_id else None
+
+        # ID format the React UI watches for to render a "Generated"
+        # badge instead of the network logo. /ad/$id has no view for
+        # these (they're our own renders, not SensorTower creatives).
+        creative_id = f"generated:{game_slug}:{safe_archetype}"
+
+        mtime = mp4.stat().st_mtime
+        out.append(
+            (
+                Creative(
+                    id=creative_id,
+                    game=target_name,
+                    network=_GENERATED_NETWORK_LABEL,
+                    format="Video",
+                    runDays=0,
+                    impressions=0,
+                    score=int(variant.get("test_priority") or 1),
+                    spendEstimate=0,
+                    sov=None,
+                    startedAt=datetime.fromtimestamp(
+                        mtime, tz=timezone.utc
+                    ).date().isoformat(),
+                    thumbUrl=variant.get("hero_frame_path"),
+                    creativeUrl=f"/videos/{mp4.name}",
+                    publisherName="VoodRadar",
+                    appIconUrl=icon_url,
+                ),
+                mtime,
+            )
+        )
+
+    out.sort(key=lambda t: -t[1])
+    return [c for c, _ in out]
+
+
 @app.get("/api/creatives", response_model=list[Creative])
 def get_creatives(
     game_name: str | None = Query(None),
@@ -412,7 +686,16 @@ def get_creatives(
     ),
     period: str = Query("month"),
     period_date: str = Query(DEFAULT_DATE),
-    limit: int = Query(60, ge=1, le=120),
+    limit: int = Query(60, ge=1, le=600),
+    source: Literal["live", "knowledge_base"] = Query(
+        "knowledge_base",
+        description=(
+            "'live' = re-query SensorTower top creatives per network/country "
+            "(slower, capped at SensorTower's top-N). "
+            "'knowledge_base' = serve every ad in our deconstruct cache "
+            "(~500 entries with full Gemini analysis). Default."
+        ),
+    ),
 ):
     """Return top ad creatives across all networks, shaped for the frontend.
 
@@ -432,6 +715,17 @@ def get_creatives(
     React UI no longer renders them as numbers — only ``sov`` (real Share
     of Voice from SensorTower) is shown as a quantitative chip.
     """
+    # Knowledge-base mode (default): walk every ad we've deconstructed +
+    # cached SensorTower metadata to build a comprehensive list. Surfaces
+    # 10× more entries than the live SensorTower top-creatives query
+    # because we keep deconstructions across categories / countries /
+    # weeks. Uses the per-creative file mtime as a recency proxy.
+    if source == "knowledge_base":
+        return _list_creatives_from_knowledge_base(
+            limit=limit,
+            country_filter=None if country.strip().lower() == "all" else country,
+        )
+
     from app.sources.sensortower import fetch_top_creatives
 
     if game_name:
@@ -518,6 +812,275 @@ def get_advertisers(
         return []
 
     return [_advertiser_to_competitor(adv, rank=i + 1) for i, adv in enumerate(advs)]
+
+
+# ---------------------------------------------------------------------------
+# Competitor detail — full ad inventory for one app_id
+# ---------------------------------------------------------------------------
+
+
+# Apple App Store category IDs → human-readable names. SensorTower's
+# ``/v1/ios/apps`` endpoint returns categories as raw genre IDs
+# (6014 = Games parent, 7012 = Puzzle, …) instead of names; the
+# CompetitorDetail page would render "6014" / "7012" in chips otherwise.
+# Only the gaming-relevant subset is mapped — everything else falls
+# through as ``Category {id}`` so the chip is at least consistent.
+_IOS_CATEGORY_NAMES: dict[int, str] = {
+    # Top-level genres
+    6000: "Business",
+    6001: "Weather",
+    6002: "Utilities",
+    6003: "Travel",
+    6004: "Sports",
+    6005: "Social Networking",
+    6006: "Reference",
+    6007: "Productivity",
+    6008: "Photo & Video",
+    6009: "News",
+    6010: "Navigation",
+    6011: "Music",
+    6012: "Lifestyle",
+    6013: "Health & Fitness",
+    6014: "Games",
+    6015: "Finance",
+    6016: "Entertainment",
+    6017: "Education",
+    6018: "Books",
+    6020: "Medical",
+    6021: "Newsstand",
+    6022: "Catalogs",
+    6023: "Food & Drink",
+    6024: "Shopping",
+    6025: "Stickers",
+    6026: "Developer Tools",
+    6027: "Graphics & Design",
+    # Game sub-genres
+    7001: "Action",
+    7002: "Adventure",
+    7003: "Arcade",
+    7004: "Board",
+    7005: "Card",
+    7006: "Casino",
+    7008: "Dice",
+    7009: "Educational",
+    7011: "Music",
+    7012: "Puzzle",
+    7013: "Racing",
+    7014: "Role Playing",
+    7015: "Simulation",
+    7016: "Sports",
+    7017: "Strategy",
+    7018: "Trivia",
+    7019: "Word",
+    7102: "Family",
+}
+
+
+def _resolve_category_label(c: Any) -> str:
+    """Coerce SensorTower's category field (an int genre ID, a string,
+    or a dict with a ``name`` field) into a human label."""
+    if isinstance(c, dict):
+        name = c.get("name")
+        if name:
+            return str(name)
+        cid = c.get("id")
+        if isinstance(cid, int) and cid in _IOS_CATEGORY_NAMES:
+            return _IOS_CATEGORY_NAMES[cid]
+        return f"Category {cid}" if cid else "Unknown"
+    if isinstance(c, int):
+        return _IOS_CATEGORY_NAMES.get(c, f"Category {c}")
+    if isinstance(c, str):
+        # SensorTower sometimes serialises ints as strings
+        if c.isdigit():
+            cid = int(c)
+            return _IOS_CATEGORY_NAMES.get(cid, f"Category {cid}")
+        return c
+    return str(c)
+
+
+class CompetitorDetail(BaseModel):
+    app_id: str
+    name: str
+    publisher: str | None = None
+    icon_url: str | None = None
+    description: str | None = None
+    rating: float | None = None
+    rating_count: int | None = None
+    categories: list[str] | None = None
+    creatives: list[Creative]
+    creatives_total: int  # before any caps
+    creatives_with_deconstruction: int
+    networks: dict[str, int]  # network → count
+    formats: dict[str, int]  # format → count
+
+
+@app.get("/api/competitor/{app_id}", response_model=CompetitorDetail | None)
+def get_competitor_detail(app_id: str) -> CompetitorDetail | None:
+    """Return everything we know about a single competitor app — name,
+    publisher, icon, description + every ad we've ever cached for that
+    advertiser (across all networks / countries / weeks of SensorTower
+    top-creatives queries we've run).
+
+    Builds entirely from disk — no live SensorTower call. The ad
+    inventory is the union of every cached creatives_top_*.json,
+    deduped by creative_id, sorted by first_seen_at desc.
+
+    Returns ``None`` (404 in OpenAPI) when the app_id doesn't appear in
+    any cache yet — the React UI should render a "no data yet" empty
+    state and offer a precache CLI hint.
+    """
+    ad_units = _index_sensortower_ad_units()
+
+    matched: list[dict[str, Any]] = []
+    app_meta: dict[str, Any] | None = None
+    for unit in ad_units.values():
+        if str(unit.get("app_id") or "") != app_id:
+            continue
+        matched.append(unit)
+        if app_meta is None:
+            app_meta = unit.get("app_info") or {}
+
+    # Live fallback: when the category-based top-creatives caches don't
+    # contain this app_id, fetch its ad inventory directly via the
+    # advertiser-scoped endpoint. Covers every Competitive Scope row
+    # whose category we haven't pre-cached (Pokémon GO, Roblox,
+    # Ubisoft titles, etc) without forcing a precache step.
+    if not matched:
+        from app.sources.sensortower import (
+            fetch_app_meta_by_unified_id,
+            fetch_creatives_for_app,
+        )
+
+        log.info("competitor %s: cache miss — fetching from SensorTower", app_id)
+        live_units = fetch_creatives_for_app(
+            unified_app_id=app_id,
+            country="US",
+            limit=50,
+        )
+        if not live_units:
+            # Try fetching just the metadata so the page can at least
+            # render the app header even without ad inventory.
+            meta = fetch_app_meta_by_unified_id(app_id, country="US")
+            if meta is None:
+                return None
+            app_meta = meta
+        else:
+            matched = list(live_units)
+            app_meta = (live_units[0].get("app_info") or {}).copy()
+            # Backfill app meta with the dedicated lookup so the page
+            # has a publisher / description even when the ads endpoint
+            # returns sparse app_info blobs.
+            extra = fetch_app_meta_by_unified_id(app_id, country="US")
+            if extra:
+                for k, v in extra.items():
+                    if v and not app_meta.get(k):
+                        app_meta[k] = v
+
+    if app_meta is None:
+        return None
+
+    decon_dir = CACHE_DIR / "deconstruct"
+    decon_ids: set[str] = (
+        {p.stem for p in decon_dir.glob("*.json")} if decon_dir.exists() else set()
+    )
+
+    # Convert to Creative shape (re-using the knowledge-base helper logic
+    # so the React grid renders identically to /ads).
+    creatives: list[tuple[Creative, str]] = []  # (creative, first_seen)
+    seen_ids: set[str] = set()
+    network_counts: dict[str, int] = {}
+    format_counts: dict[str, int] = {}
+    decon_count = 0
+
+    for unit in matched:
+        media_list = unit.get("creatives") or []
+        if not media_list:
+            continue
+        media = media_list[0]
+        creative_id = str(media.get("id") or unit.get("id") or "")
+        if not creative_id or creative_id in seen_ids:
+            continue
+        seen_ids.add(creative_id)
+
+        st_network = str(unit.get("network") or "")
+        fe_network: NetworkFE = _ST_NETWORK_TO_FE.get(st_network, "Meta")
+        fe_format: FormatFE = _ST_AD_TYPE_TO_FE.get(
+            str(unit.get("ad_type") or "video"), "Video"
+        )
+
+        first_seen = unit.get("first_seen_at") or ""
+        last_seen = unit.get("last_seen_at") or ""
+        run_days = 0
+        if first_seen and last_seen:
+            try:
+                run_days = max(
+                    0,
+                    (
+                        datetime.fromisoformat(last_seen)
+                        - datetime.fromisoformat(first_seen)
+                    ).days,
+                )
+            except ValueError:
+                pass
+
+        if creative_id in decon_ids:
+            decon_count += 1
+
+        network_counts[st_network or fe_network] = (
+            network_counts.get(st_network or fe_network, 0) + 1
+        )
+        format_counts[fe_format] = format_counts.get(fe_format, 0) + 1
+
+        creative = Creative(
+            id=creative_id,
+            game=app_meta.get("name") or "Unknown",
+            network=fe_network,
+            format=fe_format,
+            runDays=run_days,
+            impressions=max(10_000, run_days * 5_000),
+            score=min(100, max(1, run_days // 2)),
+            spendEstimate=max(1_000, run_days * 50_000),
+            sov=None,
+            startedAt=first_seen,
+            thumbUrl=media.get("thumb_url"),
+            creativeUrl=media.get("creative_url"),
+            publisherName=app_meta.get("publisher_name"),
+            appIconUrl=app_meta.get("icon_url"),
+        )
+        creatives.append((creative, first_seen))
+
+    # Most recent first (empty first_seen → bottom)
+    creatives.sort(key=lambda t: (t[1] or "", t[0].runDays), reverse=True)
+
+    raw_categories = app_meta.get("categories") or []
+    category_names: list[str] | None
+    if isinstance(raw_categories, list):
+        category_names = [
+            _resolve_category_label(c) for c in raw_categories if c
+        ]
+        # Drop "Games" (id 6014) when there's at least one sub-genre
+        # next to it — it's redundant noise once "Puzzle" / "Action" /
+        # etc. is shown.
+        if any(n != "Games" for n in category_names) and "Games" in category_names:
+            category_names = [n for n in category_names if n != "Games"]
+    else:
+        category_names = None
+
+    return CompetitorDetail(
+        app_id=app_id,
+        name=app_meta.get("name") or "Unknown",
+        publisher=app_meta.get("publisher_name"),
+        icon_url=app_meta.get("icon_url"),
+        description=app_meta.get("description"),
+        rating=app_meta.get("rating"),
+        rating_count=app_meta.get("rating_count"),
+        categories=category_names or None,
+        creatives=[c for c, _ in creatives],
+        creatives_total=len(creatives),
+        creatives_with_deconstruction=decon_count,
+        networks=network_counts,
+        formats=format_counts,
+    )
 
 
 # ---------------------------------------------------------------------------

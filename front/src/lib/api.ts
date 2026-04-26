@@ -34,6 +34,20 @@ export function useCreatives(params: CreativesParams = {}) {
   });
 }
 
+/**
+ * Lists every ad we've rendered ourselves through the per-variant
+ * Scenario pipeline. IDs are formatted ``generated:<game>:<archetype>``
+ * so the AdLibrary grid can swap in a "VoodRadar" badge / different
+ * click handler. Backed by `/api/creatives/generated`.
+ */
+export function useGeneratedCreatives() {
+  return useQuery<Creative[]>({
+    queryKey: ["creatives", "generated"],
+    queryFn: () => apiFetch<Creative[]>("/api/creatives/generated"),
+    staleTime: 60 * 1000,
+  });
+}
+
 export interface AdvertisersParams {
   game_name?: string;
   category_id?: number;
@@ -49,6 +63,44 @@ export function useAdvertisers(params: AdvertisersParams = {}) {
     queryFn: () => apiFetch<CompetitorGame[]>("/api/advertisers", params as Record<string, string | number | undefined>),
     staleTime: 5 * 60 * 1000,
     enabled: true,
+  });
+}
+
+export interface CompetitorDetail {
+  app_id: string;
+  name: string;
+  publisher: string | null;
+  icon_url: string | null;
+  description: string | null;
+  rating: number | null;
+  rating_count: number | null;
+  categories: string[] | null;
+  creatives: Creative[];
+  creatives_total: number;
+  creatives_with_deconstruction: number;
+  networks: Record<string, number>;
+  formats: Record<string, number>;
+}
+
+/**
+ * Fetch the full ad inventory + metadata for a single competitor
+ * advertiser, keyed by SensorTower app_id. Returns null on 404 so the
+ * detail page can render an empty state.
+ */
+export function useCompetitorDetail(appId: string | undefined) {
+  return useQuery<CompetitorDetail | null>({
+    queryKey: ["competitor", appId],
+    queryFn: async () => {
+      if (!appId) return null;
+      const url = new URL(`/api/competitor/${encodeURIComponent(appId)}`, API_BASE);
+      const res = await fetch(url.toString());
+      if (res.status === 404) return null;
+      if (!res.ok) throw new Error(`API /api/competitor → ${res.status}`);
+      const data = (await res.json()) as CompetitorDetail | null;
+      return data;
+    },
+    enabled: Boolean(appId),
+    staleTime: 5 * 60 * 1000,
   });
 }
 

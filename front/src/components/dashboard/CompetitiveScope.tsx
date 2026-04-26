@@ -1,4 +1,5 @@
-import { Info } from "lucide-react";
+import { ExternalLink, Info } from "lucide-react";
+import { Link } from "@tanstack/react-router";
 import { Card } from "@/components/ui/card";
 import {
   Table,
@@ -92,7 +93,7 @@ export function CompetitiveScope() {
           </TableHeader>
           <TableBody>
             {competitors.map((c) => (
-              <TableRow key={c.game}>
+              <TableRow key={c.game} className="group">
                 <TableCell className="font-medium">
                   <div className="flex items-start gap-2.5">
                     {c.iconUrl ? (
@@ -111,7 +112,19 @@ export function CompetitiveScope() {
                       </div>
                     )}
                     <div className="min-w-0 flex-1 flex-col gap-1">
-                      <div className="truncate">{c.game}</div>
+                      {c.app_id ? (
+                        <Link
+                          to="/competitor/$appId"
+                          params={{ appId: c.app_id }}
+                          className="inline-flex items-center gap-1 truncate text-foreground transition-colors hover:text-primary"
+                          title={`View every cached ad for ${c.game}`}
+                        >
+                          <span className="truncate">{c.game}</span>
+                          <ExternalLink className="h-3 w-3 opacity-0 transition-opacity group-hover:opacity-60" />
+                        </Link>
+                      ) : (
+                        <div className="truncate">{c.game}</div>
+                      )}
                       {c.publisher && (
                         <div className="truncate text-[11px] text-muted-foreground">
                           by {c.publisher}
