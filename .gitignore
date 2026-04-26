@@ -132,3 +132,6 @@ voodooio_logo.*
 ~$*
 /data/*.zip
 /data/cache.zip
+
+# Stray mp3 downloads at repo root — should land in data/cache/audio/library/
+/*.mp3
