@@ -361,13 +361,18 @@ export interface VariantVideoStatus {
  * mounts. If the user previously generated a video for this variant
  * (in any session), ``exists: true`` lets the UI render the cached
  * mp4 instantly without re-triggering the 5-min Scenario job.
+ *
+ * Pass ``audioQuality`` to bias the lookup toward fast vs rich
+ * outputs — fast and rich variants are cached as separate files on
+ * disk so the user can A/B them without overwriting either.
  */
 export function useVariantVideoStatus(
   gameName: string | undefined,
   archetypeId: string | undefined,
+  audioQuality: "fast" | "rich" = "fast",
 ) {
   return useQuery<VariantVideoStatus>({
-    queryKey: ["variant-video-status", gameName, archetypeId],
+    queryKey: ["variant-video-status", gameName, archetypeId, audioQuality],
     queryFn: async () => {
       if (!gameName || !archetypeId) return { exists: false };
       const url = new URL(
@@ -376,6 +381,7 @@ export function useVariantVideoStatus(
       );
       url.searchParams.set("game_name", gameName);
       url.searchParams.set("archetype_id", archetypeId);
+      url.searchParams.set("audio_quality", audioQuality);
       const res = await fetch(url.toString());
       if (!res.ok) return { exists: false };
       return res.json() as Promise<VariantVideoStatus>;
@@ -410,6 +416,7 @@ export function useRenderVariantVideo() {
       includeAudio?: boolean;
       includeVoice?: boolean;
       voice?: string;
+      audioQuality?: "fast" | "rich";
     }): Promise<VariantVideoResponse> => {
       const url = new URL("/api/variants/render-video", API_BASE);
       url.searchParams.set("game_name", vars.gameName);
@@ -428,6 +435,9 @@ export function useRenderVariantVideo() {
       );
       if (vars.voice) {
         url.searchParams.set("voice", vars.voice);
+      }
+      if (vars.audioQuality) {
+        url.searchParams.set("audio_quality", vars.audioQuality);
       }
       const res = await fetch(url.toString(), { method: "POST" });
       if (!res.ok) {

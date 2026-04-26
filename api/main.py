@@ -1760,6 +1760,15 @@ _VARIANT_VIDEO_MODEL = _os.environ.get(
     "SCENARIO_VARIANT_VIDEO_MODEL",
     "model_kling-o1-i2v",
 )
+# "rich" mode: Kling 2.6 Pro generates native synchronized audio per clip
+# (sfx + music + voice based on the brief's audio cues). Costs more
+# (~+15 CU/clip ≈ +$0.05) but gives diegetic SFX synced to the visual
+# events (whoosh on swipe, chime on combo, drop on absorption) which
+# OpenAI TTS / ElevenLabs alone can never match.
+_VARIANT_VIDEO_MODEL_RICH = _os.environ.get(
+    "SCENARIO_VARIANT_VIDEO_MODEL_RICH",
+    "model_kling-v2-6-i2v-pro",
+)
 _ENDCARDS_DIR = CACHE_DIR / "endcards"
 
 
@@ -1851,6 +1860,15 @@ async def render_variant_video(
             "'alloy' (neutral/punchy), 'nova' (young female), 'echo' (smoky)."
         ),
     ),
+    audio_quality: Literal["fast", "rich"] = Query(
+        "fast",
+        description=(
+            "'fast' = Kling O1 silent clips + post-hoc music/voice overlay "
+            "(default, ~$0.30/render). 'rich' = Kling 2.6 Pro with native "
+            "audio per clip — diegetic SFX synced to visuals (whoosh on "
+            "swipe, chime on combo, etc.), no post-hoc overlay. ~$1/render."
+        ),
+    ),
     model: str | None = Query(
         None,
         description="Override the Scenario video model (defaults to env or Kling i2v)",
@@ -1928,8 +1946,10 @@ async def render_variant_video(
         else:
             per_frame_prompts.append(hook_3s[:500] or "5-second cinematic gameplay clip")
 
-    # 4. Final output path — keyed by (archetype_id + endcard mtime) so
-    #    a freshly-rendered endcard invalidates the cached final mp4.
+    # 4. Final output path — keyed by (archetype_id + endcard mtime +
+    #    audio_quality) so a freshly-rendered endcard or a quality
+    #    swap invalidates the cached final mp4 cleanly. fast vs rich
+    #    outputs coexist on disk so the user can A/B them.
     safe_archetype = re.sub(r"[^a-zA-Z0-9_-]+", "-", archetype_id)[:40]
     endcard_for_cache = (
         _endcard_path_for(app_id) if include_endcard else None
@@ -1939,7 +1959,10 @@ async def render_variant_video(
         if endcard_for_cache
         else "_noec"
     )
-    final_filename = f"variant_{game_slug}_{safe_archetype}{endcard_tag}.mp4"
+    quality_tag = "_rich" if audio_quality == "rich" else ""
+    final_filename = (
+        f"variant_{game_slug}_{safe_archetype}{endcard_tag}{quality_tag}.mp4"
+    )
     final_path = _VIDEOS_DIR / final_filename
     if final_path.exists() and final_path.stat().st_size > 0:
         return VariantVideoResponse(
@@ -1978,7 +2001,15 @@ async def render_variant_video(
     # same (single Scenario call, just with one extra asset upload).
     from app.creative.scenario import call_scenario_video
 
-    chosen_model = model or _VARIANT_VIDEO_MODEL
+    # Quality dispatch:
+    #   fast → Kling O1 i2v (silent clips, post-hoc audio overlay)
+    #   rich → Kling 2.6 Pro i2v with generateAudio=True (per-clip
+    #          diegetic SFX/music/voice from the brief's audio cues,
+    #          no post-hoc overlay needed)
+    is_rich = audio_quality == "rich"
+    chosen_model = model or (
+        _VARIANT_VIDEO_MODEL_RICH if is_rich else _VARIANT_VIDEO_MODEL
+    )
     endcard_png = (
         _ENDCARDS_DIR / f"{app_id}.png"
         if include_endcard and app_id
@@ -2005,8 +2036,9 @@ async def render_variant_video(
                         model_id=chosen_model,
                         image_paths=[frame],
                         prompt=prompt,
-                        label=f"variant_{game_slug}_{safe_archetype}_clip{idx}",
+                        label=f"variant_{game_slug}_{safe_archetype}_clip{idx}{quality_tag}",
                         tail_image_path=tail,
+                        generate_audio=is_rich,
                     ),
                 ),
             )
@@ -2014,11 +2046,12 @@ async def render_variant_video(
     last_idx = len(local_frames) - 1
     log.info(
         "render_variant_video: %s · archetype=%s · %d clips × %s · "
-        "tail_image_on_clip%d=%s",
+        "audio=%s · tail_image_on_clip%d=%s",
         game_name,
         archetype_id,
         len(local_frames),
         chosen_model,
+        "native" if is_rich else "post-hoc",
         last_idx,
         bool(endcard_png),
     )
@@ -2079,20 +2112,18 @@ async def render_variant_video(
             detail="ffmpeg concat failed — check server logs",
         )
 
-    # 10. Optional audio overlay — up to two layers mixed together:
+    # 10. Audio strategy depends on quality:
     #
-    #   • Music bed (`include_audio=True`): picks
-    #     ``data/cache/audio/library/<vibe>.mp3`` matching the variant's
-    #     emotional pitch.
-    #   • Brainrot voiceover (`include_voice=True`): builds a punchy
-    #     narration from the brief's text_overlays + cta and runs it
-    #     through OpenAI TTS, then mixes it on top of the bed at full
-    #     volume (the bed ducks to ~25% so the voice cuts through).
+    #   rich → clips ALREADY have native audio from Kling 2.6 Pro.
+    #          Skip post-hoc overlay; the diegetic SFX would clash
+    #          with our static music bed. The endcard mp4 is still
+    #          silent though, so we accept that asymmetry for now
+    #          (most ads close on a beat anyway).
     #
-    #  Both ffmpeg passes run synchronously here — they're cheap (a
-    #  few seconds each on a 18s mp4) so we keep the API call bounded.
+    #   fast → clips are silent; run the multi-layer overlay
+    #          (music bed + optional voice) like before.
     audio_overlay_applied = False
-    if include_audio or include_voice:
+    if not is_rich and (include_audio or include_voice):
         audio_overlay_applied = _try_apply_audio_layers(
             video_path=final_path,
             variant=variant,
@@ -2121,6 +2152,7 @@ def variant_video_status(
     game_name: str = Query(...),
     archetype_id: str = Query(...),
     include_endcard: bool = Query(True),
+    audio_quality: Literal["fast", "rich"] = Query("fast"),
 ) -> VariantVideoStatus:
     """Cheap existence check for a previously rendered variant video.
 
@@ -2157,17 +2189,34 @@ def variant_video_status(
         if endcard_for_cache
         else "_noec"
     )
-    final_filename = f"variant_{game_slug}_{safe_archetype}{endcard_tag}.mp4"
+    quality_tag = "_rich" if audio_quality == "rich" else ""
+    final_filename = (
+        f"variant_{game_slug}_{safe_archetype}{endcard_tag}{quality_tag}.mp4"
+    )
     final_path = _VIDEOS_DIR / final_filename
 
     if not final_path.exists() or final_path.stat().st_size == 0:
-        # Also accept the previous-generation no-suffix file (when the
-        # endcard was added between renders) — the UI doesn't care which
-        # exact mtime tag was used as long as we have any cached video.
-        legacy = _VIDEOS_DIR / f"variant_{game_slug}_{safe_archetype}.mp4"
-        if legacy.exists() and legacy.stat().st_size > 0:
-            final_path = legacy
-            final_filename = legacy.name
+        # Try alternate cache files when the exact (endcard mtime,
+        # quality) tuple isn't on disk: any matching prefix is good
+        # enough for the UI to surface SOMETHING the user already
+        # rendered. Order: same quality without endcard tag, then
+        # cross-quality with endcard tag, then no-tag legacy.
+        candidates = sorted(
+            _VIDEOS_DIR.glob(f"variant_{game_slug}_{safe_archetype}*.mp4"),
+            key=lambda p: p.stat().st_mtime,
+            reverse=True,
+        )
+        # Prefer matching quality_tag if the user is asking specifically
+        match: Path | None = None
+        for c in candidates:
+            if quality_tag and quality_tag in c.name:
+                match = c
+                break
+        if match is None and candidates:
+            match = candidates[0]
+        if match and match.stat().st_size > 0:
+            final_path = match
+            final_filename = match.name
         else:
             return VariantVideoStatus(exists=False)
 

@@ -32,6 +32,7 @@ import {
   Music,
   Sparkles,
   Video,
+  Zap,
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -73,16 +74,20 @@ export function GeneratedAdSection({
   // across variant switches within the same Insights session.
   const [includeMusic, setIncludeMusic] = useState(true);
   const [includeVoice, setIncludeVoice] = useState(true);
+  const [audioQuality, setAudioQuality] = useState<"fast" | "rich">(
+    "fast",
+  );
 
   const render = useRenderVariantVideo();
 
-  // Status check — runs on mount + on variant change. If a video for
-  // this (game, variant) was rendered in a previous session it lives
-  // on disk under data/cache/videos/ and we surface it instantly,
-  // skipping the 5-min Scenario round-trip.
+  // Status check — runs on mount + on variant + quality change. If a
+  // video for this (game, variant, quality) tuple was rendered in a
+  // previous session it lives on disk under data/cache/videos/ and we
+  // surface it instantly, skipping the 5-min Scenario round-trip.
   const status = useVariantVideoStatus(
     gameName,
     selected?.brief.archetype_id,
+    audioQuality,
   );
 
   if (!selected) return null;
@@ -127,6 +132,7 @@ export function GeneratedAdSection({
       includeAudio: includeMusic,
       includeVoice,
       voice: "alloy",
+      audioQuality,
     });
   }
 
@@ -156,21 +162,37 @@ export function GeneratedAdSection({
               Pick the variant to render
             </div>
             <div className="flex items-center gap-1.5">
+              {/* Quality toggle — rich = Kling 2.6 Pro with native
+                  per-clip audio (diegetic SFX/music synced to visual
+                  events). fast = Kling O1 silent + post-hoc overlay. */}
+              <QualityToggle
+                quality={audioQuality}
+                onChange={setAudioQuality}
+                disabled={render.isPending}
+              />
               <AudioToggle
                 label="Music bed"
                 icon={<Music className="h-3 w-3" />}
-                active={includeMusic}
+                active={includeMusic && audioQuality === "fast"}
                 onClick={() => setIncludeMusic((v) => !v)}
-                disabled={render.isPending}
-                tooltip="Stock track from data/cache/audio/library/<vibe>.mp3 matched to the variant's emotional pitch"
+                disabled={render.isPending || audioQuality === "rich"}
+                tooltip={
+                  audioQuality === "rich"
+                    ? "Disabled in Rich mode — music comes from each clip's native audio."
+                    : "Stock track from data/cache/audio/library/<vibe>.mp3 matched to the variant's emotional pitch."
+                }
               />
               <AudioToggle
                 label="Brainrot voice"
                 icon={<Mic className="h-3 w-3" />}
-                active={includeVoice}
+                active={includeVoice && audioQuality === "fast"}
                 onClick={() => setIncludeVoice((v) => !v)}
-                disabled={render.isPending}
-                tooltip="OpenAI TTS reads the brief's text_overlays + cta. Music auto-ducks to 25% volume."
+                disabled={render.isPending || audioQuality === "rich"}
+                tooltip={
+                  audioQuality === "rich"
+                    ? "Disabled in Rich mode — Kling 2.6 Pro generates voice + sfx natively from the brief's audio cues."
+                    : "OpenAI TTS reads the brief's text_overlays + cta. Music auto-ducks to 25% volume."
+                }
               />
             </div>
           </div>
@@ -414,6 +436,59 @@ function Chip({
     >
       {children}
     </span>
+  );
+}
+
+function QualityToggle({
+  quality,
+  onChange,
+  disabled,
+}: {
+  quality: "fast" | "rich";
+  onChange: (q: "fast" | "rich") => void;
+  disabled?: boolean;
+}) {
+  return (
+    <div
+      className={`inline-flex items-center rounded-full border border-border bg-card p-0.5 ${
+        disabled ? "opacity-50 cursor-not-allowed" : ""
+      }`}
+      role="radiogroup"
+      aria-label="Audio quality"
+    >
+      <button
+        type="button"
+        role="radio"
+        aria-checked={quality === "fast"}
+        disabled={disabled}
+        onClick={() => onChange("fast")}
+        title="Kling O1 silent clips + post-hoc overlay. ~$0.30 / 5 min."
+        className={`flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11px] font-medium transition-colors ${
+          quality === "fast"
+            ? "bg-primary/15 text-primary"
+            : "text-muted-foreground hover:text-foreground"
+        }`}
+      >
+        <Zap className="h-3 w-3" />
+        Fast
+      </button>
+      <button
+        type="button"
+        role="radio"
+        aria-checked={quality === "rich"}
+        disabled={disabled}
+        onClick={() => onChange("rich")}
+        title="Kling 2.6 Pro with native audio. Diegetic SFX synced to visuals. ~$1 / 5 min."
+        className={`flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11px] font-medium transition-colors ${
+          quality === "rich"
+            ? "bg-pink-500/20 text-pink-300 ring-1 ring-pink-500/30"
+            : "text-muted-foreground hover:text-foreground"
+        }`}
+      >
+        <Sparkles className="h-3 w-3" />
+        Rich
+      </button>
+    </div>
   );
 }
 
