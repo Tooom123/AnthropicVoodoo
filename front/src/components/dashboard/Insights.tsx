@@ -50,7 +50,7 @@ import {
   usePipelineRuns,
 } from "@/lib/pipeline-runs-context";
 import { VariantsGallery } from "@/components/insights/VariantsGallery";
-import { VideoAdCard } from "@/components/insights/VideoAdCard";
+import { GeneratedAdSection } from "@/components/insights/GeneratedAdSection";
 import {
   fmtCurrency,
   fmtDuration,
@@ -337,7 +337,14 @@ export function Insights({ autoLaunch = false }: InsightsProps = {}) {
       />
       <BriefsGrid variants={report.final_variants} />
       <VariantsGallery variants={report.final_variants} />
-      <VideoAdCard gameName={report.target_game.name} />
+      {/* The hero output: pick a variant, click Generate, get the
+          rendered ad video back inline. Lives between the static
+          variant frames and the textual Summary so the report
+          finishes on something the PM can actually ship. */}
+      <GeneratedAdSection
+        gameName={report.target_game.name}
+        variants={report.final_variants}
+      />
       <PitchStoryBlock report={report} />
 
       {modals}

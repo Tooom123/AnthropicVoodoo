@@ -18,6 +18,7 @@ from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 load_dotenv()
@@ -34,7 +35,7 @@ app = FastAPI(title="HookLens API", version="0.1.0")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_methods=["GET"],
+    allow_methods=["GET", "POST"],
     allow_headers=["*"],
 )
 
@@ -1733,3 +1734,383 @@ def get_advertiser_ranks(
         except (TypeError, ValueError):
             continue
     return out
+
+
+# ---------------------------------------------------------------------------
+# Per-variant Generate Ad — fires N parallel Scenario img2video calls,
+# concatenates the resulting clips with ffmpeg, optionally appends the
+# game's pre-rendered endcard, and serves the final mp4 over /videos.
+# ---------------------------------------------------------------------------
+
+# Mount /videos as a static directory so the React UI can <video src="/videos/...">.
+# Existing files (the multi-clip CLI outputs in scripts/generate_demo_video.py)
+# are also served from here, which means demo_<game>_full.mp4 becomes
+# /videos/demo_<game>_full.mp4 for free.
+_VIDEOS_DIR = CACHE_DIR / "videos"
+_VIDEOS_DIR.mkdir(parents=True, exist_ok=True)
+app.mount("/videos", StaticFiles(directory=str(_VIDEOS_DIR)), name="videos")
+
+# Default Scenario video model for per-variant rendering. Single-frame
+# image-to-video (i2v) — one call per frame, parallelized N=3 by the
+# endpoint so the user sees their ad in ~3-5 minutes instead of 9-15.
+# Override with SCENARIO_VARIANT_VIDEO_MODEL env var.
+import os as _os
+
+_VARIANT_VIDEO_MODEL = _os.environ.get(
+    "SCENARIO_VARIANT_VIDEO_MODEL",
+    "model_kling-o1-i2v",
+)
+_ENDCARDS_DIR = CACHE_DIR / "endcards"
+
+
+class VariantVideoResponse(BaseModel):
+    video_url: str
+    """Path served under the API's /videos mount, e.g. ``/videos/variant_xxx.mp4``."""
+
+    cached: bool
+    """``True`` when the final mp4 was already on disk (instant return)."""
+
+    duration_s: float
+    """Approximate runtime of the assembled ad in seconds."""
+
+    clips: int
+    """How many Scenario clips were concatenated (typically 3)."""
+
+    endcard_appended: bool
+    """``True`` when a pre-rendered endcard was concatenated at the end."""
+
+    job_ids: list[str]
+    """Scenario job IDs for traceability — empty when fully cached."""
+
+    stub: bool
+    """``True`` when one or more clips fell back to a Picsum placeholder
+    (e.g. Scenario auth missing or job timed out). Frontend should warn."""
+
+
+def _slugify_game(name: str) -> str:
+    import re
+
+    return re.sub(r"[^a-zA-Z0-9_-]+", "_", name).strip("_-").lower() or "demo"
+
+
+def _download_to(url: str, dest: Path) -> Path:
+    """Mirror of scripts.generate_demo_video._download — used for both
+    Scenario CDN downloads and SensorTower asset URLs."""
+    import httpx
+
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    with httpx.Client(timeout=60.0, follow_redirects=True) as client:
+        r = client.get(url)
+        r.raise_for_status()
+        dest.write_bytes(r.content)
+    return dest
+
+
+@app.post("/api/variants/render-video", response_model=VariantVideoResponse)
+async def render_variant_video(
+    game_name: str = Query(..., description="Target game name (matches a cached report)"),
+    archetype_id: str = Query(..., description="Which variant to render"),
+    include_endcard: bool = Query(
+        True,
+        description="Append the game's pre-rendered endcard at the end if available",
+    ),
+    model: str | None = Query(
+        None,
+        description="Override the Scenario video model (defaults to env or Kling i2v)",
+    ),
+) -> VariantVideoResponse:
+    """Generate a finished ad video for one variant of a cached report.
+
+    Pipeline:
+      1. Load the cached HookLensReport for ``game_name``.
+      2. Pick the variant matching ``archetype_id`` (its hero +
+         storyboard frames, plus the brief's scenario_prompts which
+         carry the per-frame motion + audio cues).
+      3. Download each frame to ``data/cache/scenario_frames/<slug>/``.
+      4. Fire N parallel ``call_scenario_video`` calls (N = 3 typically)
+         — one image-to-video call per frame, capped by an
+         ``asyncio.Semaphore`` so we don't trigger Scenario tenant-wide
+         throttles.
+      5. ffmpeg-concat the resulting mp4s into
+         ``data/cache/videos/variant_<archetype_id>.mp4``.
+      6. Optionally append the game's pre-rendered endcard from
+         ``data/cache/endcards/<app_id>.mp4``.
+      7. Return ``/videos/...`` URL the frontend can play directly.
+
+    Cached aggressively: if the final mp4 already exists on disk we
+    return it instantly without recomputing. Re-clicks during the demo
+    are zero-latency.
+    """
+    import re
+
+    # 1. Load report
+    cache_path = REPORTS_CACHE_DIR / f"{_resolve_app_id_for_game(game_name)}_e2e.json"
+    if not cache_path.exists():
+        raise HTTPException(
+            status_code=404,
+            detail=f"No cached report for {game_name!r} — run the pipeline first",
+        )
+    report = json.loads(cache_path.read_text())
+    target_game = report.get("target_game") or {}
+    app_id = str(target_game.get("app_id") or "")
+    game_slug = _slugify_game(target_game.get("name") or game_name)
+
+    # 2. Find the variant
+    variants = report.get("final_variants") or []
+    variant = next(
+        (v for v in variants if (v.get("brief") or {}).get("archetype_id") == archetype_id),
+        None,
+    )
+    if variant is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Variant {archetype_id!r} not found in {game_name!r}",
+        )
+    brief = variant.get("brief") or {}
+    hero_url = variant.get("hero_frame_path") or ""
+    storyboard_urls = variant.get("storyboard_paths") or []
+    frame_urls = [u for u in [hero_url, *storyboard_urls] if u][:3]
+    if not frame_urls:
+        raise HTTPException(
+            status_code=422,
+            detail="Variant has no hero/storyboard frames to videofy",
+        )
+
+    # 3. Per-frame motion prompts. Prefer the brief's own scenario_prompts
+    #    (which Opus tailored per frame, including audio cues), fall back
+    #    to scene_flow beats, then to the global hook.
+    scenario_prompts = brief.get("scenario_prompts") or []
+    scene_flow = brief.get("scene_flow") or []
+    hook_3s = brief.get("hook_3s") or ""
+    per_frame_prompts: list[str] = []
+    for i in range(len(frame_urls)):
+        if i < len(scenario_prompts) and scenario_prompts[i]:
+            per_frame_prompts.append(str(scenario_prompts[i])[:500])
+        elif i < len(scene_flow) and scene_flow[i]:
+            per_frame_prompts.append(str(scene_flow[i])[:500])
+        else:
+            per_frame_prompts.append(hook_3s[:500] or "5-second cinematic gameplay clip")
+
+    # 4. Final output path — keyed by archetype_id to make caching trivial
+    safe_archetype = re.sub(r"[^a-zA-Z0-9_-]+", "-", archetype_id)[:40]
+    final_filename = f"variant_{game_slug}_{safe_archetype}.mp4"
+    final_path = _VIDEOS_DIR / final_filename
+    if final_path.exists() and final_path.stat().st_size > 0:
+        return VariantVideoResponse(
+            video_url=f"/videos/{final_filename}",
+            cached=True,
+            duration_s=_estimate_video_duration(final_path),
+            clips=len(frame_urls),
+            endcard_appended=_endcard_path_for(app_id) is not None and include_endcard,
+            job_ids=[],
+            stub=False,
+        )
+
+    # 5. Download frames locally for hashing
+    frames_dir = CACHE_DIR / "scenario_frames" / game_slug
+    frames_dir.mkdir(parents=True, exist_ok=True)
+    local_frames: list[Path] = []
+    for i, url in enumerate(frame_urls):
+        dest = frames_dir / f"{safe_archetype}_frame_{i}.png"
+        if not dest.exists() or dest.stat().st_size == 0:
+            try:
+                _download_to(url, dest)
+            except Exception as exc:
+                raise HTTPException(
+                    status_code=502,
+                    detail=f"Failed to download frame {i}: {exc}",
+                ) from exc
+        local_frames.append(dest)
+
+    # 6. Fire N parallel Scenario img2video calls
+    from app.creative.scenario import call_scenario_video
+
+    chosen_model = model or _VARIANT_VIDEO_MODEL
+    loop = asyncio.get_running_loop()
+    sem = asyncio.Semaphore(3)  # never more than 3 in flight per request
+
+    async def _gen_clip(idx: int, frame: Path, prompt: str) -> tuple[int, str, dict]:
+        async with sem:
+            return await loop.run_in_executor(
+                None,
+                lambda: (
+                    idx,
+                    *call_scenario_video(
+                        model_id=chosen_model,
+                        image_paths=[frame],
+                        prompt=prompt,
+                        label=f"variant_{game_slug}_{safe_archetype}_clip{idx}",
+                    ),
+                ),
+            )
+
+    log.info(
+        "render_variant_video: %s · archetype=%s · %d clips × %s",
+        game_name,
+        archetype_id,
+        len(local_frames),
+        chosen_model,
+    )
+    try:
+        results = await asyncio.gather(
+            *[
+                _gen_clip(i, frame, per_frame_prompts[i])
+                for i, frame in enumerate(local_frames)
+            ]
+        )
+    except Exception as exc:
+        log.exception("Parallel video generation failed")
+        raise HTTPException(
+            status_code=502,
+            detail=f"Scenario video generation failed: {exc}",
+        ) from exc
+
+    # 7. Download each clip locally so we can ffmpeg-concat them
+    clip_paths: list[Path] = []
+    job_ids: list[str] = []
+    any_stub = False
+    for idx, video_url, meta in sorted(results, key=lambda r: r[0]):
+        if meta.get("stub"):
+            any_stub = True
+        if jid := meta.get("job_id"):
+            job_ids.append(str(jid))
+        clip_path = _VIDEOS_DIR / f"variant_{game_slug}_{safe_archetype}_clip{idx}.mp4"
+        if not clip_path.exists() or clip_path.stat().st_size == 0:
+            try:
+                _download_to(video_url, clip_path)
+            except Exception as exc:
+                log.warning("Clip download failed for clip %d: %s", idx, exc)
+                continue
+        clip_paths.append(clip_path)
+
+    if not clip_paths:
+        raise HTTPException(
+            status_code=502,
+            detail="All clips failed to render — check Scenario credentials / credits",
+        )
+
+    # 8. Optionally append the endcard
+    endcard = _endcard_path_for(app_id) if include_endcard else None
+    concat_inputs = [*clip_paths, endcard] if endcard else clip_paths
+
+    # 9. ffmpeg concat
+    if not _ffmpeg_concat(concat_inputs, final_path):
+        raise HTTPException(
+            status_code=500,
+            detail="ffmpeg concat failed — check server logs",
+        )
+
+    return VariantVideoResponse(
+        video_url=f"/videos/{final_filename}",
+        cached=False,
+        duration_s=_estimate_video_duration(final_path),
+        clips=len(clip_paths),
+        endcard_appended=endcard is not None,
+        job_ids=job_ids,
+        stub=any_stub,
+    )
+
+
+def _resolve_app_id_for_game(game_name: str) -> str:
+    """Find the cached report file's stem for a game name.
+
+    Reports are keyed by app_id, but the user passes a game_name. Quick
+    scan: read each report's target_game.name and return the first
+    case-insensitive match.
+    """
+    if not REPORTS_CACHE_DIR.exists():
+        raise HTTPException(status_code=404, detail="No cached reports yet")
+    needle = game_name.strip().lower()
+    for path in REPORTS_CACHE_DIR.glob("*_e2e.json"):
+        try:
+            data = json.loads(path.read_text())
+            name = (data.get("target_game", {}).get("name") or "").lower()
+            if name == needle:
+                return path.stem.removesuffix("_e2e")
+        except Exception:
+            continue
+    raise HTTPException(
+        status_code=404,
+        detail=f"No cached report matches game name {game_name!r}",
+    )
+
+
+def _endcard_path_for(app_id: str) -> Path | None:
+    """Look for a pre-rendered endcard mp4 for this app_id. Returns
+    ``None`` when no endcard is on disk — caller will skip the append.
+    """
+    if not app_id:
+        return None
+    candidate = _ENDCARDS_DIR / f"{app_id}.mp4"
+    if candidate.exists() and candidate.stat().st_size > 0:
+        return candidate
+    return None
+
+
+def _ffmpeg_concat(inputs: list[Path], output: Path) -> bool:
+    """ffmpeg concat-demuxer with -c copy fallback to re-encode.
+
+    Returns ``True`` on success. The fallback reencodes with libx264
+    when the inputs have mismatched codecs/timestamps (common when
+    mixing Scenario clips with manually-encoded endcards).
+    """
+    import subprocess
+    import tempfile
+
+    if not inputs:
+        return False
+
+    with tempfile.NamedTemporaryFile(
+        mode="w", suffix=".txt", dir=str(_VIDEOS_DIR), delete=False
+    ) as f:
+        for p in inputs:
+            f.write(f"file '{p.resolve()}'\n")
+        list_path = Path(f.name)
+
+    try:
+        cmd_copy = [
+            "ffmpeg", "-y", "-f", "concat", "-safe", "0",
+            "-i", str(list_path), "-c", "copy", str(output),
+        ]
+        proc = subprocess.run(cmd_copy, capture_output=True, text=True)
+        if proc.returncode != 0:
+            log.info(
+                "ffmpeg -c copy failed (%s); retrying with re-encode",
+                proc.stderr.strip()[-200:],
+            )
+            cmd_reencode = [
+                "ffmpeg", "-y", "-f", "concat", "-safe", "0",
+                "-i", str(list_path),
+                "-c:v", "libx264", "-preset", "fast", "-crf", "23",
+                "-c:a", "aac", "-b:a", "128k",
+                str(output),
+            ]
+            proc = subprocess.run(cmd_reencode, capture_output=True, text=True)
+            if proc.returncode != 0:
+                log.error("ffmpeg re-encode failed: %s", proc.stderr[-500:])
+                return False
+        return output.exists() and output.stat().st_size > 0
+    finally:
+        try:
+            list_path.unlink()
+        except OSError:
+            pass
+
+
+def _estimate_video_duration(path: Path) -> float:
+    """Cheap duration estimate via ffprobe; returns 0.0 on failure."""
+    import subprocess
+
+    try:
+        result = subprocess.run(
+            [
+                "ffprobe", "-v", "error",
+                "-show_entries", "format=duration",
+                "-of", "default=noprint_wrappers=1:nokey=1",
+                str(path),
+            ],
+            capture_output=True, text=True, timeout=10,
+        )
+        return float(result.stdout.strip())
+    except (subprocess.SubprocessError, ValueError):
+        return 0.0
