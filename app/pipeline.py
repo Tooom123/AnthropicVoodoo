@@ -293,7 +293,16 @@ def _step_deconstruct(state: PipelineState) -> list[DeconstructedCreative]:
 
 
 def _step_archetypes(state: PipelineState) -> list[CreativeArchetype]:
-    state.archetypes = compute_archetypes(state.deconstructed)
+    # Anchor the SoV velocity window's end_date on the same period_date
+    # the rest of the pipeline used (top_advertisers / creatives_top).
+    # Otherwise compute_archetypes defaults to today's date, which can
+    # silently desync the velocity numbers from the SensorTower window
+    # we actually queried — gives jurors a target for "your numbers
+    # don't match the data you're showing".
+    state.archetypes = compute_archetypes(
+        state.deconstructed,
+        period_date=state.config.period_date,
+    )
     state.top_archetypes = state.archetypes[: state.config.top_k_archetypes]
     return state.top_archetypes
 

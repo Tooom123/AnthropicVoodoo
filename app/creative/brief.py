@@ -126,6 +126,13 @@ Author a CreativeBrief that adapts the archetype to {dna.name}. Specifically:
 - ``rationale`` 2-3 sentences, action-oriented for the UA team
 - ``scenario_prompts`` are 2-3 ready-to-paste Scenario txt2img prompts for: hero frame (the strongest single still), and 1-2 storyboard frames. Each prompt MUST mention: aspect 9:16, the game palette ({dna.palette.primary_hex}, {dna.palette.secondary_hex}, {dna.palette.accent_hex}), the visual style "{dna.visual_style}", and one signature on-screen text. CRITICAL FIDELITY DIRECTIVE: the generated frame must read as an authentic in-game moment from {dna.name} — same UI chrome, same {", ".join(dna.key_mechanics) if dna.key_mechanics else "core mechanic"}, same character/asset style as the IP-Adapter reference screenshots. Avoid generic stock-game tropes; describe the {dna.name}-specific gameplay objects and HUD explicitly. If the game has no character on screen ({dna.character_present}), do not invent one in the prompt.
 
+AUDIO DIRECTIVE (each scenario_prompt is later turned into a 5-second video clip via image-to-video models with audio support — Veo 3, Kling, Sora):
+- End each scenario_prompt with a single bracketed audio cue line in the form:
+  [Audio: <voiceover line if any> / <music style: 'punchy upbeat trap', 'whimsical UGC sting', 'silent', etc.> / <key SFX moments: 'whoosh on swipe', 'chime on combo', 'fail-buzzer at 1.2s'>].
+- Voiceover should match the archetype's emotional pitch ({arch.centroid_hook.emotional_pitch}); when the archetype is `asmr` keep voice null and emphasise SFX.
+- Music style must align with the game's UI mood ("{dna.ui_mood}") — avoid generic library music; describe BPM/intent.
+- Keep the audio cue concise (under 25 words) so it fits in the prompt without overwhelming the visual instructions.
+
 Then call the tool.
 """
 

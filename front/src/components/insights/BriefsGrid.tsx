@@ -17,7 +17,23 @@ export function BriefsGrid({ variants }: BriefsGridProps) {
     );
   }
 
-  const sorted = [...variants].sort((a, b) => a.test_priority - b.test_priority);
+  // Always show at most 3 briefs (the top test priorities). 4+ would
+  // shrink each card too aggressively and dilute the "tested in order"
+  // narrative — the PM only ships 1-3 variants per game anyway.
+  const sorted = [...variants]
+    .sort((a, b) => a.test_priority - b.test_priority)
+    .slice(0, 3);
+  const totalAvailable = variants.length;
+
+  // Adaptive grid: 1 → full width, 2 → halves, 3+ → thirds. Keeps a
+  // single brief from feeling abandoned in a narrow column and prevents
+  // a 5-variant report from cramming too tightly.
+  const colsClass =
+    sorted.length === 1
+      ? "grid-cols-1"
+      : sorted.length === 2
+        ? "grid-cols-1 lg:grid-cols-2"
+        : "grid-cols-1 lg:grid-cols-3";
 
   return (
     <section>
@@ -27,10 +43,14 @@ export function BriefsGrid({ variants }: BriefsGridProps) {
           Creative briefs
         </span>
         <span className="text-xs text-muted-foreground">
-          ({sorted.length} variant{sorted.length === 1 ? "" : "s"})
+          (top {sorted.length} variant{sorted.length === 1 ? "" : "s"}
+          {totalAvailable > sorted.length
+            ? ` of ${totalAvailable} generated`
+            : ""}
+          )
         </span>
       </header>
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+      <div className={`grid gap-4 ${colsClass}`}>
         {sorted.map((v) => (
           <BriefCard key={v.brief.archetype_id} variant={v} />
         ))}

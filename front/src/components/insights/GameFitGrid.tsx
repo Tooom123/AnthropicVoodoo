@@ -1,4 +1,6 @@
-import { Target } from "lucide-react";
+import { useState } from "react";
+import { ChevronDown, Target } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import type { CreativeArchetype, GameFitScore } from "@/types/hooklens";
 
@@ -14,6 +16,8 @@ interface FitRow {
 }
 
 export function GameFitGrid({ scores, archetypes }: GameFitGridProps) {
+  const [showAll, setShowAll] = useState(false);
+
   if (!scores?.length) {
     return (
       <Card className="border-border bg-card p-6 text-sm text-muted-foreground">
@@ -22,6 +26,12 @@ export function GameFitGrid({ scores, archetypes }: GameFitGridProps) {
     );
   }
 
+  // ⚠️ Sort order is INTENTIONALLY DIFFERENT from the archetypes table.
+  // Archetypes are ranked by overall_signal_score (market momentum). Here
+  // we re-rank the SAME archetypes by per-game compatibility — the top
+  // archetype overall might score poorly against this specific game's
+  // DNA and slide down in this view. That's the whole point of the
+  // step: market signal + game fit together pick the winning brief.
   const archMap = new Map(archetypes.map((a) => [a.archetype_id, a]));
   const sorted: FitRow[] = [...scores]
     .sort((a, b) => b.overall - a.overall)
@@ -31,9 +41,13 @@ export function GameFitGrid({ scores, archetypes }: GameFitGridProps) {
       rank: i + 1,
     }));
 
+  const TOP_N = 3;
+  const visible = showAll ? sorted : sorted.slice(0, TOP_N);
+  const hiddenCount = Math.max(0, sorted.length - TOP_N);
+
   return (
     <section>
-      <header className="mb-3 flex items-center justify-between">
+      <header className="mb-3 flex items-start justify-between gap-3">
         <div>
           <div className="flex items-center gap-2 text-[11px] uppercase tracking-wider text-muted-foreground">
             <Target className="h-3.5 w-3.5" /> Game-fit scoring
@@ -41,15 +55,18 @@ export function GameFitGrid({ scores, archetypes }: GameFitGridProps) {
           <h3 className="mt-0.5 text-base font-semibold">
             Archetype × Game DNA compatibility
           </h3>
+          <p className="mt-1 max-w-2xl text-xs leading-relaxed text-muted-foreground">
+            Same clusters as above, <b>re-ranked</b> by how well each one
+            adapts to this specific game (Opus 4.7 scores 0–100 on visual,
+            mechanic and audience compatibility). A top market signal can
+            slide down here if it doesn't match the Game DNA — that's the
+            point.
+          </p>
         </div>
-        <p className="hidden max-w-md text-right text-xs text-muted-foreground sm:block">
-          Opus 4.7 scores 0–100 per axis (visual / mechanic / audience) plus a
-          weighted overall. Top 3 highlighted.
-        </p>
       </header>
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-        {sorted.map(({ score, archetype, rank }) => (
+        {visible.map(({ score, archetype, rank }) => (
           <FitCard
             key={score.archetype_id}
             score={score}
@@ -59,6 +76,26 @@ export function GameFitGrid({ scores, archetypes }: GameFitGridProps) {
           />
         ))}
       </div>
+
+      {hiddenCount > 0 && (
+        <div className="mt-3 flex justify-center">
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => setShowAll((v) => !v)}
+            className="gap-1.5"
+          >
+            <ChevronDown
+              className={`h-3.5 w-3.5 transition-transform ${
+                showAll ? "rotate-180" : ""
+              }`}
+            />
+            {showAll
+              ? `Hide ${hiddenCount} lower-ranked`
+              : `See ${hiddenCount} more`}
+          </Button>
+        </div>
+      )}
     </section>
   );
 }
@@ -143,11 +180,33 @@ function FitCard({
         })}
       </div>
 
-      {score.rationale && (
-        <p className="text-xs leading-relaxed text-muted-foreground line-clamp-5">
-          {score.rationale}
-        </p>
-      )}
+      {score.rationale && <RationaleBlock rationale={score.rationale} />}
     </Card>
+  );
+}
+
+/** Click-to-expand rationale. Shows a 4-line clamp by default with a
+ *  chevron toggle so the full Opus reasoning is always one click away
+ *  but doesn't dominate the card. */
+function RationaleBlock({ rationale }: { rationale: string }) {
+  const [expanded, setExpanded] = useState(false);
+  return (
+    <div className="text-xs leading-relaxed text-muted-foreground">
+      <p className={expanded ? "" : "line-clamp-4"}>{rationale}</p>
+      {rationale.length > 240 && (
+        <button
+          type="button"
+          onClick={() => setExpanded((v) => !v)}
+          className="mt-1 inline-flex items-center gap-1 text-[11px] font-medium text-primary/80 hover:text-primary"
+        >
+          <ChevronDown
+            className={`h-3 w-3 transition-transform ${
+              expanded ? "rotate-180" : ""
+            }`}
+          />
+          {expanded ? "Show less" : "Show full rationale"}
+        </button>
+      )}
+    </div>
   );
 }

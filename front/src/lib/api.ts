@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import type { Creative, CompetitorGame } from "@/data/sample";
 import type { HookLensReport, ReportSummary, VideoAdConcept, VideoAdResult } from "@/types/hooklens";
 
@@ -324,6 +324,61 @@ export function useGenerateVideo(
       }),
     enabled: !!gameName && enabled,
     staleTime: Infinity,
+    retry: false,
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Per-variant Generate Ad — fires N parallel Scenario img2video calls
+// from the variant's hero+storyboards, concats with ffmpeg, returns mp4.
+// Slower than useGenerateVideo on first run (3-5 min), instant when cached.
+// ---------------------------------------------------------------------------
+
+export interface VariantVideoResponse {
+  /** Path served from the API's static /videos mount, e.g. ``/videos/variant_xxx.mp4``. */
+  video_url: string;
+  /** True when the mp4 was already on disk (instant return — cache hit). */
+  cached: boolean;
+  duration_s: number;
+  clips: number;
+  endcard_appended: boolean;
+  job_ids: string[];
+  /** True when one or more clips fell back to a Picsum placeholder. */
+  stub: boolean;
+}
+
+/**
+ * Trigger the per-variant ad rendering pipeline. Returns a mutation
+ * helper so the UI can fire it on click and track loading/error
+ * state without auto-firing on every render.
+ *
+ * Cache strategy: the BACKEND caches by archetype_id, so re-clicking
+ * the same variant returns the same mp4 in <100ms.
+ */
+export function useRenderVariantVideo() {
+  return useMutation({
+    mutationKey: ["render-variant-video"],
+    mutationFn: async (vars: {
+      gameName: string;
+      archetypeId: string;
+      includeEndcard?: boolean;
+    }): Promise<VariantVideoResponse> => {
+      const url = new URL("/api/variants/render-video", API_BASE);
+      url.searchParams.set("game_name", vars.gameName);
+      url.searchParams.set("archetype_id", vars.archetypeId);
+      url.searchParams.set(
+        "include_endcard",
+        vars.includeEndcard === false ? "false" : "true",
+      );
+      const res = await fetch(url.toString(), { method: "POST" });
+      if (!res.ok) {
+        const detail = await res.text();
+        throw new Error(`Render failed (${res.status}): ${detail.slice(0, 200)}`);
+      }
+      return res.json() as Promise<VariantVideoResponse>;
+    },
+    // No retry — a 5-minute video gen failing once shouldn't trigger
+    // another 5-minute attempt automatically.
     retry: false,
   });
 }

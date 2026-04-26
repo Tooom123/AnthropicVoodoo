@@ -16,6 +16,7 @@
  * imports from this module keep working.
  */
 import { useEffect, useState } from "react";
+import { useNavigate } from "@tanstack/react-router";
 import {
   AlertCircle,
   Check,
@@ -34,6 +35,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { useGame } from "@/lib/game-context";
 import {
   STEP_ORDER,
   type StepState,
@@ -45,6 +47,25 @@ export type { PipelineRunConfig } from "@/lib/pipeline-runs-context";
 export function RunAnalysisDialog() {
   const { run, isDialogOpen, closeDialog, startRun, cancelRun } =
     usePipelineRuns();
+  const { setGameName } = useGame();
+  const navigate = useNavigate();
+
+  /**
+   * "Run in background" / Close button. Closing the dialog mid-run is a
+   * common path during the demo — the user wants to see the live list
+   * view (with the running analysis as the first row), not stay on the
+   * page they were on. So we explicitly land them on /insights with no
+   * game selected, which renders the list. The pipeline keeps running
+   * via PipelineRunsContext; the floating pill takes over on other
+   * routes if the user navigates away later.
+   */
+  function handleClose() {
+    closeDialog();
+    if (run?.phase === "running") {
+      setGameName("");
+      void navigate({ to: "/insights" });
+    }
+  }
 
   const [now, setNow] = useState<number>(Date.now());
 
@@ -72,7 +93,7 @@ export function RunAnalysisDialog() {
     <Dialog
       open={isDialogOpen}
       onOpenChange={(o) => {
-        if (!o) closeDialog();
+        if (!o) handleClose();
       }}
     >
       <DialogContent className="max-w-2xl overflow-hidden">
@@ -82,7 +103,7 @@ export function RunAnalysisDialog() {
             <span className="truncate">Analyze {run.gameName}</span>
           </DialogTitle>
           <DialogDescription>
-            Running the full HookLens pipeline (10 steps · ~3–5 min · ~$0.05–1
+            Running the full pipeline (10 steps · ~3–5 min · ~$0.05–1
             in API calls). Closing this dialog keeps the run going in the
             background — a small pill in the bottom-right will track progress.
           </DialogDescription>
@@ -161,7 +182,7 @@ export function RunAnalysisDialog() {
           )}
           <Button
             variant={run.phase === "done" ? "default" : "outline"}
-            onClick={closeDialog}
+            onClick={handleClose}
           >
             {run.phase === "running" ? "Run in background" : "Close"}
           </Button>

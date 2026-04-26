@@ -1,3 +1,4 @@
+import { Info } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import {
   Table,
@@ -66,9 +67,25 @@ export function CompetitiveScope() {
           <TableHeader>
             <TableRow className="hover:bg-transparent">
               <TableHead>Game</TableHead>
-              <TableHead>Sub-genre</TableHead>
-              <TableHead className="text-right">Store rank</TableHead>
-              <TableHead className="text-right">Est. monthly spend</TableHead>
+              <TableHead>Category</TableHead>
+              <TableHead className="text-right">
+                <span
+                  title="Rank in SensorTower's top-advertisers list, sorted by Share of Voice (SoV) — not an App Store ranking."
+                  className="inline-flex items-center gap-1"
+                >
+                  SoV rank
+                  <Info className="h-3 w-3 opacity-60" />
+                </span>
+              </TableHead>
+              <TableHead className="text-right">
+                <span
+                  title="Estimated from Share of Voice. SensorTower exposes SoV but not USD spend, so this is a heuristic (sov × $8M reference budget)."
+                  className="inline-flex items-center gap-1"
+                >
+                  Est. monthly spend
+                  <Info className="h-3 w-3 opacity-60" />
+                </span>
+              </TableHead>
               <TableHead>Spend tier</TableHead>
               <TableHead>Status</TableHead>
             </TableRow>
@@ -111,14 +128,40 @@ export function CompetitiveScope() {
       </Card>
 
       <Card className="border-border bg-card p-4">
-        <div className="mb-3">
-          <h3 className="text-sm font-semibold">Estimated monthly spend distribution</h3>
-          <p className="text-xs text-muted-foreground">Tracked competitor games</p>
+        <div className="mb-3 flex items-baseline justify-between gap-3">
+          <div>
+            <h3 className="text-sm font-semibold">
+              Estimated monthly spend distribution
+            </h3>
+            <p className="text-xs text-muted-foreground">
+              Tracked competitor games · sorted by SoV
+            </p>
+          </div>
+          <span
+            className="inline-flex items-center gap-1 text-[10px] text-muted-foreground"
+            title="Spend is a SoV-based heuristic, not real USD spend from SensorTower."
+          >
+            <Info className="h-3 w-3" /> Heuristic
+          </span>
         </div>
-        <div className="h-[260px] w-full">
+        {/* Height scales with row count (32px/row + 32px chrome) so 10
+            advertisers don't collide with the chart top, and long game
+            names get a 200px Y-axis lane to fully render. */}
+        <div
+          className="w-full"
+          style={{ height: Math.max(280, data.length * 32 + 40) }}
+        >
           <ResponsiveContainer>
-            <BarChart data={data} layout="vertical" margin={{ top: 8, right: 24, left: 24, bottom: 8 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="oklch(1 0 0 / 0.08)" horizontal={false} />
+            <BarChart
+              data={data}
+              layout="vertical"
+              margin={{ top: 8, right: 24, left: 8, bottom: 8 }}
+            >
+              <CartesianGrid
+                strokeDasharray="3 3"
+                stroke="oklch(1 0 0 / 0.08)"
+                horizontal={false}
+              />
               <XAxis
                 type="number"
                 stroke="oklch(0.7 0.02 260)"
@@ -130,7 +173,9 @@ export function CompetitiveScope() {
                 dataKey="name"
                 stroke="oklch(0.7 0.02 260)"
                 fontSize={11}
-                width={120}
+                width={200}
+                interval={0}
+                tick={{ textAnchor: "end" }}
               />
               <Tooltip
                 contentStyle={{
@@ -139,7 +184,10 @@ export function CompetitiveScope() {
                   borderRadius: 8,
                   fontSize: 12,
                 }}
-                formatter={(v: number) => ["$" + abbrevNumber(v), "Monthly spend"]}
+                formatter={(v: number) => [
+                  "$" + abbrevNumber(v),
+                  "Est. monthly spend",
+                ]}
               />
               <Bar dataKey="spend" radius={[0, 4, 4, 0]}>
                 {data.map((d) => (
