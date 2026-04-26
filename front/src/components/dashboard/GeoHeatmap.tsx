@@ -280,10 +280,10 @@ export function GeoHeatmap() {
       </div>
 
       {/* Map */}
-      <div className="relative rounded-xl border border-border bg-[#060d18] overflow-hidden">
+      <div className="relative rounded-xl border border-slate-200 bg-slate-50 overflow-hidden">
         {(isLoading || dotsLoading) && (
-          <div className="absolute inset-0 z-10 flex items-center justify-center bg-[#060d18]/60">
-            <span className="text-xs text-slate-300 animate-pulse">
+          <div className="absolute inset-0 z-10 flex items-center justify-center bg-slate-50/80">
+            <span className="text-xs text-slate-500 animate-pulse">
               {dotsLoading ? "Building dot map…" : "Querying 34 markets…"}
             </span>
           </div>
@@ -300,7 +300,7 @@ export function GeoHeatmap() {
 
             const fill = tracked && !dimmed
               ? heatColor(normalize(signal!.market_intensity))
-              : "#1e3352";
+              : "#cbd5e1";
 
             return (
               <circle

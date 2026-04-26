@@ -72,14 +72,14 @@ export function Sidebar({ activePath, collapsed, onToggle }: SidebarProps) {
       <div className="flex h-14 items-center border-b border-slate-100 px-3 gap-2">
         <div
           className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-white font-black"
-          style={{ background: "#6366f1", fontSize: "1.1rem", lineHeight: 1 }}
+          style={{ background: "#0f172a", fontSize: "1.1rem", lineHeight: 1 }}
           aria-label="Voodoo"
         >
           V
         </div>
         {!collapsed && (
           <div className="flex flex-col leading-tight flex-1 min-w-0">
-            <span className="text-sm font-bold tracking-tight text-slate-800">HookLens</span>
+            <span className="text-sm font-bold tracking-tight text-slate-800">VoodRadar</span>
             <span className="text-[10px] text-slate-400">by Voodoo</span>
           </div>
         )}
@@ -146,7 +146,7 @@ export function Sidebar({ activePath, collapsed, onToggle }: SidebarProps) {
       {/* Bottom branding */}
       {!collapsed && (
         <div className="border-t border-slate-100 px-4 py-3">
-          <p className="text-[10px] text-slate-400">© 2026 Voodoo · HookLens</p>
+          <p className="text-[10px] text-slate-400">© 2026 Voodoo · VoodRadar</p>
         </div>
       )}
     </aside>
