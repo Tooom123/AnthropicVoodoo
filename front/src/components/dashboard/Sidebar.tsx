@@ -6,17 +6,9 @@ import {
   LayoutGrid,
   Activity,
   Target,
-  Eye,
   Sparkles,
   Map,
-  Wand2,
-  Brain,
-  TrendingUp,
-  Layers,
   Radar,
-  GitCompare,
-  PieChart,
-  Lightbulb,
   Compass,
   Gamepad2,
 } from "lucide-react";
@@ -33,23 +25,30 @@ interface Section {
   items: SubItem[];
 }
 
+/**
+ * Sidebar nav. Trimmed to only routes that actually have a page mounted.
+ *
+ * Order within Market Intelligence is intentional for the demo:
+ * 1. Ad Library — what the PM sees first ("show me what's running today")
+ * 2. HookLens Insights — the hero product surface (analyses + briefs)
+ * 3. Competitive Scope — top advertisers contextualizing the analysis
+ * 4. Performance Signals — single-creative deep dive
+ *
+ * Game Mapping covers Voodoo's own portfolio + the worldwide market map.
+ *
+ * Old placeholder items (Trend Detection, Creative Clusters, Audience
+ * Overlap, Brief Generator, Asset Studio, Recommendations) all pointed
+ * to non-existent routes and have been removed to keep the demo clean.
+ */
 const SECTIONS: Section[] = [
   {
     label: "Market Intelligence",
     icon: Radar,
     items: [
       { label: "Ad Library", to: "/", icon: LayoutGrid },
-      { label: "Performance Signals", to: "/performance", icon: Activity },
-      { label: "Competitive Scope", to: "/competitive", icon: Target },
       { label: "HookLens Insights", to: "/insights", icon: Sparkles },
-    ],
-  },
-  {
-    label: "Pattern Recognition",
-    icon: Eye,
-    items: [
-      { label: "Trend Detection", to: "/patterns/trends", icon: TrendingUp },
-      { label: "Creative Clusters", to: "/patterns/clusters", icon: Layers },
+      { label: "Competitive Scope", to: "/competitive", icon: Target },
+      { label: "Performance Signals", to: "/performance", icon: Activity },
     ],
   },
   {
@@ -58,22 +57,6 @@ const SECTIONS: Section[] = [
     items: [
       { label: "Voodoo Portfolio", to: "/voodoo", icon: Gamepad2 },
       { label: "Global Market Map", to: "/geo", icon: Compass },
-      { label: "Audience Overlap", to: "/mapping/overlap", icon: GitCompare },
-    ],
-  },
-  {
-    label: "Creative Output",
-    icon: Wand2,
-    items: [
-      { label: "Brief Generator", to: "/creative/brief", icon: Sparkles },
-      { label: "Asset Studio", to: "/creative/studio", icon: PieChart },
-    ],
-  },
-  {
-    label: "Insight Layer",
-    icon: Brain,
-    items: [
-      { label: "Recommendations", to: "/insights/recommendations", icon: Lightbulb },
     ],
   },
 ];
