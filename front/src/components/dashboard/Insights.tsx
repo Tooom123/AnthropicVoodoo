@@ -43,6 +43,7 @@ import {
   type PipelineRunConfig,
 } from "@/components/insights/RunAnalysisDialog";
 import { VariantsGallery } from "@/components/insights/VariantsGallery";
+import { VideoAdCard } from "@/components/insights/VideoAdCard";
 import {
   fmtCurrency,
   fmtDuration,
@@ -293,6 +294,7 @@ export function Insights({ autoLaunch = false }: InsightsProps = {}) {
       />
       <BriefsGrid variants={report.final_variants} />
       <VariantsGallery variants={report.final_variants} />
+      <VideoAdCard gameName={report.target_game.name} />
       <PitchStoryBlock report={report} />
 
       {modals}

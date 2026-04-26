@@ -1180,6 +1180,212 @@ def _load_game_dna(game_name: str):
     return report.target_game
 
 
+# ---------------------------------------------------------------------------
+# Single-creative deep dive — powers the /ad/$id detail page
+# ---------------------------------------------------------------------------
+
+
+class CreativeDetailMedia(BaseModel):
+    creative_url: str | None = None
+    preview_url: str | None = None
+    thumb_url: str | None = None
+    width: int | None = None
+    height: int | None = None
+    aspect_ratio: str | None = None
+    video_duration: int | None = None
+    title: str | None = None
+    button_text: str | None = None
+    message: str | None = None
+
+
+class CreativeDetailApp(BaseModel):
+    app_id: str
+    name: str
+    publisher_name: str | None = None
+    icon_url: str | None = None
+    canonical_country: str | None = None
+
+
+class SimilarCreative(BaseModel):
+    creative_id: str
+    network: str
+    ad_type: str
+    thumb_url: str | None
+    advertiser_name: str | None
+    icon_url: str | None
+    first_seen_at: str | None
+    days_active: int
+
+
+class CreativeDetail(BaseModel):
+    """Full payload for the ``/ad/$id`` detail page — every field comes
+    from cached SensorTower data (no mocks). Returns 404 if the creative
+    isn't in any cached ``creatives_top_*.json``.
+    """
+
+    creative_id: str
+    network: str
+    ad_type: str
+    ad_formats: list[str]
+    first_seen_at: str | None
+    last_seen_at: str | None
+    days_active: int
+    phashion_group: str | None
+    media: CreativeDetailMedia
+    app: CreativeDetailApp
+    siblings: list[SimilarCreative]
+
+
+def _scan_all_creatives() -> list[dict[str, Any]]:
+    """Iterate every ``ad_unit`` from every cached ``creatives_top_*.json``.
+    Yields raw dicts (not Pydantic) since each row carries the bundled
+    ``app_info`` block which we want to keep intact for enrichment.
+    """
+    out: list[dict[str, Any]] = []
+    st_cache = CACHE_DIR / "sensortower"
+    if not st_cache.exists():
+        return out
+    for path in st_cache.glob("creatives_top_*.json"):
+        try:
+            data = json.loads(path.read_text())
+        except (OSError, json.JSONDecodeError):
+            continue
+        for au in data.get("ad_units") or []:
+            out.append(au)
+    return out
+
+
+@app.get("/api/creatives/{creative_id}", response_model=CreativeDetail)
+def get_creative_detail(creative_id: str) -> CreativeDetail:
+    """Return rich detail for one creative by its SensorTower id."""
+    units = _scan_all_creatives()
+
+    # Find the unit — the URL ``id`` is the ad_unit id (= phashion_group),
+    # which equals ``creatives[0].id`` in 99% of rows.
+    target: dict[str, Any] | None = None
+    for au in units:
+        if str(au.get("id") or "") == creative_id:
+            target = au
+            break
+        for c in au.get("creatives") or []:
+            if str(c.get("id") or "") == creative_id:
+                target = au
+                break
+        if target is not None:
+            break
+
+    if target is None:
+        raise HTTPException(status_code=404, detail=f"Creative {creative_id} not in cache")
+
+    media_src = (target.get("creatives") or [{}])[0]
+    info = target.get("app_info") or {}
+
+    first = target.get("first_seen_at")
+    last = target.get("last_seen_at")
+    try:
+        days = (
+            (datetime.fromisoformat(last) - datetime.fromisoformat(first)).days
+            if first and last
+            else 0
+        )
+    except (TypeError, ValueError):
+        days = 0
+    days = max(0, days)
+
+    # Aspect ratio derived from width/height if both present
+    w, h = media_src.get("width"), media_src.get("height")
+    aspect = None
+    if isinstance(w, (int, float)) and isinstance(h, (int, float)) and h:
+        ratio = w / h
+        if abs(ratio - 9 / 16) < 0.05:
+            aspect = "9:16"
+        elif abs(ratio - 1.0) < 0.05:
+            aspect = "1:1"
+        elif abs(ratio - 16 / 9) < 0.05:
+            aspect = "16:9"
+        elif abs(ratio - 4 / 5) < 0.05:
+            aspect = "4:5"
+        else:
+            aspect = f"{w}:{h}"
+
+    # Sibling creatives — same advertiser app_id, ranked by days_active desc,
+    # excluding the current one. Caps at 6.
+    same_app = [
+        au
+        for au in units
+        if str(au.get("app_id") or "") == str(target.get("app_id") or "")
+        and str(au.get("id") or "") != creative_id
+    ]
+
+    def _days(au: dict[str, Any]) -> int:
+        try:
+            return max(
+                0,
+                (
+                    datetime.fromisoformat(au.get("last_seen_at"))
+                    - datetime.fromisoformat(au.get("first_seen_at"))
+                ).days,
+            )
+        except (TypeError, ValueError):
+            return 0
+
+    same_app.sort(key=_days, reverse=True)
+    siblings: list[SimilarCreative] = []
+    seen_sibling_ids: set[str] = set()
+    for au in same_app:
+        sid = str(au.get("id") or "")
+        if not sid or sid in seen_sibling_ids:
+            continue
+        seen_sibling_ids.add(sid)
+        if len(siblings) >= 6:
+            break
+        s_media = (au.get("creatives") or [{}])[0]
+        s_info = au.get("app_info") or {}
+        siblings.append(
+            SimilarCreative(
+                creative_id=str(au.get("id") or ""),
+                network=str(au.get("network") or ""),
+                ad_type=str(au.get("ad_type") or ""),
+                thumb_url=s_media.get("thumb_url"),
+                advertiser_name=s_info.get("name"),
+                icon_url=s_info.get("icon_url"),
+                first_seen_at=au.get("first_seen_at"),
+                days_active=_days(au),
+            )
+        )
+
+    return CreativeDetail(
+        creative_id=creative_id,
+        network=str(target.get("network") or ""),
+        ad_type=str(target.get("ad_type") or ""),
+        ad_formats=list(target.get("ad_formats") or []),
+        first_seen_at=first,
+        last_seen_at=last,
+        days_active=days,
+        phashion_group=target.get("phashion_group"),
+        media=CreativeDetailMedia(
+            creative_url=media_src.get("creative_url"),
+            preview_url=media_src.get("preview_url"),
+            thumb_url=media_src.get("thumb_url"),
+            width=w if isinstance(w, int) else None,
+            height=h if isinstance(h, int) else None,
+            aspect_ratio=aspect,
+            video_duration=media_src.get("video_duration"),
+            title=media_src.get("title"),
+            button_text=media_src.get("button_text"),
+            message=media_src.get("message"),
+        ),
+        app=CreativeDetailApp(
+            app_id=str(info.get("app_id") or target.get("app_id") or ""),
+            name=str(info.get("name") or info.get("humanized_name") or "Unknown"),
+            publisher_name=info.get("publisher_name"),
+            icon_url=info.get("icon_url"),
+            canonical_country=info.get("canonical_country"),
+        ),
+        siblings=siblings,
+    )
+
+
 @app.get("/api/video-brief", response_model=VideoAdConcept)
 def get_video_brief(game_name: str = Query(...)) -> VideoAdConcept:
     """Return (or generate) the brainrot VideoAdConcept for a game (LLM step only, fast)."""
