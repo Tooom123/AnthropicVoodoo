@@ -7,6 +7,8 @@
 
 Built for **Voodoo Hack 2026 — Track 3 (Market Intelligence)**.
 
+![VoodRadar home](./docs/screenshots/voodradar-home.png)
+
 ---
 
 ## What it does
