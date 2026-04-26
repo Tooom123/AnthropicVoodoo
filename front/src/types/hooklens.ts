@@ -200,6 +200,26 @@ export interface HookLensReport {
 // 6. /api/reports list summary
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// 7. Brainrot video ad concept — /api/video-brief
+// ---------------------------------------------------------------------------
+
+export interface VideoAdConcept {
+  title: string;
+  gameplay_hook: string;
+  concept: string;
+  scenario_prompt: string;
+  narration_script: string;
+  style_tags: string[];
+}
+
+export interface VideoAdResult {
+  concept: VideoAdConcept;
+  video_url: string;
+  stub: boolean;
+  job_id: string | null;
+}
+
 export interface ReportSummary {
   app_id: string;
   name: string;

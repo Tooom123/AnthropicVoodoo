@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as VoodooRouteImport } from './routes/voodoo'
 import { Route as PerformanceRouteImport } from './routes/performance'
 import { Route as InsightsRouteImport } from './routes/insights'
+import { Route as GeoRouteImport } from './routes/geo'
 import { Route as CompetitiveRouteImport } from './routes/competitive'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AdIdRouteImport } from './routes/ad.$id'
@@ -29,6 +30,11 @@ const PerformanceRoute = PerformanceRouteImport.update({
 const InsightsRoute = InsightsRouteImport.update({
   id: '/insights',
   path: '/insights',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const GeoRoute = GeoRouteImport.update({
+  id: '/geo',
+  path: '/geo',
   getParentRoute: () => rootRouteImport,
 } as any)
 const CompetitiveRoute = CompetitiveRouteImport.update({
@@ -50,6 +56,7 @@ const AdIdRoute = AdIdRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/competitive': typeof CompetitiveRoute
+  '/geo': typeof GeoRoute
   '/insights': typeof InsightsRoute
   '/performance': typeof PerformanceRoute
   '/voodoo': typeof VoodooRoute
@@ -58,6 +65,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/competitive': typeof CompetitiveRoute
+  '/geo': typeof GeoRoute
   '/insights': typeof InsightsRoute
   '/performance': typeof PerformanceRoute
   '/voodoo': typeof VoodooRoute
@@ -67,6 +75,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/competitive': typeof CompetitiveRoute
+  '/geo': typeof GeoRoute
   '/insights': typeof InsightsRoute
   '/performance': typeof PerformanceRoute
   '/voodoo': typeof VoodooRoute
@@ -77,6 +86,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/competitive'
+    | '/geo'
     | '/insights'
     | '/performance'
     | '/voodoo'
@@ -85,6 +95,7 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/competitive'
+    | '/geo'
     | '/insights'
     | '/performance'
     | '/voodoo'
@@ -93,6 +104,7 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/competitive'
+    | '/geo'
     | '/insights'
     | '/performance'
     | '/voodoo'
@@ -102,6 +114,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   CompetitiveRoute: typeof CompetitiveRoute
+  GeoRoute: typeof GeoRoute
   InsightsRoute: typeof InsightsRoute
   PerformanceRoute: typeof PerformanceRoute
   VoodooRoute: typeof VoodooRoute
@@ -131,6 +144,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof InsightsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/geo': {
+      id: '/geo'
+      path: '/geo'
+      fullPath: '/geo'
+      preLoaderRoute: typeof GeoRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/competitive': {
       id: '/competitive'
       path: '/competitive'
@@ -158,6 +178,7 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   CompetitiveRoute: CompetitiveRoute,
+  GeoRoute: GeoRoute,
   InsightsRoute: InsightsRoute,
   PerformanceRoute: PerformanceRoute,
   VoodooRoute: VoodooRoute,

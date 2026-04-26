@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import type { Creative, CompetitorGame } from "@/data/sample";
-import type { HookLensReport, ReportSummary } from "@/types/hooklens";
+import type { HookLensReport, ReportSummary, VideoAdConcept, VideoAdResult } from "@/types/hooklens";
 
 const API_BASE = (import.meta.env.VITE_API_URL as string | undefined) ?? "http://localhost:8000";
 
@@ -146,6 +146,41 @@ export function useReportSourceCreatives(gameName: string) {
   });
 }
 
+// ---------------------------------------------------------------------------
+// Geo signals — Tom's worldwide market-intensity heatmap (cf. GeoHeatmap.tsx)
+// ---------------------------------------------------------------------------
+
+export interface CountrySignal {
+  country_code: string;
+  country_name: string;
+  continent: string;
+  lat: number;
+  lng: number;
+  radius: number;
+  num_advertisers: number;
+  top_sov: number;
+  market_intensity: number;
+}
+
+export interface GeoSignalsParams {
+  game_name?: string;
+  category_id?: number;
+  period?: string;
+  period_date?: string;
+}
+
+export function useGeoSignals(params: GeoSignalsParams = {}) {
+  return useQuery<CountrySignal[]>({
+    queryKey: ["geo-signals", params],
+    queryFn: () =>
+      apiFetch<CountrySignal[]>(
+        "/api/geo-signals",
+        params as Record<string, string | number | undefined>,
+      ),
+    staleTime: 10 * 60 * 1000,
+  });
+}
+
 /** List of pre-cached reports — for a "previously analyzed" picker. */
 export function useReportList() {
   return useQuery<ReportSummary[]>({
@@ -258,5 +293,37 @@ export function useAdvertiserRanks(
     },
     staleTime: 10 * 60 * 1000,
     enabled: Boolean(appId),
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Tom's brainrot video ad pipeline — Scenario Veo3 + structured 3-beat prompts
+// ---------------------------------------------------------------------------
+
+/** Brainrot video ad concept — LLM step only, fast. */
+export function useVideoBrief(gameName: string | undefined) {
+  return useQuery<VideoAdConcept>({
+    queryKey: ["video-brief", gameName],
+    queryFn: () =>
+      apiFetch<VideoAdConcept>("/api/video-brief", { game_name: gameName }),
+    enabled: !!gameName,
+    staleTime: Infinity,
+  });
+}
+
+/** Trigger Scenario video generation (slow — 2-5 min). Returns video_url when done. */
+export function useGenerateVideo(
+  gameName: string | undefined,
+  enabled: boolean,
+) {
+  return useQuery<VideoAdResult>({
+    queryKey: ["video-generate", gameName],
+    queryFn: () =>
+      apiFetch<VideoAdResult>("/api/video-brief/generate", {
+        game_name: gameName,
+      }),
+    enabled: !!gameName && enabled,
+    staleTime: Infinity,
+    retry: false,
   });
 }
