@@ -2545,19 +2545,33 @@ def _try_apply_audio_layers(
         audio_inputs.append((next_idx, "voice"))
         next_idx += 1
 
-    # Build filter_complex. If music + voice → amix at custom volumes.
+    # Build filter_complex. The CRUCIAL trick: pad every short audio
+    # source with silence (apad=pad_dur) so ffmpeg never decides the
+    # output should end early because one input ran out. We then trim
+    # to the EXACT video duration via the outer ``-t``. This avoids
+    # the bug where a 3-second TTS voice was truncating an 18-second
+    # video down to 3s because of -shortest semantics.
     if len(audio_inputs) == 1:
         only_idx, only_role = audio_inputs[0]
-        # Single layer: just trim/loop to video duration
-        filter_str = f"[{only_idx}:a]volume={'0.55' if only_role == 'music' else '1.0'},atrim=0:{duration:.3f},asetpts=N/SR/TB[a]"
-    else:
-        # Music ducks to 25% so voice (full volume) sits on top
+        vol = "0.55" if only_role == "music" else "1.0"
         filter_str = (
-            f"[1:a]volume=0.25,atrim=0:{duration:.3f},asetpts=N/SR/TB[m];"
-            f"[2:a]volume=1.0[v];"
-            f"[m][v]amix=inputs=2:duration=longest:dropout_transition=0[a]"
+            f"[{only_idx}:a]volume={vol},apad=whole_dur={duration:.3f},"
+            f"atrim=0:{duration:.3f},asetpts=N/SR/TB[a]"
+        )
+    else:
+        # Two layers: music ducks to 25%, voice at 100%. Both padded
+        # to video length so the amix output equals video length.
+        filter_str = (
+            f"[1:a]volume=0.25,apad=whole_dur={duration:.3f},"
+            f"atrim=0:{duration:.3f},asetpts=N/SR/TB[m];"
+            f"[2:a]volume=1.0,apad=whole_dur={duration:.3f},"
+            f"atrim=0:{duration:.3f},asetpts=N/SR/TB[v];"
+            f"[m][v]amix=inputs=2:duration=first:dropout_transition=0[a]"
         )
 
+    # NOTE: NO ``-shortest`` flag — that's what was making ffmpeg cut
+    # the output to the voice length. The ``-t`` cap below + the
+    # apad-then-atrim chain in the filter ensure correct duration.
     cmd = [
         "ffmpeg", "-y",
         *inputs,
@@ -2566,7 +2580,6 @@ def _try_apply_audio_layers(
         "-c:v", "copy",
         "-c:a", "aac", "-b:a", "192k",
         "-t", f"{duration:.3f}",
-        "-shortest",
         "-movflags", "+faststart",
         str(out),
     ]
