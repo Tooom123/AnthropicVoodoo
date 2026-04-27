@@ -18,7 +18,7 @@
 
 <img src="docs/screenshots/voodradar-sizzle-reel.gif" alt="VoodRadar sizzle reel — animated branded endcards across four Voodoo titles" width="280">
 
-*↑ Four of the per-game **branded endcards** VoodRadar pre-generates (GPT Image 2 for the static frame → Kling i2v for the 3-second animation). Each title's endcard is rendered once and grafted onto every variant via `lastFrameImage` chaining, so a 3-clip Kling video transitions seamlessly into a CTA frame that's already on-brand for the game. **Zero human edit.***
+*↑ Four of the per-game **branded endcards** VoodRadar pre-generates (GPT Image 2 for the static frame → Kling i2v for the 3-second animation). Each title's endcard is rendered once and grafted onto every variant via `lastFrameImage` chaining, so a 3-clip Kling video transitions into a CTA frame that's already on-brand for the game.*
 
 </div>
 
@@ -26,7 +26,7 @@
 
 ## TL;DR — what the jury saw
 
-> **As a Voodoo PM managing 50 live games, I want VoodRadar to tell me every Monday morning which titles need a creative refresh, deconstruct what's currently winning in the category, and ship me three on-brand video variants ready to A/B test — in less time than my coffee gets cold.**
+> **As a Voodoo PM managing dozens of live games, I want a tool that flags which titles need a creative refresh, deconstructs what is currently winning in their category, and produces a small set of on-brand video variants I can take to A/B test — without spending a half-day per title.**
 
 VoodRadar turns a single game name into a full competitive creative dossier in **3 to 5 minutes**:
 
@@ -34,12 +34,12 @@ VoodRadar turns a single game name into a full competitive creative dossier in *
 2. **Deconstructs** every creative with **Gemini Pro Vision** — extracting the hook, the scene flow, the text overlays, the CTA, the palette, the audience proxy.
 3. **Clusters** the corpus into archetypes via signal-weighted scoring (SoV velocity, derivative spread, freshness, network diversity).
 4. **Scores** each archetype against the target Game DNA on visual / mechanic / audience axes (Claude Opus 4.7).
-5. **Authors** per-archetype creative briefs with explicit **audio directives** (bespoke brainrot narration scripts, no LoRem).
+5. **Authors** per-archetype creative briefs with explicit **audio directives** — including bespoke, high-tempo narration scripts written for each variant (no Lorem-Ipsum filler, no generic copy).
 6. **Renders** 3 hero frames via **Scenario (gpt-image-2)**, then **3 parallel 5-second Kling i2v video calls**, with explicit `firstFrame` / `lastFrame` chaining on the final clip so it transitions seamlessly into the **pre-generated game-specific endcard**.
 7. **Mixes** a multi-layer audio track via `ffmpeg filter_complex`: music bed (auto-ducked to 25%) + Opus-authored narration → OpenAI TTS + timestamp-spliced game SFX.
 8. **Outputs** an 18-second branded MP4 ready to upload to Meta Ads / TikTok.
 
-The killer feature: every Gemini call is **persisted in a knowledge base** keyed by `creative_id`. The first analysis pays Gemini, every subsequent one (cross-game, cross-week, cross-machine) hits disk in <10 ms. After the hackathon we shipped the repo with **499 ads pre-deconstructed** — a fresh clone gets the moat for free.
+A design choice we leaned on heavily: every Gemini call is **persisted in a knowledge base** keyed by `creative_id`. The first analysis pays Gemini; subsequent ones (cross-game, cross-week, cross-machine) hit disk in <10 ms. The repo ships with **499 ads pre-deconstructed**, so a fresh clone has a usable corpus from the start.
 
 ---
 
@@ -56,11 +56,11 @@ We don't just rank by raw Share-of-Voice. SensorTower's top-creatives feed is he
 | **`freshness`** | Days since `first_seen_at`. Decay function: full weight ≤ 7 days, half-weight at 30 days, ~0 at 90 days. Catches "this hook just launched and is already top-N". | `ad_unit.first_seen_at` from creatives_top. |
 | **`network_diversity`** | Number of distinct networks running the same `phashion_group` (visual hash). Genuine winners propagate across Meta / TikTok / AppLovin. Single-network outliers are usually network-specific tests. | `phashion_group` + `network` fields. |
 
-Final score is `(0.45 × velocity_norm) + (0.20 × spread_norm) + (0.20 × freshness_norm) + (0.15 × diversity_norm)`. The weights were tuned empirically against the Voodoo benchmark of 14 ads we manually labelled "winner" / "tester" / "decay". Implementation in [`app/analysis/archetypes.py`](app/analysis/archetypes.py).
+Final score is `(0.45 × velocity_norm) + (0.20 × spread_norm) + (0.20 × freshness_norm) + (0.15 × diversity_norm)`. The weights are heuristic — picked to favour velocity over freshness over diversity — and would benefit from being calibrated against a labelled set of historical winners in a follow-up. Implementation in [`app/analysis/archetypes.py`](app/analysis/archetypes.py).
 
-This is **why we don't just hand the PM a top-50 list** — the platform surfaces the 5–8 ads where the signal genuinely justifies attention, with the score components transparent on every card.
+The intent is to surface the handful of ads where the signal genuinely justifies attention rather than dumping a full top-50 list on the PM, with each score component visible on the card so the choice is auditable.
 
-### 2 · Gemini deconstruction — the moat
+### 2 · Gemini deconstruction — the persistent corpus
 
 Every selected creative goes through **Gemini 2.5 Pro Vision** (1M context, native multi-frame video understanding). The prompt asks for a **structured Pydantic schema** so we never deal with prose:
 
@@ -93,12 +93,12 @@ The clustering step picks the 3 archetypes that score highest **for this specifi
 - 3 storyboard frames (each with prompt for Scenario, plus negative prompt)
 - per-frame text overlays
 - final CTA copy
-- **`audio_directive`**: the punchline of the prompt
+- **`audio_directive`** — the section of the prompt that drives the audio output
   - `vibe_track`: which emotional pitch to match for the music bed
-  - `narration_script`: bespoke 3-sentence brainrot script Opus writes specifically for the variant — short cadence, punchy nouns, set up + reveal + CTA
+  - `narration_script`: a bespoke 3-sentence script Opus writes specifically for the variant — short cadence, punchy nouns, structured as setup → reveal → CTA, calibrated to the snappy delivery that performs on TikTok / Reels
   - `sfx_cues`: 3-5 timestamped game-feel sound effects (`whoosh @ 1.2s`, `drop @ 4.8s`, `chime @ 17.5s`)
 
-The audio directive is what lets us produce ads that sound like *Voodoo* ads (high-tempo, casual-arcade) and not generic AI slop. Without it, the TTS reads the text overlays robotically and the music feels glued on — we tested both.
+Including this directive in the prompt gave us audio that fits the casual-arcade tone Voodoo ads typically run on, rather than a flat reading of the text overlays. We compared both approaches internally before settling on this design.
 
 ### 4 · Video generation — 3 parallel calls + first/last frame chain
 
@@ -130,13 +130,13 @@ ffmpeg filter_complex (multi-layer audio mix — section 5)
                  final.mp4
 ```
 
-The **first/last-frame chaining on `clip_2`** is the trick that gives us a seamless cut into the branded endcard. Kling's i2v supports passing both `firstFrameImage` and `lastFrameImage` (in **Fast** mode — Rich/2.6-Pro mode rejects the combo when `generateAudio=true`, so we accept a hard cut there in exchange for native diegetic audio). We extract the endcard's first frame at pipeline-init time and reuse it across every variant for the same game.
+The **first/last-frame chaining on `clip_2`** is what gives the cut into the branded endcard a clean transition. Kling's i2v supports passing both `firstFrameImage` and `lastFrameImage` (in **Fast** mode — Rich/2.6-Pro mode rejects the combo when `generateAudio=true`, so in that mode we accept a hard cut in exchange for native diegetic audio). We extract the endcard's first frame at pipeline-init time and reuse it across every variant for the same game.
 
 Implementation in [`app/creative/scenario.py`](app/creative/scenario.py) (the API client) and [`api/main.py:render_variant_video`](api/main.py) (the orchestrator).
 
 ### 5 · Audio mixing — multi-layer ffmpeg `filter_complex`
 
-This was the most fun debugging session of the hackathon. Three layers, all mixed into one stereo track:
+Three layers, mixed down into one stereo track:
 
 | Layer | Source | Volume | Strategy |
 |---|---|---|---|
@@ -144,9 +144,9 @@ This was the most fun debugging session of the hackathon. Three layers, all mixe
 | **Voiceover** | OpenAI TTS (`alloy` voice) reading the **Opus-authored bespoke narration** — *not* the text overlays. The narration is cached on disk per `(brief_hash, voice_id)` so re-rolls are free. | 100% | Padded with silence to the full video duration so `amix` can't drop early. |
 | **Game SFX** | 5 short stems (`whoosh.mp3`, `swoosh.mp3`, `drop.mp3`, `chime.mp3`, `brand.mp3`) timestamp-spliced at the brief's `sfx_cues`. | 80% | Each splice uses `adelay=<ms>|<ms>` to hit the correct beat, then `apad` + `atrim` to align. |
 
-The full filter graph is built dynamically — every layer that's enabled gets its own input slot, its own chain, and a label that goes into the final `amix=inputs=N`. The previously-painful bug was using `-shortest`, which truncated the 18s video to the 4s narration; we now `apad` every audio source to video length and let amix do its thing. Implementation in [`api/main.py:_try_apply_audio_layers`](api/main.py).
+The filter graph is built dynamically: each enabled layer gets its own input slot, its own chain, and a label that feeds into the final `amix=inputs=N`. An early implementation used `-shortest`, which truncated 18s videos down to the 4s narration; the current version `apad`s every audio source to the video length so `amix` aligns correctly. Implementation in [`api/main.py:_try_apply_audio_layers`](api/main.py).
 
-The result: every ad sounds bespoke. The PM keeps three toggles in the UI (Music / Voice / SFX) and can flip combinations live during a test session — 20 seconds end-to-end per re-mix because the silent video stays cached.
+In the UI, the PM has three toggles (Music / Voice / SFX) and can re-mix without re-running the video pipeline — the silent variant stays cached, so a re-mix takes about 20 seconds end-to-end.
 
 ### 6 · Endcards — pre-generated, animated, per-game
 
@@ -203,7 +203,7 @@ We pre-generated 14 endcards covering every Voodoo title in our demo set. Adding
                             └──────────────────────────┘
 ```
 
-**Knowledge base** (`data/cache/deconstruct/`) is the moat: every Gemini call keyed by `creative_id`, cached forever. The first analysis pays Gemini, every subsequent one hits disk in <10 ms. A weekly cron of `scripts/scan_top_competitors.py` keeps it fresh.
+**Knowledge base** (`data/cache/deconstruct/`) is where the persistence lives: every Gemini call keyed by `creative_id`, cached on disk. The first analysis pays Gemini, subsequent ones hit disk in <10 ms. A weekly cron of `scripts/scan_top_competitors.py` keeps it fresh.
 
 ---
 
@@ -243,7 +243,7 @@ scripts/
 
 data/cache/                      # All cached state (selectively gitignored)
 ├── reports/                     # 16 cached HookLensReports (~440 KB)
-├── deconstruct/                 # 499 Gemini deconstructions (~2 MB) ⭐ THE MOAT
+├── deconstruct/                 # 499 Gemini deconstructions (~2 MB)
 ├── endcards/                    # 14 game endcards (PNG + 3-second MP4)
 ├── voodoo/                      # 50-game catalog + portfolio snapshot
 ├── sensortower/                 # Raw SensorTower API responses
@@ -333,7 +333,7 @@ Walks every cached SensorTower creative, deconstructs the ones not yet in the kn
 
 <img src="docs/screenshots/voodradar-hero-ad.gif" alt="VoodRadar — full Archery Clash ad with audio + endcard transition" width="300">
 
-*A full **Archery Clash** ad VoodRadar produced for the demo: 3 Kling i2v clips concatenated → seamless `lastFrame` graft into the branded endcard. Bespoke Opus-authored narration sits on top of an auto-ducked music bed and three timestamp-spliced game SFX. **Zero human edit between the brief and this MP4.***
+*An **Archery Clash** ad VoodRadar produced for the demo: 3 Kling i2v clips concatenated, with a `lastFrame` graft into the branded endcard. Opus-authored narration sits on top of an auto-ducked music bed and three timestamp-spliced game SFX. The pipeline runs end-to-end from the brief to this MP4.*
 
 </div>
 
@@ -341,11 +341,7 @@ Walks every cached SensorTower creative, deconstructs the ones not yet in the kn
 
 ## Credits
 
-Built for **Voodoo &times; Anthropic Hack 2026** in 30 hours by a team of three:
-
-- **Edouard Foussier** — [@edouardfoussier](https://github.com/edouardfoussier)
-- **Tom Anglès** — [@Tooom123](https://github.com/Tooom123)
-- **Mehdi** *(GitHub TBA)*
+Built for **Voodoo &times; Anthropic Hack 2026** in 30 hours by **[Tom](https://github.com/Tooom123), Mehdi and myself**.
 
 Powered by Anthropic credits (Claude Opus 4.7), Google AI credits (Gemini 2.5 Pro Vision), and Scenario beta access (gpt-image-2 + Kling O1/2.6-Pro i2v + Veo 3). SensorTower data used under hackathon-sponsor credentials.
 
