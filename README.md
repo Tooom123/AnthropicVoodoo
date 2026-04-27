@@ -13,8 +13,9 @@
 [![Gemini Pro Vision](https://img.shields.io/badge/Gemini_2.5_Pro-4285F4?style=flat&logo=google&logoColor=white)](https://ai.google.dev/)
 [![Scenario AI](https://img.shields.io/badge/Scenario-img2vid_·_Kling-7C3AED?style=flat)](https://scenario.com/)
 
-**Type a mobile-game name → 5 minutes later, get 3 ready-to-test ad videos**
-**grounded in fresh SensorTower market signals.**
+**Type a mobile-game name → get a full competitive creative dossier**
+**(deconstructed competitor ads, archetypes, ready-to-render briefs)**
+**in 3–5 minutes, grounded in fresh [SensorTower](https://sensortower.com/) signals.**
 
 <img src="docs/screenshots/voodradar-sizzle-reel.gif" alt="VoodRadar sizzle reel — animated branded endcards across four Voodoo titles" width="280">
 
@@ -28,9 +29,9 @@
 
 > **As a Voodoo PM managing dozens of live games, I want a tool that flags which titles need a creative refresh, deconstructs what is currently winning in their category, and produces a small set of on-brand video variants I can take to A/B test — without spending a half-day per title.**
 
-VoodRadar turns a single game name into a full competitive creative dossier in **3 to 5 minutes**:
+VoodRadar turns a single game name into a full competitive creative dossier in **3 to 5 minutes** (rendering each brief into a finished video is a separate, optional step that takes another few minutes per variant):
 
-1. **Pulls** the live SensorTower top-creatives feed (4 networks × 7 countries) and indexes hundreds of ads.
+1. **Pulls** the live [SensorTower](https://sensortower.com/) top-creatives feed (4 networks × 7 countries) and indexes hundreds of ads.
 2. **Deconstructs** every creative with **Gemini Pro Vision** — extracting the hook, the scene flow, the text overlays, the CTA, the palette, the audience proxy.
 3. **Clusters** the corpus into archetypes via signal-weighted scoring (SoV velocity, derivative spread, freshness, network diversity).
 4. **Scores** each archetype against the target Game DNA on visual / mechanic / audience axes (Claude Opus 4.7).
@@ -82,7 +83,7 @@ class DeconstructedCreative(BaseModel):
     pacing_score: float                  # 0-1, normalized scene-cuts-per-second
 ```
 
-Each deconstruction is written to `data/cache/deconstruct/<creative_id>.json` and **never recomputed**. After the hackathon, our knowledge base has **499 creatives × ~3 KB each ≈ 2 MB of structured market intelligence** that grew from zero in 48 hours of pipeline runs. A `scripts/scan_top_competitors.py` cron keeps it fresh weekly.
+Each deconstruction is written to `data/cache/deconstruct/<creative_id>.json` and **never recomputed** unless the file is removed. After the hackathon, the knowledge base contains **499 creatives × ~3 KB each ≈ 2 MB of structured market intelligence** built up over the hackathon weekend. A `scripts/scan_top_competitors.py` cron is set up to keep it fresh on a weekly cadence.
 
 This is what makes the second analysis on a Voodoo title **10× cheaper than the first** — the per-archetype clustering reads from disk instead of re-paying Gemini.
 
@@ -102,13 +103,13 @@ Including this directive in the prompt gave us audio that fits the casual-arcade
 
 ### 4 · Video generation — 3 parallel calls + first/last frame chain
 
-This is the part the jury asked the most about. The pipeline takes one brief and renders an 18-second branded ad in roughly 3 minutes:
+The video-rendering step takes one brief and produces an 18-second branded MP4. End-to-end time depends mostly on how busy the Scenario backend is — typically a few minutes per variant when run uncached:
 
 ```
                       ┌─────── Scenario gpt-image-2 (parallel ×3) ───────┐
                       │                                                   │
 brief.frame_prompts ──┼── frame_0.png ──┐                                 │
-                      ├── frame_1.png ──┼─── 3 hero frames (1080×1920)    │
+                      ├── frame_1.png ──┼─── 3 hero frames (1080×1916)    │
                       └── frame_2.png ──┘                                 │
                                                                           │
                       ┌─────── Kling i2v (parallel ×3) ──────────────────┘
@@ -210,7 +211,7 @@ We pre-generated 14 endcards covering every Voodoo title in our demo set. Adding
 ## Repo layout
 
 ```
-api/main.py                      # FastAPI: 13 endpoints + SSE pipeline runner
+api/main.py                      # FastAPI: 20+ endpoints + SSE pipeline runner
 app/
 ├── models.py                    # Pydantic data contract (the lingua franca)
 ├── pipeline.py                  # 10-step pipeline orchestrator
@@ -242,10 +243,10 @@ scripts/
 └── generate_demo_video.py       # CLI multi-clip ad assembly (pre-React)
 
 data/cache/                      # All cached state (selectively gitignored)
-├── reports/                     # 16 cached HookLensReports (~440 KB)
-├── deconstruct/                 # 499 Gemini deconstructions (~2 MB)
-├── endcards/                    # 14 game endcards (PNG + 3-second MP4)
-├── voodoo/                      # 50-game catalog + portfolio snapshot
+├── reports/                     # 21 cached HookLensReports (~0.6 MB)
+├── deconstruct/                 # 499 Gemini deconstructions (~1.9 MB)
+├── endcards/                    # 17 animated game endcards (PNG + 3-second MP4)
+├── voodoo/                      # 50-game Voodoo catalog + portfolio snapshot
 ├── sensortower/                 # Raw SensorTower API responses
 ├── audio/library/               # Stock music keyed by emotional pitch
 ├── audio/sfx/                   # Game SFX stems
@@ -282,7 +283,7 @@ uv run uvicorn api.main:app --reload --port 8000
 cd front && npm run dev          # → http://localhost:8080
 ```
 
-The cached state ships with the repo (~30 MB), so a fresh clone has 16 analyzed games + 499 deconstructed ads + 14 brand endcards available **without paying any API**.
+The cached state ships with the repo (~125 MB tracked), so a fresh clone has 21 analyzed games + 499 deconstructed ads + 17 animated brand endcards available **without paying any API**.
 
 ### Re-running the full pipeline on a new game
 
@@ -305,7 +306,7 @@ Walks every cached SensorTower creative, deconstructs the ones not yet in the kn
 ## Demo paths
 
 - **Hero report** → http://localhost:8080/insights → "Crowd City"
-  (16 cached reports available; Crowd City has the most polished variants + a hand-rendered endcard).
+  (21 cached reports available; Crowd City has the most polished variants + an animated endcard).
 - **Generate Ad** → on any cached report, click **Generate Ad** in the "Generated ad video" section. With the Scenario clips already cached the assembly takes ~30 s instead of 5 min.
 - **Knowledge base** → http://localhost:8080/weekly → 499 deconstructed ads, distribution by emotional pitch, click any tile for its Gemini dossier on `/ad/<id>`.
 - **Competitor deep-dive** → http://localhost:8080/competitive → click any top advertiser → live SensorTower fetch of their full ad inventory + cached deconstructions.
