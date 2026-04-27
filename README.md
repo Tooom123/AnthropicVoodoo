@@ -16,9 +16,9 @@
 **Type a mobile-game name → 5 minutes later, get 3 ready-to-test ad videos**
 **grounded in fresh SensorTower market signals.**
 
-<img src="docs/screenshots/voodradar-sizzle-reel.gif" alt="VoodRadar sizzle reel — generated ad + branded endcards across multiple Voodoo titles" width="240">
+<img src="docs/screenshots/voodradar-sizzle-reel.gif" alt="VoodRadar sizzle reel — animated branded endcards across four Voodoo titles" width="280">
 
-*↑ A sizzle reel of what VoodRadar produces end-to-end: a generated ad for **aquapark.io** (Opus brief → Scenario img → Kling i2v ×3 → multi-layer audio), followed by two of the per-game **branded endcards** (GPT Image 2 → Kling i2v animation) that get grafted onto every variant via `lastFrameImage` chaining. **Zero human edit.***
+*↑ Four of the per-game **branded endcards** VoodRadar pre-generates (GPT Image 2 for the static frame → Kling i2v for the 3-second animation). Each title's endcard is rendered once and grafted onto every variant via `lastFrameImage` chaining, so a 3-clip Kling video transitions seamlessly into a CTA frame that's already on-brand for the game. **Zero human edit.***
 
 </div>
 
@@ -333,7 +333,7 @@ Walks every cached SensorTower creative, deconstructs the ones not yet in the kn
 
 <img src="docs/screenshots/voodradar-hero-ad.gif" alt="VoodRadar — full Archery Clash ad with audio + endcard transition" width="300">
 
-*The full **Archery Clash** ad VoodRadar shipped during the demo — 18 seconds, end to end: WhatsApp-ping hook → 3 Kling i2v clips (parallel) → seamless lastFrame graft into the branded endcard. Bespoke Opus-authored narration on top of an auto-ducked music bed and three timestamp-spliced game SFX. From "type the game name" to **this MP4** in under 5 minutes.*
+*A full **Archery Clash** ad VoodRadar produced for the demo: 3 Kling i2v clips concatenated → seamless `lastFrame` graft into the branded endcard. Bespoke Opus-authored narration sits on top of an auto-ducked music bed and three timestamp-spliced game SFX. **Zero human edit between the brief and this MP4.***
 
 </div>
 
@@ -341,7 +341,13 @@ Walks every cached SensorTower creative, deconstructs the ones not yet in the kn
 
 ## Credits
 
-Built for **Voodoo Hack 2026** in 30 hours by team Edouard / Tooom / partners, on Anthropic credits, Google AI credits, and Scenario beta access. SensorTower data used under hackathon-sponsor credentials.
+Built for **Voodoo &times; Anthropic Hack 2026** in 30 hours by a team of three:
+
+- **Edouard Foussier** — [@edouardfoussier](https://github.com/edouardfoussier)
+- **Tom Anglès** — [@Tooom123](https://github.com/Tooom123)
+- **Mehdi** *(GitHub TBA)*
+
+Powered by Anthropic credits (Claude Opus 4.7), Google AI credits (Gemini 2.5 Pro Vision), and Scenario beta access (gpt-image-2 + Kling O1/2.6-Pro i2v + Veo 3). SensorTower data used under hackathon-sponsor credentials.
 
 Audio assets in `data/cache/audio/library/` — royalty-free Pixabay CC0 tracks: [Bonkers for Arcades](https://pixabay.com/music/upbeat-bonkers-for-arcades-271755/), [Powerful Energetic Sport Rock](https://pixabay.com/music/upbeat-powerful-energetic-sport-rock-trailer-274290/), [Vlog Beat](https://pixabay.com/music/upbeat-vlog-beat-2-186044/), and 4 others mapped to emotional-pitch slots in `data/cache/audio/library/README.md`.
 
