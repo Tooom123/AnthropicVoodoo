@@ -50,298 +50,296 @@
     "period_start": "2026-04-01T00:00:00Z",
     "period_end": "2026-04-01T00:00:00Z",
     "num_advertisers_scanned": 10,
-    "num_creatives_analyzed": 16,
-    "num_phashion_groups": 16
+    "num_creatives_analyzed": 8,
+    "num_phashion_groups": 8
   },
   "top_archetypes": [
     {
-      "archetype_id": "satisfaction-in-game",
-      "label": "Satisfaction · in-game",
-      "member_creative_ids": [
-        "67a7083d6f23bd94"
-      ],
-      "centroid_hook": {
-        "summary": "Rapid-fire block placement clearing a complex grid.",
-        "visual_action": "Green blocks are slotted into a grid at high speed, filling gaps and clearing lines.",
-        "text_overlay": "SMART GENIUS PSYCHOPATH",
-        "voiceover_transcript": null,
-        "emotional_pitch": "satisfaction"
-      },
-      "palette_hex": [
-        "#4CAF50",
-        "#2196F3",
-        "#FFEB3B"
-      ],
-      "common_mechanics": [],
-      "velocity_score": 0.861,
-      "derivative_spread": 1.0,
-      "freshness_days": 3.0,
-      "overall_signal_score": 3.194,
-      "rationale": "1 creatives across 1 unique advertisers, average age 3d (velocity source: sov). Hook representative: \"Rapid-fire block placement clearing a complex grid.\""
-    },
-    {
-      "archetype_id": "transformation-animation",
-      "label": "Transformation · animation",
+      "archetype_id": "other-animation",
+      "label": "Other · animation",
       "member_creative_ids": [
         "5d287f88cf4759b9"
       ],
       "centroid_hook": {
-        "summary": "High-energy static display of Goku in his Ultra Instinct form charging a powerful energy attack.",
-        "visual_action": "Goku is centered, surrounded by a glowing blue and silver aura, holding a bright energy sphere.",
-        "text_overlay": "PLAY NOW!",
+        "summary": "Static character art of Goku Ultra Instinct with a prominent 'PLAY NOW!' call to action.",
+        "visual_action": "Goku is depicted charging a blue energy blast against a vibrant, rainbow-colored background with glowing orbs.",
+        "text_overlay": "Dragon Ball Z Dokkan Battle PLAY NOW!",
         "voiceover_transcript": null,
-        "emotional_pitch": "transformation"
+        "emotional_pitch": "other"
       },
       "palette_hex": [
         "#00BFFF",
-        "#FFFFFF",
-        "#FFD700"
+        "#FFFF00",
+        "#FF00FF"
       ],
       "common_mechanics": [],
       "velocity_score": 1.745,
       "derivative_spread": 1.0,
       "freshness_days": 620.0,
       "overall_signal_score": 1.06,
-      "rationale": "1 creatives across 1 unique advertisers, average age 620d (velocity source: sov). Hook representative: \"High-energy static display of Goku in his Ultra Instinct form charging a powerfu\""
+      "rationale": "1 creatives across 1 unique advertisers, average age 620d (velocity source: sov). Hook representative: \"Static character art of Goku Ultra Instinct with a prominent 'PLAY NOW!' call to\""
     },
     {
-      "archetype_id": "challenge-animation",
-      "label": "Challenge · animation",
+      "archetype_id": "satisfaction-animation",
+      "label": "Satisfaction · animation",
       "member_creative_ids": [
-        "f41b68dd7e9c7ab2",
-        "94abdde96b93e53e"
+        "f41b68dd7e9c7ab2"
       ],
       "centroid_hook": {
-        "summary": "Goku charging a powerful attack.",
-        "visual_action": "Goku in Super Saiyan 3 form lunges forward with a glowing fist.",
+        "summary": "Goku SSJ3 performs his iconic Dragon Fist attack.",
+        "visual_action": "Goku charges energy and punches forward, summoning a massive golden dragon.",
         "text_overlay": "Dragon Fist!!!",
         "voiceover_transcript": "Dragon Fist!!!",
-        "emotional_pitch": "challenge"
+        "emotional_pitch": "satisfaction"
       },
       "palette_hex": [
         "#FFD700",
-        "#FF4500",
-        "#000080"
+        "#1E3A8A",
+        "#4B0082"
       ],
       "common_mechanics": [],
-      "velocity_score": 1.238,
+      "velocity_score": 1.745,
       "derivative_spread": 1.0,
-      "freshness_days": 430.5,
-      "overall_signal_score": 0.863,
-      "rationale": "2 creatives across 2 unique advertisers, average age 430d (velocity source: sov). Hook representative: \"Goku charging a powerful attack.\""
+      "freshness_days": 717.0,
+      "overall_signal_score": 1.058,
+      "rationale": "1 creatives across 1 unique advertisers, average age 717d (velocity source: sov). Hook representative: \"Goku SSJ3 performs his iconic Dragon Fist attack.\""
     },
     {
       "archetype_id": "satisfaction-mixed",
       "label": "Satisfaction · mixed",
       "member_creative_ids": [
         "bdf6fd7b1032fa14",
-        "5ba7458dea1165c1",
-        "f8b53e0f8d3ee77a"
+        "5ba7458dea1165c1"
       ],
       "centroid_hook": {
-        "summary": "A hand clears a traffic jam of colorful buses in a satisfying manner.",
-        "visual_action": "A hand uses a stylus to move buses out of a crowded parking lot to clear a path.",
+        "summary": "A hand uses a stylus to solve a bus-sorting puzzle while the narrator asks a question about relaxation.",
+        "visual_action": "A hand with a stylus slides colorful buses around a crowded parking lot to clear a path for passengers.",
         "text_overlay": "Hey! Played a game that Actually makes you Feel relaxed?",
         "voiceover_transcript": "Hey! Have you ever played a game that actually makes you feel relaxed?",
         "emotional_pitch": "satisfaction"
       },
       "palette_hex": [
-        "#D9E2F1",
-        "#FF5733",
-        "#4CAF50"
+        "#4A90E2",
+        "#9B51E0",
+        "#F2994A"
       ],
       "common_mechanics": [],
-      "velocity_score": 0.981,
+      "velocity_score": 1.034,
       "derivative_spread": 1.0,
-      "freshness_days": 80.7,
-      "overall_signal_score": 0.835,
-      "rationale": "3 creatives across 3 unique advertisers, average age 81d (velocity source: sov). Hook representative: \"A hand clears a traffic jam of colorful buses in a satisfying manner.\""
+      "freshness_days": 114.0,
+      "overall_signal_score": 0.829,
+      "rationale": "2 creatives across 2 unique advertisers, average age 114d (velocity source: sov). Hook representative: \"A hand uses a stylus to solve a bus-sorting puzzle while the narrator asks a que\""
     },
     {
       "archetype_id": "curiosity-animation",
       "label": "Curiosity · animation",
       "member_creative_ids": [
-        "0d364815e2ca3d52",
-        "e6e407c8d6232949",
-        "93435c4f71f85343"
+        "0d364815e2ca3d52"
       ],
       "centroid_hook": {
-        "summary": "Cross-section reveal of a secret underground bunker beneath the Eiffel Tower.",
-        "visual_action": "The camera pans down from a landmark into a detailed, multi-level subterranean base.",
+        "summary": "Revealing secret underground bunkers beneath famous landmarks like the Eiffel Tower.",
+        "visual_action": "A cross-section view pans down from the Eiffel Tower to show a complex multi-story underground shelter.",
         "text_overlay": null,
         "voiceover_transcript": null,
         "emotional_pitch": "curiosity"
       },
       "palette_hex": [
-        "#4A5D6A",
-        "#8B7355",
-        "#2F4F4F"
+        "#2c3e50",
+        "#d35400",
+        "#2d5a27"
       ],
       "common_mechanics": [],
-      "velocity_score": 1.099,
+      "velocity_score": 1.128,
       "derivative_spread": 1.0,
-      "freshness_days": 240.0,
-      "overall_signal_score": 0.821,
-      "rationale": "3 creatives across 3 unique advertisers, average age 240d (velocity source: sov). Hook representative: \"Cross-section reveal of a secret underground bunker beneath the Eiffel Tower.\""
+      "freshness_days": 328.0,
+      "overall_signal_score": 0.824,
+      "rationale": "1 creatives across 1 unique advertisers, average age 328d (velocity source: sov). Hook representative: \"Revealing secret underground bunkers beneath famous landmarks like the Eiffel To\""
+    },
+    {
+      "archetype_id": "fail-in-game",
+      "label": "Fail · in-game",
+      "member_creative_ids": [
+        "0f1d747b3e7d863f"
+      ],
+      "centroid_hook": {
+        "summary": "A player attempts a difficult level and immediately fails by crashing a bus.",
+        "visual_action": "A hand cursor moves a purple bus, then crashes a red bus into a green one.",
+        "text_overlay": "WHY THIS LEVEL IS SO HARD, CAN YOU WIN?",
+        "voiceover_transcript": null,
+        "emotional_pitch": "fail"
+      },
+      "palette_hex": [
+        "#FFFFFF",
+        "#4CAF50",
+        "#F44336"
+      ],
+      "common_mechanics": [],
+      "velocity_score": 0.976,
+      "derivative_spread": 1.0,
+      "freshness_days": 259.0,
+      "overall_signal_score": 0.769,
+      "rationale": "1 creatives across 1 unique advertisers, average age 259d (velocity source: sov). Hook representative: \"A player attempts a difficult level and immediately fails by crashing a bus.\""
     }
   ],
   "game_fit_scores": [
     {
-      "archetype_id": "satisfaction-in-game",
-      "visual_match": 35,
-      "mechanic_match": 20,
-      "audience_match": 60,
-      "overall": 32,
-      "rationale": "Mechanic mismatch is the dealbreaker: rapid-fire grid-block placement is a puzzle/Tetris-style satisfaction loop with zero overlap with Push'em All's swipe-to-shove crowd physics — recreating this hook would misrepresent the product and tank IPM/retention. Palette also clashes (green/blue/yellow puzzle tones vs. our signature red-vs-blue stickman contrast), and there's no character or platform action to anchor it. Audience is the only partial bridge (broad hypercasual satisfaction-seekers), but not enough to justify production; skip this archetype or, at most, borrow the \"SMART GENIUS PSYCHOPATH\" escalating-text overlay device on top of native push gameplay."
+      "archetype_id": "other-animation",
+      "visual_match": 15,
+      "mechanic_match": 5,
+      "audience_match": 20,
+      "overall": 12,
+      "rationale": "This is a static IP-driven anime card-battler creative leaning on Dragon Ball Z brand recognition — none of which Push'em All can borrow without trademark risk. The minimalist stickman/physics-push core loop has zero affinity with a charged-energy-blast hero pose, and the neon magenta/yellow palette clashes with the game's clean blue/green/red hypercasual look. Audience overlap is also weak: Dokkan players skew mid-core gacha/RPG, not the broad casual swipe-and-satisfy crowd. Skip — do not adapt this archetype."
     },
     {
-      "archetype_id": "transformation-animation",
-      "visual_match": 22,
-      "mechanic_match": 15,
-      "audience_match": 30,
-      "overall": 20,
-      "rationale": "Hard pass: a Goku/Ultra Instinct anime transformation hook has zero connection to Push'em All's stickman crowd-pushing loop, and using licensed DBZ IP creates serious legal/ASA takedown risk that outweighs any CTR upside. The palette overlaps loosely on blue, but the anime rendering style clashes with the game's flat minimalist 3D, and while shonen fans skew casual-mobile, they expect RPG/gacha combat — bounce/uninstall rates would be brutal. Skip this archetype; if the team wants the \"transformation\" emotional beat, recreate it natively with the in-game \"SIZE UP!\" power-up moment instead."
-    },
-    {
-      "archetype_id": "challenge-animation",
-      "visual_match": 18,
-      "mechanic_match": 15,
+      "archetype_id": "satisfaction-animation",
+      "visual_match": 15,
+      "mechanic_match": 10,
       "audience_match": 25,
-      "overall": 19,
-      "rationale": "Hard pass for Push'em All. The Dragon Ball anime aesthetic (gold/orange/navy, detailed character animation, shonen power-fantasy framing) clashes with the game's minimalist 3D stickman look and bright blue/green/red palette, and a charged-fist anime attack does not communicate the swipe-to-push crowd-control loop at all. Audience also skews older/male anime-fan rather than the broad all-ages hypercasual base, plus there's obvious IP risk using Goku — do not greenlight, even as a stylistic reference."
+      "overall": 15,
+      "rationale": "Hard pass: this archetype is built around licensed Dragon Ball IP (Goku SSJ3, Dragon Fist), which creates immediate legal/takedown risk for a hypercasual title that has no anime aesthetic, no charged-attack mechanic, and no narrative VO style. The gold/indigo/purple palette and shounen-anime audience also clash with Push'em All's bright minimalist stickman look and broad casual all-ages audience. Only the abstract \"satisfying knockout payoff\" idea is transferable — rebuild the satisfaction beat around the stick expanding and shoving a red stickman crowd off the platform, and drop the IP entirely."
     },
     {
       "archetype_id": "satisfaction-mixed",
       "visual_match": 35,
-      "mechanic_match": 30,
-      "audience_match": 75,
-      "overall": 42,
-      "rationale": "The hypercasual \"relaxing satisfaction\" audience overlaps strongly with Push'em All's broad casual base, but the hook itself is fundamentally mismatched: traffic-jam puzzle solving is slow/cerebral while Push'em All's value prop is energetic crowd-pushing physics chaos — there's no honest way to bait this hook and deliver the actual game without a bounce. Palette and stylus-on-vehicles visuals also clash with the stickman-on-platform 3D look. Recommend skipping a direct adaptation; if testing, only borrow the \"have you played a game that...\" VO framing over native push-crowds-off-platform footage rather than replicating the traffic-jam hook."
+      "mechanic_match": 20,
+      "audience_match": 55,
+      "overall": 30,
+      "rationale": "The \"relaxing bus-sort puzzle\" hook is fundamentally misaligned with Push'em All's energetic, competitive crowd-pushing action loop — selling calm/relaxation undermines the satisfying-aggression fantasy that drives this game's installs. Visual frictions are significant too: the archetype's purple/orange puzzle-board palette and stylus-on-2D-grid framing clash with the game's vibrant blue/red 3D stickman platforms and there's no character protagonist to anchor the player. Audience overlaps modestly on the casual hypercasual layer, but we'd recommend skipping this archetype rather than retrofitting it; if forced, only the \"ASMR satisfaction\" emotional beat is transferable — re-shoot with stickmen tumbling off platforms in a satisfying chain."
     },
     {
       "archetype_id": "curiosity-animation",
-      "visual_match": 18,
-      "mechanic_match": 15,
-      "audience_match": 40,
-      "overall": 22,
-      "rationale": "Hard pass for Push'em All. The archetype's muted slate/khaki/teal palette and realistic landmark cross-section animation are stylistically incompatible with the game's bright primary-color, stickman-on-a-platform identity — viewers clicking this hook expect a base-builder/exploration/narrative experience, not a swipe-and-push hypercasual. Audience overlap is only mildly present (broad casual mobile users skew curiosity-driven), but the mechanic delta is severe: there is no plausible 3-second pivot from a subterranean bunker reveal into crowd-pushing physics without catastrophic IPM drop and likely policy/misleading-ad risk. Recommend not adapting this archetype; if curiosity-cross-section must be tested, restage it as a \"what's under the platform?\" reveal showing water/sharks below the stickman arena instead."
+      "visual_match": 15,
+      "mechanic_match": 10,
+      "audience_match": 35,
+      "overall": 18,
+      "rationale": "This archetype is a documentary-style cross-section reveal of real-world landmarks — visually (muted navy/orange/forest palette, architectural illustration) and tonally (slow curiosity pacing) it's the opposite of Push'em All's bright, kinetic stickman physics gameplay. There's no hook bridge to swiping, pushing crowds, or platform falls, so adapting it would require fabricating a contrived \"what's beneath the platform\" angle that abandons the proven satisfying-push payoff. Audience overlap exists only loosely (broad casual viewers), and the archetype's tiny sample (1 creative, 1 advertiser, 328d old) signals this is a weak, stale signal — do not prioritize testing."
+    },
+    {
+      "archetype_id": "fail-in-game",
+      "visual_match": 25,
+      "mechanic_match": 20,
+      "audience_match": 55,
+      "overall": 28,
+      "rationale": "The fail-bait hook style does broadly map to hypercasual audiences, but the specific concept (driving/parking buses into each other) has zero mechanical overlap with Push'em All's swipe-to-push crowd-control loop — recreating it would misrepresent the product and likely tank install-to-play retention. Visually the white/green/red palette is roughly compatible, but the absence of stickman crowds, platform-edge pushing, or the signature blue water means we'd essentially be rebuilding the creative from scratch. Recommend skipping this archetype and instead borrowing only the \"WHY THIS LEVEL IS SO HARD, CAN YOU WIN?\" fail-bait framing applied to a genuine Push'em All near-miss (player getting shoved off the platform at the last second)."
     }
   ],
   "final_variants": [
     {
       "brief": {
-        "archetype_id": "satisfaction-in-game",
+        "archetype_id": "satisfaction-mixed",
         "target_game_id": "1479551182",
-        "title": "Smart. Genius. Psychopath. — Push'em All Edition",
-        "hook_3s": "A blue stickman's stick EXPANDS and sweeps 30 red enemies off the platform in one satisfying physics ragdoll wave — splash, splash, splash.",
+        "title": "Push'em All — \"Oddly Satisfying Chain Wipe\"",
+        "hook_3s": "\"Ever played something this satisfying?\" — finger swipes, stick expands, red stickmen tumble off the platform in a domino chain splash.",
         "scene_flow": [
-          "0-3s: Tight top-down on the blue platform. Player swipes once, stick expands modestly, shoves a small red cluster off the edge. Overlay: 'SMART'.",
-          "3-7s: Camera pulls back. Bigger swipe, 'SIZE UP!' power-up triggers, stick doubles in length, wipes a full row of red stickmen into the water in a single arc. Overlay: 'GENIUS'.",
-          "7-12s: Combo multiplier x8 spikes on HUD, coin counter ticks up rapidly, level timeline fills. Stick grows absurdly long, sweeping a 50-enemy crowd off a narrow bridge — ragdolls splash in slow-mo. Overlay: 'PSYCHOPATH'.",
-          "12-15s: Final boss-platform: one mega-swipe clears everything, level-complete burst, coins rain. CTA card snaps in."
+          "0–3s HOOK: Top-down close-up of the blue/green platform. A finger swipes across the screen as the player's stickman extends a glowing stick — first row of red enemies launches into the water with a satisfying splash.",
+          "3–7s ESCALATION: Camera pulls back. Swipe-trail visible. Stick keeps growing ('SIZE UP!' pops). A chain reaction sends 20+ red stickmen tumbling off both edges in slow-mo splashes.",
+          "7–11s PAYOFF: Combo counter spikes ×8, ×12, ×20. Coins burst upward. Level progress bar fills toward the boss platform.",
+          "11–14s CLIMAX: One final mega-swipe clears the boss arena — the screen briefly empties, water ripples settle, a tiny 'PERFECT' stamp lands.",
+          "14–15s CTA: Game logo + 'PLAY FREE' button pulses on the bright blue water background."
         ],
-        "visual_direction": "Lock to the native Push'em All look: vibrant #2a7dfa water, #56a38b sandy/green platforms, bright #e3001b enemy stickmen vs. a blue hero. Minimalist 3D, soft top-down/isometric camera that pulls back as the stick grows. Every escalation beat ends with a bigger red ragdoll splash into blue water — that's the satisfaction payoff. Keep native HUD visible: progress timeline at top, combo multiplier and coin counter, 'SIZE UP!' power-up burst. No filters, no UGC frame — this is pure clean in-game footage with escalating overlays.",
+        "visual_direction": "Lock to the game's signature minimalist 3D look: vibrant #2a7dfa water, #56a38b sandy-green platforms, and a sea of #e3001b stickman enemies. Camera stays in the authentic ¾ top-down Push'em All angle — no stylus, no 2D puzzle board. Lean into ASMR-grade physics: exaggerated splashes, slow-mo tumbles, crisp swipe trails, and the in-game HUD (combo multiplier, coin counter, progress timeline, SIZE UP banner) visible at all times to read as real gameplay, not a mock.",
         "text_overlays": [
-          "SMART",
-          "GENIUS",
+          "Ever felt THIS satisfied? 😌",
+          "One swipe…",
           "SIZE UP!",
-          "PSYCHOPATH",
-          "Can you clear it all?"
+          "×20 COMBO",
+          "Wait for it…",
+          "Your turn 👇"
         ],
-        "cta": "PLAY FREE",
-        "rationale": "Voodoo's current Push'em All rotation is all unlabeled video/playable with no copy hook — there's zero text-driven escalation creative in market. This brief imports the trending 'SMART/GENIUS/PSYCHOPATH' satisfaction-escalation overlay device (the only transferable element from the puzzle archetype) and bolts it onto authentic swipe-and-shove gameplay, giving UA a copy-led variant to A/B against the silent videos without misrepresenting the core loop. Expect lift on CTR via the meme-recognizable text beat while IPM stays protected by truthful gameplay.",
+        "cta": "Play Free",
+        "rationale": "Voodoo's current rotation on Push'em All is all wordless gameplay videos and one playable — there's zero VO-led \"satisfaction question\" hook in market, despite that archetype trending across hypercasual. This brief imports the archetype's relaxing-question opener and ASMR payoff beat, but re-skins it onto authentic crowd-push physics so we keep the aggressive-fantasy install driver. UA: run as a fresh VO-driven variant against the silent gameplay control to test whether a spoken hook lifts IPM on iOS casual audiences.",
         "scenario_prompts": [
-          "Hero frame, aspect 9:16, top-down isometric in-game shot of Push'em All: a single blue stickman character on a green-and-sandy platform (#56a38b) surrounded by vibrant blue water (#2a7dfa), wielding a massively expanded horizontal stick sweeping a dense crowd of bright red stickman enemies (#e3001b) off the edge, red ragdolls mid-air splashing into blue water, minimalist 3D with bright contrasting colors and simple stickman-like figures, native HUD visible with level progress timeline at top, combo multiplier 'x8' and coin counter, bold white overlay text 'PSYCHOPATH' centered, clean mobile game UI chrome, no filters, authentic Push'em All gameplay still",
-          "Storyboard frame 1, aspect 9:16, top-down in-game view of Push'em All early level: blue stickman on a narrow green platform (#56a38b) over blue water (#2a7dfa), short stick extended sideways pushing a small group of red stickman enemies (#e3001b) toward the edge, minimalist 3D with bright contrasting colors and simple stickman-like figures, native HUD with progress timeline and coin counter, bold white overlay text 'SMART' top-center, clean authentic Push'em All gameplay, no character invented beyond the hero",
-          "Storyboard frame 2, aspect 9:16, dynamic in-game moment of Push'em All: blue stickman triggers a 'SIZE UP!' power-up, glowing yellow burst on the HUD, stick doubling in length on a green platform (#56a38b) surrounded by blue water (#2a7dfa), wiping a full row of red stickman enemies (#e3001b) into the water with physics ragdolls, minimalist 3D bright contrasting colors and simple stickman figures, native HUD visible with combo multiplier and progress timeline, bold white overlay text 'SIZE UP!' center-screen, authentic Push'em All gameplay still"
+          "Hero frame, aspect 9:16, authentic in-game Push'em All moment: ¾ top-down view of a #56a38b sandy-green floating platform surrounded by vibrant #2a7dfa water, a single player stickman at center wielding a long horizontal expanding stick sweeping a dense crowd of #e3001b red stickman enemies off both edges mid-tumble with white splash particles, in-game HUD visible (combo multiplier '×18 COMBO' top-right, coin counter top-left, level progress timeline top-center, yellow 'SIZE UP!' banner mid-screen), minimalist 3D with bright contrasting colors and simple stickman-like figures, clean shadows, no stylus, no puzzle grid, on-screen text 'Ever felt THIS satisfied? 😌' bold white sans-serif lower third. [Audio: VO 'Ever played a game this satisfying?' / punchy upbeat trap 110 BPM with airy ASMR layer / whoosh on swipe 0.3s, watery splash cluster 1.5s, coin chime on combo 2.8s]",
+          "Storyboard frame, aspect 9:16, authentic Push'em All gameplay: extreme close-up of the expanding stick mid-swipe knocking a chain of #e3001b red stickmen off a #56a38b green platform into #2a7dfa blue water, slow-motion domino tumble with exaggerated splash arcs, swipe trail glow, HUD shows '×20 COMBO' and full coin counter, minimalist 3D with bright contrasting colors and simple stickman-like figures, no character invented beyond the existing player stickman, on-screen text 'SIZE UP!' yellow burst overlay center. [Audio: no VO / energetic competitive trap drop 115 BPM / stick-extend whoosh, rapid bowling-pin tumble SFX, deep splash thump on final enemy]",
+          "Storyboard CTA frame, aspect 9:16, authentic Push'em All endgame: cleared #56a38b green boss platform with calm rippling #2a7dfa blue water, level progress timeline filled to 100%, floating coin burst settling, minimalist 3D with bright contrasting colors and simple stickman-like figures, large 'PLAY FREE' button in #e3001b red with white text bottom-center, game logo above, on-screen text 'Your turn 👇'. [Audio: VO 'Your turn — play free' / triumphant competitive sting resolving to soft pad / coin shimmer, UI button pop, water ripple tail]"
         ]
       },
-      "hero_frame_path": "https://cdn.cloud.scenario.com/assets-transform/asset_44BW7sy87AEsKMqZdwey7SHk?p=100&Policy=eyJTdGF0ZW1lbnQiOlt7IlJlc291cmNlIjoiaHR0cHM6Ly9jZG4uY2xvdWQuc2NlbmFyaW8uY29tL2Fzc2V0cy10cmFuc2Zvcm0vYXNzZXRfNDRCVzdzeTg3QUVzS01xWmR3ZXk3U0hrP3A9MTAwKiIsIkNvbmRpdGlvbiI6eyJEYXRlTGVzc1RoYW4iOnsiQVdTOkVwb2NoVGltZSI6MTc3ODE5ODM5OX19fV19&Key-Pair-Id=K36FIAB9LE2OLR&Signature=v07LuXLFF-RwNBD%7EHFVuLT5-KAHYQSVRP0NlRhiqwQsqW0IVf8z1k%7EusLUyntZPRGCIAa2PCQN2AMh7KEJAjtHOoqLE8eB4%7EAlvXiRHtMPU7LBTTogyoWJHMfA7Gi8FivTvRI5-BQ1sURRbqz8Vy5E7ev2RjvTZfZ58oRzmZpNnk73%7EisgyYxiDcYYeSz-4yrsh5AEvw8KJqQl48nphoKvCE6WD01FM4V9pL1RLEDypRXW%7EFriNSgqIqc%7EOk96N%7EG8qFd96ycB427ifxY562cTezPV4hmWRJvIJE9ys3ztVttZpjb-tyDwR03djslhQk1N44GXEkdLwk8QVSwczKHA__",
+      "hero_frame_path": "https://cdn.cloud.scenario.com/assets-transform/asset_2dS53aFHMtYr9y96WTavvPmJ?p=100&Policy=eyJTdGF0ZW1lbnQiOlt7IlJlc291cmNlIjoiaHR0cHM6Ly9jZG4uY2xvdWQuc2NlbmFyaW8uY29tL2Fzc2V0cy10cmFuc2Zvcm0vYXNzZXRfMmRTNTNhRkhNdFlyOXk5NldUYXZ2UG1KP3A9MTAwKiIsIkNvbmRpdGlvbiI6eyJEYXRlTGVzc1RoYW4iOnsiQVdTOkVwb2NoVGltZSI6MTc3ODE5ODM5OX19fV19&Key-Pair-Id=K36FIAB9LE2OLR&Signature=F3c4FkuBV4lj%7ExG1gzvIV2NtcdGgbyUFmP7eQD5%7E6nZFP7cIJfL26jrmOzOYw9IG9Y5X7eN2jZiuUUJLy9pbFEpx-FZLgd-bsI0Wz5681%7EUj%7Eis47BWEkIIH3NY3kz1YzDIZK7o84zdVMbxmTiAZ7O0xqHTcZ5fOQcQ-%7EV4SGdFDYEDHJx%7EVNverDBXlN0mRfypeUfYUJBNi3epzFWxv6dvsHZFFg-ydn5Nks%7EuGkJMNqy4H13UK1rvSc68coQe3msAmvE-5w9BTI%7EiHx7mkSvxeHxRUXRO8TGFMnx1XlVAQ3%7EMOjb0RidoNIQlqgGeJGsVTm3p8%7E4KbqGMjLqwP5w__",
       "storyboard_paths": [
-        "https://cdn.cloud.scenario.com/assets-transform/asset_T5uC6PNuNUvVYnMCxFmXrc8q?p=100&Policy=eyJTdGF0ZW1lbnQiOlt7IlJlc291cmNlIjoiaHR0cHM6Ly9jZG4uY2xvdWQuc2NlbmFyaW8uY29tL2Fzc2V0cy10cmFuc2Zvcm0vYXNzZXRfVDV1QzZQTnVOVXZWWW5NQ3hGbVhyYzhxP3A9MTAwKiIsIkNvbmRpdGlvbiI6eyJEYXRlTGVzc1RoYW4iOnsiQVdTOkVwb2NoVGltZSI6MTc3ODE5ODM5OX19fV19&Key-Pair-Id=K36FIAB9LE2OLR&Signature=Am4uvbzKn4R5BALHNCZ3tr89C7gMLS88%7En78gWIwckJuaz7GgwjTw8iiJty5HO401-cRJTQIKHzhpPef0wsqBl3F5Xys7XqmeqM-iHOycAwV76qNfJESpWkSL1HyhjME%7Eus8BjG00PWtjnwGOvF2QmaoX0NKHKJjgfa9TTnSFtAUjuIhm4edroX1tDxmeA8Qn5z878X1Yljni1k4kybJJCDioL32jPtnMpjnczKntKjZXuZYHwBLN2DTlJeX5WauTW1kY82czI3-89TIF%7EKvTsPwvwNxbQ-205V%7E9SD5WkSwJewlwszJFViI5cMgl1X4ltevHCXnNxuZO6y3v8jAJQ__",
-        "https://cdn.cloud.scenario.com/assets-transform/asset_BjFGSVSatRipDjWpgDJ1jGBM?p=100&Policy=eyJTdGF0ZW1lbnQiOlt7IlJlc291cmNlIjoiaHR0cHM6Ly9jZG4uY2xvdWQuc2NlbmFyaW8uY29tL2Fzc2V0cy10cmFuc2Zvcm0vYXNzZXRfQmpGR1NWU2F0UmlwRGpXcGdESjFqR0JNP3A9MTAwKiIsIkNvbmRpdGlvbiI6eyJEYXRlTGVzc1RoYW4iOnsiQVdTOkVwb2NoVGltZSI6MTc3ODE5ODM5OX19fV19&Key-Pair-Id=K36FIAB9LE2OLR&Signature=p7NdfPJlfcimX%7EyHEXgvUL%7EH6-SSS-z24b-RXTI4tr-9umnCJTvld-q8acpAFnpkeq8VwJhMEMlm-s1%7EXZpNwTpwIV1tLy39bxqujgd--cooQxsujxLJVrwUOcr0rpIjSHIkxZh568gIfhuU6fRHXi9IbjaY-t3rdNyU5tmnG-0mHl3l0Jgx8QtAnzUzMe8RmQVrs3lunoJ310aIj95UG4-DRCo4jnh5mbls6-ej1q2%7EKlnBlB4rNExGSLWzw-OZG88eKBF-7AHV6CMix-5EoBZQwhTNo7dvm41PrplqhFtVlZTWETadBHUtcpH1jNcZI80w8YBiDrkw7AqqZRX6bg__"
+        "https://cdn.cloud.scenario.com/assets-transform/asset_a6if4JPXh7BBhMiaEaCHVkBd?p=100&Policy=eyJTdGF0ZW1lbnQiOlt7IlJlc291cmNlIjoiaHR0cHM6Ly9jZG4uY2xvdWQuc2NlbmFyaW8uY29tL2Fzc2V0cy10cmFuc2Zvcm0vYXNzZXRfYTZpZjRKUFhoN0JCaE1pYUVhQ0hWa0JkP3A9MTAwKiIsIkNvbmRpdGlvbiI6eyJEYXRlTGVzc1RoYW4iOnsiQVdTOkVwb2NoVGltZSI6MTc3ODE5ODM5OX19fV19&Key-Pair-Id=K36FIAB9LE2OLR&Signature=qzS3RB7c2Hk9m6TYaiAjLmj9OlCMxj9vbEe-vLz36KfUSSWSStgcELMlG5yzoQNjYvXP6fBvvy4YqcSM5Ov-EiygNrpPnlmsCs1Rq69jLUrdIpSXfqQSJi9i7zZ75C3FHCHjicZzyLyBngKuXVx2lBpFCd9FZddhciYj6msG1dcxYpsj87pfeTyf8tCLj-2vKbeQNJL61CUOAUNT3JEvl0wPkdOCWjutCqelLbsj4aMd19sbGTgM7l1evP2-mG%7EGD-AY9Y4AR0w%7EKuGvl1b3qPJ4UnOzqw-H6ARHY95HgKnU5kJSFBQY5cwktU%7ESummElE8cXmkfmZttN3wSURZtww__",
+        "https://cdn.cloud.scenario.com/assets-transform/asset_8rSpif6PcbPKS5uJZZWGiWxu?p=100&Policy=eyJTdGF0ZW1lbnQiOlt7IlJlc291cmNlIjoiaHR0cHM6Ly9jZG4uY2xvdWQuc2NlbmFyaW8uY29tL2Fzc2V0cy10cmFuc2Zvcm0vYXNzZXRfOHJTcGlmNlBjYlBLUzV1SlpaV0dpV3h1P3A9MTAwKiIsIkNvbmRpdGlvbiI6eyJEYXRlTGVzc1RoYW4iOnsiQVdTOkVwb2NoVGltZSI6MTc3ODE5ODM5OX19fV19&Key-Pair-Id=K36FIAB9LE2OLR&Signature=QMCrzpFIEgQVDSSiZSf7ptD5zTCij6Wm3xk5JlJayE%7EOa08Ee-Z-FguoJ3LsK7z4LkcGRTYmekMIrlJ4hytF3RjGXCqvCcXLPKLAN3w4gWcA7ZyT%7EEHINjWAb49ZXaiPzovUvDetpHPod5dnaHJwfBvuJ4h0xLqPvWDv7TQE%7EukEvQw-j2Lq-X8kHh3JY4naoreJlWeQGBNRjdqMsWWeLvr7BUZjPK2Sz9tmUpEnF3dixNimdKPOnywkkt8Pi6xzfCZWuNT5DqlqaHPpKk96hK5%7EM1jrDakN%7EWTaRIhSFQqYRQFU%7E-8j0alsG0PB-kGqF-OR0XIepb99TemYKGj3TQ__"
       ],
       "test_priority": 1,
-      "test_priority_rationale": "signal_score=3.19 × game_fit=32/100 ⇒ priority=1.02"
+      "test_priority_rationale": "signal_score=0.83 × game_fit=30/100 ⇒ priority=0.25"
     },
     {
       "brief": {
-        "archetype_id": "satisfaction-mixed",
+        "archetype_id": "fail-in-game",
         "target_game_id": "1479551182",
-        "title": "\"Ever Played a Game That…\" — POV Push Satisfaction",
-        "hook_3s": "\"Ever played a game that actually makes you feel something?\" — phone tilts down to a red stickman crowd getting yeeted into blue water.",
+        "title": "\"Why Is This Level So Hard?\" — Last-Second Push-Off Fail",
+        "hook_3s": "A finger swipes a stickman across a narrow blue-water platform — red enemies swarm, the stick extends — then BAM, our hero gets shoved off the edge at the final inch.",
         "scene_flow": [
-          "0–3s: Vertical phone-in-hand UGC framing. Casual VO: 'Hey — ever played a game that actually makes you feel something?' Phone screen shows the Push'em All platform with a swarm of red stickmen approaching.",
-          "3–7s: Cut to clean in-game POV. Thumb swipes; the blue player extends the stick and sweeps a dense red crowd off the edge — slow-mo splash into water. Combo counter ticks x4, x7, x12.",
-          "7–11s: 'SIZE UP!' power-up notification flashes. Stick grows huge, clearing an entire wave in one swing. Coins fountain up. Progress bar surges toward the finish.",
-          "11–14s: Quick montage of 3 satisfying push moments — domino chain, edge-of-platform near-miss, final boss crowd wipe.",
-          "14–15s: Finish-line confetti, score tally, CTA card snaps in over the gameplay still."
+          "0-3s: Top-down Push'em All level start. Hand cursor swipes the blue stickman forward, expanding stick spinning. Overlay punches in: 'WHY IS THIS LEVEL SO HARD?'",
+          "3-7s: Combo multiplier climbs (x3, x5, x7) as red stickmen tumble into the blue water. Coin counter ticks up. 'SIZE UP!' power-up flashes.",
+          "7-11s: Final platform — a huge red mob waits at the goal line. Player swipes to push, but a single red enemy clips the hero from behind.",
+          "11-14s: Slow-mo: blue stickman wobbles on the edge, arms flailing, then plops into the water. Big red 'FAIL' stamp.",
+          "14-15s: Reset to level start with finger tap. Overlay: 'CAN YOU WIN?' → CTA card."
         ],
-        "visual_direction": "Lean fully into the Push'em All DNA: vibrant #2a7dfa water, #56a38b sandy-green platform, and #e3001b stickman enemies as the only red on screen so every push reads instantly. Minimalist 3D, no textures beyond flat shading, soft sun shadows. Open with shaky vertical UGC phone-holding framing for authenticity, then cut to crisp top-down-ish gameplay capture with the native HUD intact (progress timeline top, combo multiplier center-screen, coin counter top-right, 'SIZE UP!' burst). Camera punches in on impacts; physics ragdolls exaggerated for the satisfaction payoff.",
+        "visual_direction": "Authentic Push'em All top-down/3rd-person hybrid camera on a narrow sandy-green (#56a38b) platform surrounded by vibrant blue water (#2a7dfa). Bright red (#e3001b) stickman enemy crowds contrast sharply against the hero's blue stickman. Minimalist 3D, clean shadows, no textures beyond flat shaded polygons. Keep the signature HUD: level progress timeline at top, combo multiplier text mid-screen, coin counter top-right, 'SIZE UP!' power-up burst. Camera shake on the final shove, slow-mo wobble on the edge sells the fail.",
         "text_overlays": [
-          "Ever played a game that…",
-          "…actually feels GOOD?",
-          "COMBO x12 🔥",
+          "WHY IS THIS LEVEL SO HARD?",
+          "COMBO x7 🔥",
           "SIZE UP!",
-          "Try not to smile 😏",
-          "Push'em All →"
+          "ONE STEP LEFT...",
+          "FAIL 💀",
+          "CAN YOU WIN?"
         ],
-        "cta": "Play Free",
-        "rationale": "Voodoo's current rotation on Push'em All is silent gameplay-only video and a playable — zero UGC framing and zero voice-led \"satisfaction\" hooks despite that archetype winning across 3 advertisers in the scan. This brief imports the trending UGC \"ever played a game that…\" VO opener over native push-crowd footage, giving UA a fresh top-of-funnel angle (relatable handheld hook) without faking the core loop. Ship as a 15s video first; if CTR lifts, fork a playable variant with the same VO cold-open.",
+        "cta": "PLAY FREE",
+        "rationale": "Voodoo's current rotation on Push'em All is all straight gameplay videos and one playable — zero fail-bait framing, which is a proven hypercasual scroll-stopper. This brief grafts the trending 'WHY IS THIS LEVEL SO HARD, CAN YOU WIN?' fail hook onto a genuine Push'em All near-miss (hero shoved off at the last inch), so we get the engagement lift of fail-bait without misrepresenting the core loop. Ship as a 15s video first; if CTR beats the current Applovin videos by >15%, port the same beats into the existing playable's intro.",
         "scenario_prompts": [
-          "Hero frame, 9:16 vertical mobile gameplay screenshot of Push'em All: minimalist 3D low-poly scene, sandy-green (#56a38b) rectangular platform floating over vibrant blue (#2a7dfa) water, a blue stickman player at center wielding a long horizontal extending stick sweeping a dense crowd of bright red (#e3001b) stickman enemies off the edge, red ragdolls mid-air splashing into the water, flat shading, soft sun shadow, native HUD: thin level progress timeline across the top, large white 'COMBO x12' multiplier text center-screen, small coin counter top-right, bold overlay text 'actually feels GOOD?' in white sans-serif near top third, bright contrasting colors, energetic competitive mood, authentic in-game Push'em All moment",
-          "Storyboard frame 1, 9:16 vertical, UGC-style: a hand holding a smartphone in portrait, phone screen clearly shows Push'em All gameplay — sandy-green (#56a38b) platform, blue (#2a7dfa) water, red (#e3001b) stickman crowd being pushed by a blue stickman with extending stick, minimalist 3D bright contrasting colors, slightly blurred living-room background, big white overlay text 'Ever played a game that…' across the top of the frame, casual relatable feel",
-          "Storyboard frame 2, 9:16 vertical Push'em All in-game capture: blue stickman player on a #56a38b platform over #2a7dfa water, oversized power-up stick mid-swing flattening a wave of #e3001b red stickmen who fly off into the water as ragdolls, golden coins erupting upward, bright yellow 'SIZE UP!' power-up notification banner mid-screen, level progress timeline at top, minimalist 3D simple stickman figures with flat bright contrasting colors, exaggerated physics, authentic Push'em All HUD and asset style"
+          "Top-down 9:16 in-game screenshot of Push'em All: a single blue stickman hero (#2a7dfa) standing at the edge of a narrow sandy-green platform (#56a38b) surrounded by vibrant blue water, expanding push-stick rotating around him, a dense crowd of bright red stickman enemies (#e3001b) charging from the far end. Authentic HUD: level progress timeline at top, 'COMBO x7' text mid-screen in bold white, coin counter top-right. Minimalist 3D with bright, contrasting colors and simple stickman-like figures, flat shading, no textures. Bold overlay text reads 'WHY IS THIS LEVEL SO HARD?' across the upper third. [Audio: VO (anxious male) 'Why is this level so hard?!' / 130bpm punchy competitive trap with rising tension synth / whoosh on stick spin at 0.5s, crowd-stomp loop, combo chime at 2s]",
+          "9:16 dramatic slow-motion in-game frame from Push'em All: the blue stickman hero (#2a7dfa) tipping sideways off the edge of a sandy-green platform (#56a38b) into vibrant blue water, one red stickman enemy (#e3001b) frozen mid-shove behind him, scattered red bodies already splashing below. Game HUD intact: level progress bar nearly full at top, 'SIZE UP!' power-up notification fading, coin counter top-right. Minimalist 3D, bright contrasting colors, simple stickman figures, flat shading. Giant red overlay text 'FAIL 💀' stamped across center. [Audio: VO null / music drops to a single detuned piano hit / fail-buzzer at 1.0s, water-splash at 1.8s, sad whistle tail]",
+          "9:16 clean Push'em All level-start frame, finger-tap cursor hovering over the blue stickman hero (#2a7dfa) on a sandy-green starting platform (#56a38b), narrow blue-water track stretching ahead lined with red stickman crowds (#e3001b) waiting on side ledges. Full HUD visible: empty progress timeline, combo counter at zero, coin total top-right. Minimalist 3D, bright contrasting colors, simple stickman-like figures, flat shading, no textures. Bold yellow overlay text 'CAN YOU WIN?' pulses center-screen above a green PLAY FREE button. [Audio: VO (taunting female) 'Can YOU win?' / 140bpm energetic competitive electro with hand-clap / UI tap-pop on cursor, rising whoosh into button-glow chime]"
         ]
       },
-      "hero_frame_path": "https://cdn.cloud.scenario.com/assets-transform/asset_Z729ZyE2u4ehhKyQt5VdEPCz?p=100&Policy=eyJTdGF0ZW1lbnQiOlt7IlJlc291cmNlIjoiaHR0cHM6Ly9jZG4uY2xvdWQuc2NlbmFyaW8uY29tL2Fzc2V0cy10cmFuc2Zvcm0vYXNzZXRfWjcyOVp5RTJ1NGVoaEt5UXQ1VmRFUEN6P3A9MTAwKiIsIkNvbmRpdGlvbiI6eyJEYXRlTGVzc1RoYW4iOnsiQVdTOkVwb2NoVGltZSI6MTc3ODE5ODM5OX19fV19&Key-Pair-Id=K36FIAB9LE2OLR&Signature=fzu8UUfgP-2sPcdf-O%7Emqeu0B5twCsjU4s%7EgUOG7l9CObEjgCaGjlvKzodVsGosOUZL8kf-CgHkoyiOR-5IbtEg4--%7EjN%7E%7E5pSX2Uje0NbqJCmYx64deIMspVSJLi1EdBngsqtcpTYga3Aptz5rIPM-6k2fkVtkAVmZn6VQZ463qrpbkRI-o-9f-40IPTey2F6cLvqJfk-nIvTzsd%7EDTrMHYf%7EAJqJRO%7EhZQI7NsUKjJUSNzLf-ZpQyZXHFm-2anjmCPqpsB7OLBW6l3u14oWxJGAYf9RjrvSEOvfBa%7EGLToH3%7EPxsFCwMJ3ar8fy3%7EM0AnNc9nJyoCniQ69tv4b1g__",
+      "hero_frame_path": "https://cdn.cloud.scenario.com/assets-transform/asset_Bpi3Vr8HuTmf1LbZa4gEwK9r?p=100&Policy=eyJTdGF0ZW1lbnQiOlt7IlJlc291cmNlIjoiaHR0cHM6Ly9jZG4uY2xvdWQuc2NlbmFyaW8uY29tL2Fzc2V0cy10cmFuc2Zvcm0vYXNzZXRfQnBpM1ZyOEh1VG1mMUxiWmE0Z0V3SzlyP3A9MTAwKiIsIkNvbmRpdGlvbiI6eyJEYXRlTGVzc1RoYW4iOnsiQVdTOkVwb2NoVGltZSI6MTc3ODE5ODM5OX19fV19&Key-Pair-Id=K36FIAB9LE2OLR&Signature=Vh4fxVMB5UxxVAblPsLfkM0ExTe71IbtWwOaTWvYfrv5XnH9elFbvV9RMYdNpWjpMqpsrA-qahsHiD0NEHI8iW3s6NvtHh9MMY6KaMBzLkJC0-guCVjA7jUCpw24RUl0aFeF1PJ-jZopIHQiRCnrXGbrkOKmbmFBw3pnKAtttGXka8pmaTqcUvFeOmzWdzs4VVan7iYHj1B8dHRfnmRawCCtXbKHlSEoeVHPT-ktI2RU4bWDGbVhGGesa90FYr-wTFPh8BW8o8E%7EvA6g-Ezt7lEufpJTqmdgO7tTtfnSAKs%7Ey1RxwMVsYWUf3V8k9swmICjDccS3d5wA6RkdzAUe8A__",
       "storyboard_paths": [
-        "https://cdn.cloud.scenario.com/assets-transform/asset_PyZEvscPZoXucYBHnp8eWYEo?p=100&Policy=eyJTdGF0ZW1lbnQiOlt7IlJlc291cmNlIjoiaHR0cHM6Ly9jZG4uY2xvdWQuc2NlbmFyaW8uY29tL2Fzc2V0cy10cmFuc2Zvcm0vYXNzZXRfUHlaRXZzY1Bab1h1Y1lCSG5wOGVXWUVvP3A9MTAwKiIsIkNvbmRpdGlvbiI6eyJEYXRlTGVzc1RoYW4iOnsiQVdTOkVwb2NoVGltZSI6MTc3ODE5ODM5OX19fV19&Key-Pair-Id=K36FIAB9LE2OLR&Signature=j6bAu74a92YDQm2%7EKgAIyyyjpBKLXMUiwJ80Sp99guSGw7HvWxVAqRGTUaR-Zj6MFB7vXRqqxhfHXXbl97iwG4w4z5NNq0yXgJnKRdTAti3a9czy6uNL0LNMAGZV0Rgr3BobIMoLBR9%7E3cP2Fi8IakQ%7Ew6OHbCLkdI9pkxT0rljSv-HIkNxjX5njNRTb9nIByYePs9d1FKX7UUOgBq%7Ea16xjwwpRSV7FO845wQGNEpR7PX3JiFzD79RpVvtkbHGOapcxe8yumMLF8vpQzc1FkB-qkvZi6H-X2j8uMpn7YwtMdUdk0w8uMbjVDmElncRAaKtp0O3JdApewUV%7EBaOgtg__",
-        "https://cdn.cloud.scenario.com/assets-transform/asset_BbvNtaE5xZpcCHanc8wneAFQ?p=100&Policy=eyJTdGF0ZW1lbnQiOlt7IlJlc291cmNlIjoiaHR0cHM6Ly9jZG4uY2xvdWQuc2NlbmFyaW8uY29tL2Fzc2V0cy10cmFuc2Zvcm0vYXNzZXRfQmJ2TnRhRTV4WnBjQ0hhbmM4d25lQUZRP3A9MTAwKiIsIkNvbmRpdGlvbiI6eyJEYXRlTGVzc1RoYW4iOnsiQVdTOkVwb2NoVGltZSI6MTc3ODE5ODM5OX19fV19&Key-Pair-Id=K36FIAB9LE2OLR&Signature=XF0y1aVyKGs%7EUsaF2DKMKMuCtqJDlIF%7EmQ3UmexDnoOcA8MiyC%7ET0JVms5Q7HpSgOrAYZUva4uL-TU5tdFNXMw01ML-Ii8TOaREdxOsp9bE6lnXEKELk86h4oYN75SByTjYgovKQRw-mT1iHhQeenxXKDQ0ObsknJum-3QI9jseSW8CmYu3sfJAWqB7Fl1pzuAy9HVNP9GfaMiKOCYRVTctPFco67yEu6UllqltcSCv%7EelEGbX7KuYJaFZ0VioFGFCt1r5C0KDISlgE%7EC4Rk9EcXssry65yICrk%7E4-nY-aQ-rLUVozX2ZyzjKr5eq7XusJM6prCDefFd1hQ39iVmiw__"
+        "https://cdn.cloud.scenario.com/assets-transform/asset_JV4TVTe1FTA5sT87wPz7TWrL?p=100&Policy=eyJTdGF0ZW1lbnQiOlt7IlJlc291cmNlIjoiaHR0cHM6Ly9jZG4uY2xvdWQuc2NlbmFyaW8uY29tL2Fzc2V0cy10cmFuc2Zvcm0vYXNzZXRfSlY0VFZUZTFGVEE1c1Q4N3dQejdUV3JMP3A9MTAwKiIsIkNvbmRpdGlvbiI6eyJEYXRlTGVzc1RoYW4iOnsiQVdTOkVwb2NoVGltZSI6MTc3ODE5ODM5OX19fV19&Key-Pair-Id=K36FIAB9LE2OLR&Signature=KAsv-uhGEI7UY-xyg8ypwFFgKDbmFzOtWGuGZy577zG30-MH-f8ZQpQQ-z12RyZMQj0%7EwGdy24abzxmSZ8G4Qi06kMFHupGDWUABaGdudAcX2oWVHG4rR3ffEc97o%7EoFzZohn%7EgSDB25E7dAPvklkC1F1myALHDxJnd6YnFmhlKiN8A6MSJdEOQajLgn0KP9Uvaudxn6qBtI5hi8CBspkZQVOlfV0W2NaESJgJ9KmfdSjxU94os9VB6TXZ%7EM4APM3uXVDpq-xegPBCiyhh0in3-5%7ENPjTlmL8t-91IYxnsT1dj49yeiy%7EI4wSrujipYoTVJGkqThg4sTzNOOXxl8Wg__",
+        "https://cdn.cloud.scenario.com/assets-transform/asset_bYc7kA6AhuoXq3Hqf54PLZXF?p=100&Policy=eyJTdGF0ZW1lbnQiOlt7IlJlc291cmNlIjoiaHR0cHM6Ly9jZG4uY2xvdWQuc2NlbmFyaW8uY29tL2Fzc2V0cy10cmFuc2Zvcm0vYXNzZXRfYlljN2tBNkFodW9YcTNIcWY1NFBMWlhGP3A9MTAwKiIsIkNvbmRpdGlvbiI6eyJEYXRlTGVzc1RoYW4iOnsiQVdTOkVwb2NoVGltZSI6MTc3ODE5ODM5OX19fV19&Key-Pair-Id=K36FIAB9LE2OLR&Signature=CD34n7hFgeKOcHv-bBfS0J6pfU1FEiN5fQFAJyDRrzwinqzMXz4eqeMk-UI8KEXab%7EGOoq7tVnoR3qkWwskVxU-BFhgz14TAs%7EmG29qd3ZdzGE96pqzNBR83xlDs1Ww9SIoQwDCFfKNsVSI-ka4oedYOWnE6Nd33%7EAdG7TnB1fTDSEYKikezDNUqHap2ZGngK7nqaJLDxYWkmjLZRFUuEkuOuB5R%7EvUlvVbE5WklScfjXcIC1%7EU9zljRRQOSQDIYgME5TNW1z3O5Jo01Vk3-0cbHBmp4fEhPxQTrVK5Y0YkxmFafX-bmR-RxezGmq5JHESNellMAIe0Ba6eVrgsMuQ__"
       ],
       "test_priority": 2,
-      "test_priority_rationale": "signal_score=0.83 × game_fit=42/100 ⇒ priority=0.35"
+      "test_priority_rationale": "signal_score=0.77 × game_fit=28/100 ⇒ priority=0.22"
     },
     {
       "brief": {
         "archetype_id": "curiosity-animation",
         "target_game_id": "1479551182",
-        "title": "What's Under the Platform? — Cross-Section Reveal for Push'em All",
-        "hook_3s": "Camera slices through the bright blue water beside the platform — revealing hungry sharks circling directly below the red stickman crowd about to be pushed in.",
+        "title": "What's Beneath The Platform? — Push'em All Cross-Section Reveal",
+        "hook_3s": "\"What's actually under the platform?\" — camera slices the bright blue water away to reveal a secret multi-floor bunker of red stickmen stacked below.",
         "scene_flow": [
-          "0-3s: Top-down hero shot of the sandy platform. Camera tilts and the world splits in half like a diorama — water surface peels away to expose sharks swimming under the arena. Overlay: 'What's down there?'",
-          "3-7s: Snap back to gameplay POV. Player swipes, the stick expands, and a red stickman crowd is shoved toward the edge. Combo multiplier ticks up: x2, x3, x4.",
-          "7-11s: Cross-section view returns mid-push — we follow a red stickman tumbling off the platform and SPLASH into the shark zone below. Coin counter spikes, 'SIZE UP!' power-up triggers.",
-          "11-14s: Wider stick sweeps a massive crowd off in one satisfying arc, level progress bar fills to FINISH.",
-          "14-15s: End card with logo, tap-to-play pulse, CTA."
+          "0-3s: Top-down Push'em All level in motion — stickman swipes, pushes a small red crowd off the edge. They fall... but the camera follows them DOWN past the waterline.",
+          "3-7s: Cross-section reveal: the platform peels open like an architectural diagram, exposing 4 stacked underground floors PACKED with red stickman enemies waiting their turn — labeled 'FLOOR 1', 'FLOOR 2', 'BOSS LVL'.",
+          "7-11s: Cut back to gameplay POV — player grabs 'SIZE UP!' power-up, stick expands huge, sweeps an entire floor's worth of red figures off in one satisfying combo (x12 multiplier pops).",
+          "11-14s: Rapid montage of deeper, weirder floors revealed (lava floor, ice floor, giant boss floor) — each push sends crowds tumbling between layers.",
+          "14-15s: End card: stickman hero on top of cleared platform, coin counter spinning, CTA button pulses."
         ],
-        "visual_direction": "Lean fully into the Push'em All DNA: minimalist 3D, sandy/green platform (#56a38b), vibrant blue water (#2a7dfa), bright red stickman enemies (#e3001b). The 'cross-section' twist is achieved by literally cutting away the water surface to expose a stylized underwater layer — same flat-shaded minimalist 3D, no realism. Keep the energetic/competitive HUD (progress timeline top, combo multiplier center, coin counter top-right). Camera is dynamic: orbiting reveal into top-down gameplay, then a clean diorama split for the payoff. No muted slate/khaki tones from the source archetype — translate the curiosity beat into our bright primary palette.",
+        "visual_direction": "Lock to Push'em All's signature minimalist 3D look: vibrant #2a7dfa water, #56a38b sandy-green platforms, and #e3001b enemy stickmen as the only saturated threat color. The cross-section reveal uses a clean architectural slice (think cutaway diorama) but rendered in the SAME flat-shaded stickman style — no documentary realism, no muted navy/orange. Camera language is punchy and kinetic: quick orbit, snap zoom into the cutaway, then back to overhead gameplay cam. Preserve in-game HUD (level timeline, combo text, coin counter, SIZE UP banner) on every gameplay beat so it reads as authentic footage.",
         "text_overlays": [
-          "What's under the platform?",
-          "Swipe to push →",
-          "COMBO x4!",
+          "What's UNDER the platform?",
+          "Wait... there are FLOORS?!",
           "SIZE UP!",
-          "Don't fall in 🦈",
-          "FINISH"
+          "x12 COMBO",
+          "Can you clear them ALL?",
+          "Play Free"
         ],
-        "cta": "Push 'Em In!",
-        "rationale": "Voodoo's current rotation on Push'em All is all straight gameplay videos and a playable — zero curiosity-driven 'reveal' hooks despite curiosity·animation trending across 3 advertisers in the scan. This brief brings the underrepresented cross-section/reveal angle but restages it safely as 'what lurks beneath the arena' so the 3-second pivot to core swipe-push gameplay is honest and IPM-safe. UA team: test against the existing pure-gameplay videos as the curiosity-hook variant; expect lift on CTR with comparable install intent.",
+        "cta": "Play Free",
+        "rationale": "Voodoo's current Push'em All rotation is all straight gameplay capture and playables with zero narrative hook — this brief injects the trending curiosity/cross-section reveal angle (underrepresented in their stack) while staying mechanically honest to the push-crowds-off-platform payoff. The \"secret floors of enemies beneath the platform\" conceit gives scroll-stoppers a reason to watch past 3s, then hands off to the proven satisfying-push gameplay. Test against the existing playable as a top-funnel video to see if curiosity-led CTR lifts installs vs. pure gameplay creatives.",
         "scenario_prompts": [
-          "Hero frame, aspect 9:16, Push'em All in-game moment: minimalist 3D sandy-green platform (#56a38b) floating in vibrant blue water (#2a7dfa), camera angled to reveal a stylized cross-section cutaway of the water beside the platform exposing flat-shaded cartoon sharks swimming underneath. On the platform surface: a dense crowd of bright red stickman figures (#e3001b) clustered near the edge, an expanding push-stick mechanic visible. Authentic game HUD: level progress timeline along the top, coin counter top-right, combo multiplier center. On-screen text overlay 'What's under the platform?' in bold white sans-serif. Bright, contrasting colors, simple stickman-like figures, minimalist 3D visual style, energetic competitive mood, no realism, no muted tones.",
-          "Storyboard frame, aspect 9:16, Push'em All gameplay: top-down-ish 3D view of the sandy-green platform (#56a38b) surrounded by vibrant blue water (#2a7dfa), an expanding push-stick sweeping a crowd of bright red stickman enemies (#e3001b) off the edge, several red stickmen mid-air tumbling toward the water. HUD shows progress timeline, coin counter, and a large 'COMBO x4!' overlay in bold yellow. Minimalist 3D with bright contrasting colors and simple stickman-like figures, energetic competitive UI, authentic Push'em All chrome.",
-          "Storyboard frame, aspect 9:16, Push'em All cross-section payoff shot: split diorama view showing the sandy-green platform (#56a38b) on top and the underwater layer in vibrant blue (#2a7dfa) below, a single red stickman figure (#e3001b) caught mid-splash falling from platform into water where stylized flat-shaded sharks circle. 'SIZE UP!' power-up notification overlay in bright accent red, coin counter visible top-right, level progress timeline along top edge. Minimalist 3D, bright contrasting colors, simple stickman-like figures, no realism, authentic in-game Push'em All look."
+          "Hero frame, 9:16 vertical aspect ratio, Push'em All mobile game in-game screenshot style: overhead three-quarter view of a sandy-green (#56a38b) floating platform surrounded by vibrant blue water (#2a7dfa), the platform sliced open in a clean architectural cross-section to reveal four stacked underground floors crammed with bright red (#e3001b) stickman enemies waiting in formation, top floor shows the blue-shirted player stickman mid-swipe with extending push-stick, authentic game HUD visible: level progress timeline at top, combo multiplier text, coin counter, bold white overlay text 'What's UNDER the platform?', minimalist 3D flat-shaded style with simple stickman-like figures, bright contrasting colors, no realistic textures, no muted palette. [Audio: VO (curious whisper) 'Wait... what's actually under there?' / energetic competitive trap beat 140bpm building tension / whoosh on camera dive at 1.5s, low bass thud on reveal at 3s.]",
+          "Storyboard frame, 9:16 vertical aspect ratio, Push'em All in-game gameplay shot: top-down dynamic view of sandy-green (#56a38b) platform over blue water (#2a7dfa), player stickman just grabbed a glowing power-up, push-stick massively expanded sweeping a huge crowd of red (#e3001b) stickman enemies tumbling off the edge in physics-based ragdoll chaos, motion blur on swipe, signature yellow 'SIZE UP!' notification banner popping center-screen, combo multiplier 'x12 COMBO' in bold white, coin counter ticking up, level timeline HUD at top, minimalist 3D flat-shaded stickman style, bright contrasting colors. [Audio: no VO / punchy upbeat trap drop 145bpm / satisfying swoosh-thwack on stick swing, rapid chime stack on combo count, splash SFX as crowd hits water.]",
+          "Storyboard frame, 9:16 vertical aspect ratio, Push'em All cutaway diagram style frame: architectural cross-section of the level showing four themed underground floors beneath the sandy-green (#56a38b) surface platform — floor 1 normal red (#e3001b) stickman crowd, floor 2 ice-blue tinted, floor 3 lava-orange tinted, floor 4 a giant red boss stickman, surrounded by vibrant blue (#2a7dfa) water on the sides, clean labeled floors 'FLOOR 1 / FLOOR 2 / FLOOR 3 / BOSS', bold overlay text 'Wait... there are FLOORS?!', minimalist 3D flat-shaded simple stickman figures, bright contrasting colors, authentic Push'em All asset style not documentary realism. [Audio: VO (curious, rising) 'There are FLOORS?!' / energetic competitive synth riser 140bpm / elevator-ding on each floor label reveal, deep boss-roar SFX on bottom floor at 3.5s.]"
         ]
       },
-      "hero_frame_path": "https://cdn.cloud.scenario.com/assets-transform/asset_CnSKUM5GkSg7WG6jLvWQYWpq?p=100&Policy=eyJTdGF0ZW1lbnQiOlt7IlJlc291cmNlIjoiaHR0cHM6Ly9jZG4uY2xvdWQuc2NlbmFyaW8uY29tL2Fzc2V0cy10cmFuc2Zvcm0vYXNzZXRfQ25TS1VNNUdrU2c3V0c2akx2V1FZV3BxP3A9MTAwKiIsIkNvbmRpdGlvbiI6eyJEYXRlTGVzc1RoYW4iOnsiQVdTOkVwb2NoVGltZSI6MTc3ODE5ODM5OX19fV19&Key-Pair-Id=K36FIAB9LE2OLR&Signature=ia3VeIj648GJPQOuw5q4KvK0W0O5rIh7ZTUe83MHEOxZqL5w2WOpwR%7E383xp8W25kyzI1LtHAyw9OY00Q8XU8e0RGi7sARzBSJQU40z3p6nVTniKnuRDiX5vYf0aVlQH%7EbwnSoR5TAACCcl9G66oe9icj9jYtWveN4x7MSPzdUhlyFHuD3TamYiibcZHSGlMo8ZS7PL4Dx21KRxDj1ockyC82ibxeOnLD3Ps5JfB7oSP80zo54l-XUvPtRjrb7SWsBa9T6-qyWKuleiJKhwUSEi9sdz2nVS3Qnlfkra%7E-xbIizvtPZC0jjB8J0qFkgtY7lY9LWqG1FhQ8FWZEEHWpg__",
+      "hero_frame_path": "https://cdn.cloud.scenario.com/assets-transform/asset_NMLCjjNnQSE3ZbWdiixb9h61?p=100&Policy=eyJTdGF0ZW1lbnQiOlt7IlJlc291cmNlIjoiaHR0cHM6Ly9jZG4uY2xvdWQuc2NlbmFyaW8uY29tL2Fzc2V0cy10cmFuc2Zvcm0vYXNzZXRfTk1MQ2pqTm5RU0UzWmJXZGlpeGI5aDYxP3A9MTAwKiIsIkNvbmRpdGlvbiI6eyJEYXRlTGVzc1RoYW4iOnsiQVdTOkVwb2NoVGltZSI6MTc3ODE5ODM5OX19fV19&Key-Pair-Id=K36FIAB9LE2OLR&Signature=b03ap7F9sAr8uDuUT2xXuI%7EWGknYsyA4pvwDmuzxr7Q54UKlmnz5m9hr-kPeKkZaNZL3w6pqVa3PYj8xtYELhp%7EjxDdVbJZH30OwBzuND9%7Eu5%7EcOqGlPMqWfRGHMkhtPuOe3J7kpkFIMncMT%7EaQS4jSW3yuMNvqCvpMJqhyF6Ag7oypwbIjnKf%7ENXEVuU2WkhFv-TriqGrgrLoI7gLPRdwDgcCpCm--YViznKiQSjPFvbifMS9vYftWpXGhtio1ppak3H94tTUxN797ZOQJ1FG-aUXB0-j77S3%7EwvTSWbBZ%7Ef0Kh-Z3r5a2IAkG%7EzQXvjDvb5-Br-V9EleQEId4sbA__",
       "storyboard_paths": [
-        "https://cdn.cloud.scenario.com/assets-transform/asset_qrsq7J3gmRjMZ32gjYHn8ECX?p=100&Policy=eyJTdGF0ZW1lbnQiOlt7IlJlc291cmNlIjoiaHR0cHM6Ly9jZG4uY2xvdWQuc2NlbmFyaW8uY29tL2Fzc2V0cy10cmFuc2Zvcm0vYXNzZXRfcXJzcTdKM2dtUmpNWjMyZ2pZSG44RUNYP3A9MTAwKiIsIkNvbmRpdGlvbiI6eyJEYXRlTGVzc1RoYW4iOnsiQVdTOkVwb2NoVGltZSI6MTc3ODE5ODM5OX19fV19&Key-Pair-Id=K36FIAB9LE2OLR&Signature=ePs8aLgBuA9CwigVAyiyhcDkwpLinUuPzobhR%7EOtaO5p15i9CstjhQowbJav5odZMGekrtKdaQoNUQVsvp1gfpDD9z3dgSHU6Mr59auzqcAqCYUoCJ46iVLOeg1bRHvfnxFfjYoTIZj%7E%7EvyyGBXXAjh84MvfJm5IQV1HCOKpSI3h888SFroEpRHzDIyKbFFF%7ER3osnN8JOruR9eQNFYR1z4gXpEPKoIl1kG6Jk2tasnCztK04VE1o8VW5f1rIZjBIKQBMgpqiMD44ir5fEaAPEK4MdQhgnFRq32PyqwVF-HV9zRfRBlmtSX2xstrU6ydNjyfnnIe5xDQRFwy0h7WRQ__",
-        "https://cdn.cloud.scenario.com/assets-transform/asset_YXucoi6oufn92JYrY8yDQfwz?p=100&Policy=eyJTdGF0ZW1lbnQiOlt7IlJlc291cmNlIjoiaHR0cHM6Ly9jZG4uY2xvdWQuc2NlbmFyaW8uY29tL2Fzc2V0cy10cmFuc2Zvcm0vYXNzZXRfWVh1Y29pNm91Zm45MkpZclk4eURRZnd6P3A9MTAwKiIsIkNvbmRpdGlvbiI6eyJEYXRlTGVzc1RoYW4iOnsiQVdTOkVwb2NoVGltZSI6MTc3ODE5ODM5OX19fV19&Key-Pair-Id=K36FIAB9LE2OLR&Signature=JhqFAckgJDRaym2ctUHRWi1IVB1ebQLgC2MiWmySO-pVZo2q1ZzPPuadZD6wYIuivn1yWue5XJmRIu6Vzj0RREueDY0hDfj64c0PZ6oAZlkl1Qdh1fn8sdfI4ZebdgzvLltrD6TNL8tfo2HaAdGsOSPF3CYREm%7EZh1ZjafAB7ofzUFjl4Q0SdG3Zfm5ZvbSbbI3o3DvljQ85HuTVYtzo5aMqXgn2XulZolG8fchxTfWdi68RBbDBNZupLQ3ppedPsaOaZZyWjT56FqYj%7EVkPp69BAE56VmfbhTyVHI%7EES8CQC5NErQ4nMdve71Youg6k9UCweG3W8lHVfvj2gTiSVw__"
+        "https://cdn.cloud.scenario.com/assets-transform/asset_yfbif2wsZZC87RPyF6XDdrnp?p=100&Policy=eyJTdGF0ZW1lbnQiOlt7IlJlc291cmNlIjoiaHR0cHM6Ly9jZG4uY2xvdWQuc2NlbmFyaW8uY29tL2Fzc2V0cy10cmFuc2Zvcm0vYXNzZXRfeWZiaWYyd3NaWkM4N1JQeUY2WERkcm5wP3A9MTAwKiIsIkNvbmRpdGlvbiI6eyJEYXRlTGVzc1RoYW4iOnsiQVdTOkVwb2NoVGltZSI6MTc3ODE5ODM5OX19fV19&Key-Pair-Id=K36FIAB9LE2OLR&Signature=HYWzlAmIR2jwKQe8ZFoA1cKeLHb3HMeex-t4Ffxh%7EV1ngW6j9WpGG4S-9KV-CUUnZtHkqeiP5e5nslRufg8uc5fv5vYH2HVbANP4JL58QU7hMBuvabkiPX4H7EeXJfj9HBge45i-J66Xee40dFn1Q353ndVwa1E1eQ%7EDWodwelzlQJmLv1ULdKZrQE5yIGuJsqph68WZvyo2PDn7pZl6YhaAsiAcl6tTFzviKZhDh-SLYJSpx6CKPx9Q1PaRCby61A%7EffE5yw6oLFuwNPlXAc9BO%7Eoi2GgK98p94iH2ucOn2HUCTrctMBQWvpf1RvBvoZJy%7EOrvHrILNKd0K5PAY1Q__",
+        "https://cdn.cloud.scenario.com/assets-transform/asset_M7mpfgXogwVVyNA1n2Fa8GHC?p=100&Policy=eyJTdGF0ZW1lbnQiOlt7IlJlc291cmNlIjoiaHR0cHM6Ly9jZG4uY2xvdWQuc2NlbmFyaW8uY29tL2Fzc2V0cy10cmFuc2Zvcm0vYXNzZXRfTTdtcGZnWG9nd1ZWeU5BMW4yRmE4R0hDP3A9MTAwKiIsIkNvbmRpdGlvbiI6eyJEYXRlTGVzc1RoYW4iOnsiQVdTOkVwb2NoVGltZSI6MTc3ODE5ODM5OX19fV19&Key-Pair-Id=K36FIAB9LE2OLR&Signature=S2ILEEauedV9iiaCnMxHt7j62moS5Lii344aQ3mnxtpxxHGoV5-NuTppcOR9fR5aceohyZzjf-HiBTQhawuT3QKCUl6-CftB6sxYBJMHKPMuFOEoJM4JfuFoONOhGMWBLvAs32GhURnJ%7EqYQQmhrfVwoo6rrFiJjnQDuu6KxeImQZRflDCbaffE0Yvo2k6IY5Kfjy8sCH8IH-co71Vo9VD3ert%7E8v29ULd9ASrMf6uv2tSmjm9mT6jomFcARrL1vk4l-bwTUge2I%7ETDVkKwjkxN1pSXCYrp6-JUI0z4Q2hfXHwBaZoMyJQgLeY5Fdi7N4IfEPOGxcdRsMadf7M3PAA__"
       ],
       "test_priority": 3,
-      "test_priority_rationale": "signal_score=0.82 × game_fit=22/100 ⇒ priority=0.18"
+      "test_priority_rationale": "signal_score=0.82 × game_fit=18/100 ⇒ priority=0.15"
     }
   ],
-  "pipeline_duration_seconds": 685.7595361649946,
-  "total_cost_usd": 0.024765,
-  "generated_at": "2026-04-26T05:03:01.063259Z"
+  "pipeline_duration_seconds": 498.82904425000015,
+  "total_cost_usd": 0.012067000000000001,
+  "generated_at": "2026-04-26T15:06:45.241736Z"
 }
