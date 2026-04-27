@@ -1,22 +1,24 @@
 <div align="center">
 
-# 🏆 VoodRadar
+# 🏆 VOODOO &times; ANTHROPIC HACK 2026
 
-### **AI ad-intelligence platform for mobile-game publishers**
+### **VoodRadar — AI ad-intelligence platform for mobile-game publishers**
 
-[![Hackathon Winner](https://img.shields.io/badge/🏆_Voodoo_Hack_2026-1st_place_·_Track_3_Market_Intelligence-FFD700?style=for-the-badge)](#)
+[![Hackathon Winner](https://img.shields.io/badge/🏆_1st_place-Track_3_·_Market_Intelligence-FFD700?style=for-the-badge)](#)
+
 [![Python 3.12](https://img.shields.io/badge/Python-3.12-3776AB?style=flat&logo=python&logoColor=white)](https://www.python.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-009688?style=flat&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
 [![React](https://img.shields.io/badge/React-19-61DAFB?style=flat&logo=react&logoColor=black)](https://react.dev/)
 [![Anthropic Opus 4.7](https://img.shields.io/badge/Claude_Opus_4.7-D4A574?style=flat&logo=anthropic&logoColor=white)](https://www.anthropic.com/)
 [![Gemini Pro Vision](https://img.shields.io/badge/Gemini_2.5_Pro-4285F4?style=flat&logo=google&logoColor=white)](https://ai.google.dev/)
+[![Scenario AI](https://img.shields.io/badge/Scenario-img2vid_·_Kling-7C3AED?style=flat)](https://scenario.com/)
 
 **Type a mobile-game name → 5 minutes later, get 3 ready-to-test ad videos**
 **grounded in fresh SensorTower market signals.**
 
-<img src="docs/screenshots/voodradar-hero-ad.gif" alt="VoodRadar — sample generated ad for Archery Clash" width="280">
+<img src="docs/screenshots/voodradar-sizzle-reel.gif" alt="VoodRadar sizzle reel — generated ad + branded endcards across multiple Voodoo titles" width="240">
 
-*↑ One of the ads VoodRadar generated end-to-end during the demo: Archery Clash, "WhatsApp ping → archery hook" angle. Bespoke Opus-authored narration, OpenAI TTS voice-over, music bed auto-ducked to 25%, timed game SFX, branded endcard transition. **Zero human edit.***
+*↑ A sizzle reel of what VoodRadar produces end-to-end: a generated ad for **aquapark.io** (Opus brief → Scenario img → Kling i2v ×3 → multi-layer audio), followed by two of the per-game **branded endcards** (GPT Image 2 → Kling i2v animation) that get grafted onto every variant via `lastFrameImage` chaining. **Zero human edit.***
 
 </div>
 
@@ -325,10 +327,22 @@ Walks every cached SensorTower creative, deconstructs the ones not yet in the kn
 
 ---
 
+## One last hero shot
+
+<div align="center">
+
+<img src="docs/screenshots/voodradar-hero-ad.gif" alt="VoodRadar — full Archery Clash ad with audio + endcard transition" width="300">
+
+*The full **Archery Clash** ad VoodRadar shipped during the demo — 18 seconds, end to end: WhatsApp-ping hook → 3 Kling i2v clips (parallel) → seamless lastFrame graft into the branded endcard. Bespoke Opus-authored narration on top of an auto-ducked music bed and three timestamp-spliced game SFX. From "type the game name" to **this MP4** in under 5 minutes.*
+
+</div>
+
+---
+
 ## Credits
 
 Built for **Voodoo Hack 2026** in 30 hours by team Edouard / Tooom / partners, on Anthropic credits, Google AI credits, and Scenario beta access. SensorTower data used under hackathon-sponsor credentials.
 
 Audio assets in `data/cache/audio/library/` — royalty-free Pixabay CC0 tracks: [Bonkers for Arcades](https://pixabay.com/music/upbeat-bonkers-for-arcades-271755/), [Powerful Energetic Sport Rock](https://pixabay.com/music/upbeat-powerful-energetic-sport-rock-trailer-274290/), [Vlog Beat](https://pixabay.com/music/upbeat-vlog-beat-2-186044/), and 4 others mapped to emotional-pitch slots in `data/cache/audio/library/README.md`.
 
-🏆 **Track 3 — Market Intelligence — 1st place — Voodoo Hack 2026.**
+🏆 **Track 3 — Market Intelligence — 1st place — Voodoo &times; Anthropic Hack 2026.**
