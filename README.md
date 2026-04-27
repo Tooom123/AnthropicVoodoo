@@ -147,7 +147,7 @@ Three layers, mixed down into one stereo track:
 
 The filter graph is built dynamically: each enabled layer gets its own input slot, its own chain, and a label that feeds into the final `amix=inputs=N`. An early implementation used `-shortest`, which truncated 18s videos down to the 4s narration; the current version `apad`s every audio source to the video length so `amix` aligns correctly. Implementation in [`api/main.py:_try_apply_audio_layers`](api/main.py).
 
-In the UI, the PM has three toggles (Music / Voice / SFX) and can re-mix without re-running the video pipeline — the silent variant stays cached, so a re-mix takes about 20 seconds end-to-end.
+The UI exposes three toggles (Music / Voice / SFX) and the backend keeps a silent copy of the assembled video as `.silent.mp4`, so the architecture supports re-mixing audio without re-running the video pipeline. Validating that fast-path end-to-end was on our shortlist for the hackathon and remains a follow-up — the rendering itself currently runs the full pipeline on each click.
 
 ### 6 · Endcards — pre-generated, animated, per-game
 
@@ -164,7 +164,7 @@ Every Voodoo title gets a **branded endcard** generated *once* and reused across
 
 Pipeline scripts: [`scripts/generate_endcards.py`](scripts/generate_endcards.py) for the static gen, [`scripts/animate_endcards.py`](scripts/animate_endcards.py) for the animation pass (with auto-trim of the empty 2 last seconds + 429 backoff). The `--all` flag is idempotent — already-animated games are skipped.
 
-We pre-generated 14 endcards covering every Voodoo title in our demo set. Adding a new one is `uv run python -m scripts.generate_endcards --game "Subway Surfers" && uv run python -m scripts.animate_endcards --game "Subway Surfers"`.
+We pre-generated 17 animated endcards covering every Voodoo title in our demo set. Adding a new one is `uv run python -m scripts.generate_endcards --game "<game name>" && uv run python -m scripts.animate_endcards --game "<game name>"`.
 
 ---
 
@@ -288,7 +288,7 @@ The cached state ships with the repo (~125 MB tracked), so a fresh clone has 21 
 ### Re-running the full pipeline on a new game
 
 ```bash
-uv run python -m scripts.precache "Subway Surfers"
+uv run python -m scripts.precache "<game name>"
 ```
 
 Burns ~$0.50–$1 in API calls and takes 3–5 minutes. The result lands in `data/cache/reports/<app_id>_e2e.json` and shows up in the React UI immediately.
@@ -307,7 +307,7 @@ Walks every cached SensorTower creative, deconstructs the ones not yet in the kn
 
 - **Hero report** → http://localhost:8080/insights → "Crowd City"
   (21 cached reports available; Crowd City has the most polished variants + an animated endcard).
-- **Generate Ad** → on any cached report, click **Generate Ad** in the "Generated ad video" section. With the Scenario clips already cached the assembly takes ~30 s instead of 5 min.
+- **Generate Ad** → on any cached report, click **Generate Ad** in the "Generated ad video" section. End-to-end render takes a few minutes per variant (parallel Scenario calls + Kling i2v are the bottleneck).
 - **Knowledge base** → http://localhost:8080/weekly → 499 deconstructed ads, distribution by emotional pitch, click any tile for its Gemini dossier on `/ad/<id>`.
 - **Competitor deep-dive** → http://localhost:8080/competitive → click any top advertiser → live SensorTower fetch of their full ad inventory + cached deconstructions.
 
@@ -344,8 +344,8 @@ Walks every cached SensorTower creative, deconstructs the ones not yet in the kn
 
 Built for **Voodoo &times; Anthropic Hack 2026** in 30 hours by **[Tom](https://github.com/Tooom123), Mehdi and myself**.
 
-Powered by Anthropic credits (Claude Opus 4.7), Google AI credits (Gemini 2.5 Pro Vision), and Scenario beta access (gpt-image-2 + Kling O1/2.6-Pro i2v + Veo 3). SensorTower data used under hackathon-sponsor credentials.
+Powered by Anthropic credits (Claude Opus 4.7), Google AI credits (Gemini 2.5 Pro Vision), and [Scenario](https://www.scenario.com/) credits (gpt-image-2 + Kling O1/2.6-Pro i2v + Veo 3). [SensorTower](https://sensortower.com/) data used under hackathon-sponsor credentials.
 
-Audio assets in `data/cache/audio/library/` — royalty-free Pixabay CC0 tracks: [Bonkers for Arcades](https://pixabay.com/music/upbeat-bonkers-for-arcades-271755/), [Powerful Energetic Sport Rock](https://pixabay.com/music/upbeat-powerful-energetic-sport-rock-trailer-274290/), [Vlog Beat](https://pixabay.com/music/upbeat-vlog-beat-2-186044/), and 4 others mapped to emotional-pitch slots in `data/cache/audio/library/README.md`.
+Audio assets sourced from the royalty-free [Pixabay](https://pixabay.com/) library, mapped to emotional-pitch slots in `data/cache/audio/library/README.md`.
 
 🏆 **Track 3 — Market Intelligence — 1st place — Voodoo &times; Anthropic Hack 2026.**
